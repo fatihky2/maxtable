@@ -29,7 +29,7 @@
 extern	TSS	*Tss;
 
 
-//ev用于注册事件， 数组用于回传要处理的事件
+
 struct epoll_event ev, events[20];
 
 msg_data * msg_list_head = NULL;
@@ -86,7 +86,7 @@ void * msg_recv(void *args)
 
 	//printf("Listening %d\n", SERV_PORT);
 
-	//注册epoll事件
+
 	epfd = epoll_create(EPOLL_SIZE);
 	if (epfd == -1) {
 		perror("epoll_create");
@@ -100,14 +100,14 @@ void * msg_recv(void *args)
 	while(TRUE)
 	{
 		printf("waiting...\n");
-		//等待epoll事件的发生
+
 		nfds = epoll_wait(epfd, events, 20, -1);
 		if(nfds == -1)
 		{
 			perror("epoll_wait");
 		}
 
-		//处理发生的所有事件
+
 		for(i=0; i< nfds; i++)	
 		{
 			//New connection
@@ -131,7 +131,7 @@ void * msg_recv(void *args)
 				ev.events = EPOLLIN;
 				epoll_ctl(epfd, EPOLL_CTL_ADD, connfd, &ev);
 			}
-			//可读事件
+
 			else if(events[i].events & EPOLLIN)
 			{
 				if((sockfd = events[i].data.fd)<0)	
@@ -160,7 +160,7 @@ void * msg_recv(void *args)
 					new_msg->fd = sockfd;
 					new_msg->n_size = n;
 					new_msg->next = NULL;
-					//添加新的任务
+
 					pthread_mutex_lock(&mutex);
 					if (msg_list_head == NULL)
 					{
@@ -173,7 +173,7 @@ void * msg_recv(void *args)
 						msg_list_tail = new_msg;
 					}
 					msg_list_len ++;
-					//唤醒所有等待cond条件的线程
+
 					pthread_cond_signal(&cond);
 					pthread_mutex_unlock(&mutex);
 				}
@@ -182,7 +182,7 @@ void * msg_recv(void *args)
 					fprintf(stderr, "big error, msg list length exceeds the max len!\n");
 
 			}
-			//可写事件
+
 			else if(events[i].events & EPOLLOUT)
 			{
 				msg_data * resp_msg = (msg_data *)events[i].data.ptr;						
@@ -190,7 +190,7 @@ void * msg_recv(void *args)
 				write(sockfd, resp_msg->data, resp_msg->n_size);
 				printf("write %d->[%s]\n", resp_msg->n_size, resp_msg->data);
 
-				//注册读事件
+
 				ev.data.fd = sockfd;
 				ev.events = EPOLLIN;
 				epoll_ctl(epfd, EPOLL_CTL_MOD, sockfd, &ev);
@@ -218,11 +218,11 @@ void msg_process(char * (*handler_request)(char *req_buf))
 	{
 		
 		pthread_mutex_lock(&mutex);
-		//等待到任务队列不为空
+
 		while (msg_list_head == NULL)
 			pthread_cond_wait(&cond, &mutex);
 
-		//从任务队列取出一个读任务
+
 		req_msg = msg_list_head;
 		msg_list_head = msg_list_head->next;
 		msg_list_len --;
@@ -247,11 +247,10 @@ void msg_process(char * (*handler_request)(char *req_buf))
 		MEMCPY(resp_msg->data, resp, resp_size);
 		resp_msg->fd = fd;
 
-		//设置需要传递出去的数据
 		ev.data.ptr = resp_msg;
-		//设置用于注测的写操作事件
+
 		ev.events = EPOLLOUT;
-		//修改sockfd上要处理的事件为EPOLLOUT
+	
 		epoll_ctl(epfd, EPOLL_CTL_MOD, fd, &ev);
   
 		conn_destroy_req(req);
