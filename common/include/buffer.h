@@ -25,30 +25,30 @@ typedef struct buf
 {
 	struct buf	*bdnew;
 	struct buf	*bdold;
-	long		bblkno;		/* block number in sstable */
-	short		bkeep;		/* # of buffer kept */
-	short		bstat;		/* status bits */
+	long		bblkno;		
+	short		bkeep;		
+	short		bstat;		
 	char		bsstab_name[256];
 	int		bsstabid;
 	int		btabid;
-	struct block	*bblk;		/* ptr buffer */
-	struct buf	*bhash;		/* next in chain */
-	struct buf	*bsstabnew;		/* ptr recent buf */
-	struct buf	*bsstabold;		/* ptr older buf */
-	struct buf	*bsstab;	/* ptr the header of sstable */
-	int		bsstab_size;	/* # of block in one sstab */	
+	struct block	*bblk;		
+	struct buf	*bhash;		
+	struct buf	*bsstabnew;		
+	struct buf	*bsstabold;		
+	struct buf	*bsstab;	
+	int		bsstab_size;		
 } BUF;
 
 
-/* BUF status bits - bstat */
-#define	BUF_WRITING	0x1	/* block for buffer being read in */
-#define	BUF_KEPT	0x2	/* keep count is non-zero */
-#define	BUF_IOERR	0x4	/* error writing a buffer */
-#define	BUF_NOTHASHED	0x8	/* this buf not hashed (SS_COPYBUF) */
-#define	BUF_HASHED	0x10	/* buffer is hashed */
+
+#define	BUF_WRITING	0x1	
+#define	BUF_KEPT	0x2	
+#define	BUF_IOERR	0x4	
+#define	BUF_NOTHASHED	0x8	
+#define	BUF_HASHED	0x10	
 #define	BUF_DIRTY	0x20
 #define	BUF_DESTROY	0x40
-#define BUF_READ_EMPTY	0x80	/* Read data from the empty file. */
+#define BUF_READ_EMPTY	0x80	
 
 
 #define SSTABLE_STATE(bp)	(bp->bsstab->bstat)
@@ -59,13 +59,13 @@ typedef struct buf
 #define BUFHASHINDEX(sstab,tabid)	(((tabid ^ (tabid << 8))^ (sstab ^ (sstab<<4))) & BUFHASHMASK)
 
 
-/* macro to get buffer hash slot (BUF **) from block number and dbid */
+
 #define BUFHASH(sstab,tabid)	(Kernel->ke_bufhash + BUFHASHINDEX(sstab,tabid))
 
 
 
 
-/* buffer link macros */
+
 #define	LRUUNLINK(bp)	        bp->bsstabold->bsstabnew = bp->bsstabnew, \
 			        bp->bsstabnew->bsstabold = bp->bsstabold, \
 			        bp->bsstabold = bp, bp->bsstabnew = bp
@@ -80,7 +80,7 @@ typedef struct buf
 				hdr->bsstabnew->bsstabold = bp, \
 				hdr->bsstabnew = bp
 
-/* use routines instead of macros for dirty chain: little performance effect */
+
 #define DIRTYLINK(bp, hdr)	bufdlink(bp, hdr)
 #define DIRTYUNLINK(bp)		bufdunlink(bp)
 

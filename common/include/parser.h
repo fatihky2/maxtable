@@ -23,34 +23,11 @@
 #define PARSER_H_
 
 
-/*
-	       1st version
-	
-                command (select *)
-                /           \
-         resdom           command (where *)
-           /     \               /         \
-  constant    resdom   resdom   null
-                   /     \      /       \
-           constant  null  const   null    
 
-
-	         2nd version
-	
-	      command (select *)
-	      / 	  \
-          resdom	command (where *)
-          /     \	       /	 \
- resdom   constant   resdom   null
-   /   \		 /     \      /       \
-null  constant constant  null  const	 null	 
-
-
-*/
 
 struct command
 {
-	int		querytype;  /* query type */
+	int		querytype;  
 	long            rootstat;
 	int             tabname_len;
 	char            tabname[128];
@@ -58,20 +35,19 @@ struct command
 
 struct resdom
 {
-	int		colid;   	/* id of column or SET command 
-			                            ** option, eg. language */
+	int		colid;   	
 	char		colname[64];
-	short		colstat; 	/* status */
-	int		coltype; 	/* data type */
-	int		coloffset;	/* Column offset in the row */	
+	short		colstat; 	
+	int		coltype; 	
+	int		coloffset;		
 	char		pad[2];
-	int		colen;   	/* length of data */
+	int		colen;   	
 } ;
 
 typedef struct constant
 {
 	int            	len;
-	char            *value;  /* ptr to value */
+	char            *value;  
 	short	       	constat;	
 	short           pad;
 } CONSTANT;
@@ -91,9 +67,9 @@ typedef struct tree
 	union symbol	sym;
 } TREE;
 
-#define PAR_CMD_NODE		1   /* Command: create table/select ...*/
-#define PAR_RESDOM_NODE		2   /* Column */
-#define PAR_CONSTANT_NODE	3   /* Value*/
+#define PAR_CMD_NODE		1   
+#define PAR_RESDOM_NODE		2   
+#define PAR_CONSTANT_NODE	3   
 
 
 #define PAR_NODE_IS_COMMAND(type)       (type == PAR_CMD_NODE)

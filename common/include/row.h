@@ -25,15 +25,15 @@
 
 typedef struct rowfmt
 {
-	int		rowno;  /* row number */
-	int		status;	/* status */
-	int		vattcnt;/* number of variable length atts */
+	int		rowno;  
+	int		status;	
+	int		vattcnt;
 }ROWFMT;
 
 #define GETINT(p)	(*(int *) (p))
 
-#define COLOFFSETENTRYSIZE	4	/* The size of entry of var-column offset is sizeof(int). */
-#define	ROWVATTCNT_OFF		8	/* The 3rd item. */
+#define COLOFFSETENTRYSIZE	4	
+#define	ROWVATTCNT_OFF		8	
 
 #define	VARCOL_MAX_NUM		16
 #define	COL_OFFTAB_MAX_SIZE	(VARCOL_MAX_NUM * sizeof(int))
@@ -45,7 +45,7 @@ typedef struct rowfmt
 
 #define ROW_GET_ROWNO(rp)       GETINT(rp)
 
-/* Get the end of the row; i.e. the last byte of the row. */
+
 #define ROW_GET_END(rp, minlen)				\
 	((rp) + GETINT((rp) + (minlen)) - 1)
 
@@ -58,7 +58,7 @@ typedef struct rowfmt
 #define ROW_GET_VARCOL_OFFSET(endrowp, varcolno)			\
 		(GETINT((endrowp) - (varcolno) * COLOFFSETENTRYSIZE + 1))
 
-/* The offset of last var-column. */
+
 #define ROW_GET_ENDOF_OFFSET_TABLE(rp, minlen)			\
 	(GETINT((rp) + (minlen))				\
 	      - ROW_GET_VARCNT((rp)) * COLOFFSETENTRYSIZE)
@@ -81,7 +81,7 @@ do									\
 									\
 	if ((varcolid) == varcount)					\
 	{								\
-		/* If last column, length = rowlen - offset table - its offset */	\
+			\
 		(collen) = ROW_GET_ENDOF_OFFSET_TABLE((rp),		\
 				      (minlen)) - (thiscoloff);		\
 	}								\
@@ -98,9 +98,9 @@ do									\
 #define ROWSTAT(rp) ((ROWFMT *)(rp))->status
 #define ROWVATTCNT(rp) ((ROWFMT *)(rp))->vattcnt
 	
-#define EQ      0       /* Col1 EQUALS Col2 */
-#define LE      -1      /* Col1 LESS than Col2*/
-#define GR      1       /* Col1 Greater than Col2 */
+#define EQ      0       
+#define LE      -1      
+#define GR      1       
 	
 #define MT_COMPARE(val1, val2) ((val1) > (val2)) ? GR : (((val1) < (val2)) ? LE : EQ)
 

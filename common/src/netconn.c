@@ -23,6 +23,8 @@
 #include "parser.h"
 #include "memcom.h"
 #include "strings.h"
+#include <pthread.h>
+#include "thread.h"
 
 extern	TSS	*Tss;
 
@@ -456,7 +458,7 @@ _read_again:
 
 void startup(int servPort, int opid, char * (*handler_request)(char *req_buf))
 {
-	struct sockaddr_in servaddr;
+	/*struct sockaddr_in servaddr;
 	int listenfd = socket(AF_INET, SOCK_STREAM, 0);
 
 	bzero(&servaddr, sizeof(servaddr));
@@ -473,8 +475,17 @@ void startup(int servPort, int opid, char * (*handler_request)(char *req_buf))
 	}
 
 	listen(listenfd, 20);
+	*/
 
+	pthread_t pthread_id;
+	
 	tss_setup(opid);
 
-	start_daemon(listenfd, handler_request);
+	msg_recv_args * args = MEMALLOCHEAP(sizeof(msg_recv_args));
+	args->port = servPort;
+
+	pthread_create(&pthread_id, NULL, msg_recv, (void *)args);
+
+	//start_daemon(listenfd, handler_request);
+	msg_process(handler_request);
 }

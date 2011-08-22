@@ -1,11 +1,11 @@
 CC		= gcc -g -Wall
 CPP		= g++ -g -Wall
 AR		= ar cr
-CFLAGS		= -I./common/include/ -I./cli/include -I./master/include -I./region/include -I./interface/include -I./service/include -lpthread
+CFLAGS		= -I./common/include/ -I./client/include -I./master/include -I./region/include -I./interface/include -I./service/include -lpthread
 COMMON_SRC	= common/src/*.c
 REGION_SRC	= region/src/*.c
 MASTER_SRC	= master/src/*.c
-CLI_SRC		= cli/src/*.c
+CLI_SRC		= client/src/*.c
 INTERFACE_SRC	= interface/src/*.c
 SERVICE_SRC = service/src/*.cpp
 
@@ -16,16 +16,16 @@ LIB_OBJS_C = $(patsubst %.c,%.o,$(LIB_SRCS_C))
 LIB_SRCS_CPP = $(wildcard ${SERVICE_SRC})
 LIB_OBJS_CPP = $(patsubst %.cpp,%.o,$(LIB_SRCS_CPP))
 
-all: cli master region sample service service_sample
+all: client master region sample service service_sample
 
 %.o : %.c
 	$(CC) -o $@ -c $< $(CFLAGS)
 %.o : %.cpp
 	$(CPP) -o $@ -c $< $(CFLAGS)
 
-cli: ${COMMON_SRC} ${CLI_SRC}
-	#$(CC) $(CFLAGS) ${COMMON_SRC} ${CLI_SRC} -D MEMMGR_TEST -D MAXTABLE_UNIT_TEST -o startClient
-	$(CC) $(CFLAGS) ${COMMON_SRC} ${CLI_SRC} -D MEMMGR_TEST -o startClient
+client: ${COMMON_SRC} ${CLI_SRC}
+	$(CC) $(CFLAGS) ${COMMON_SRC} ${CLI_SRC} -D MEMMGR_TEST -D MAXTABLE_UNIT_TEST -o startClient
+#	$(CC) $(CFLAGS) ${COMMON_SRC} ${CLI_SRC} -D MEMMGR_TEST -o startClient
 
 master: ${COMMON_SRC} ${MASTER_SRC}
 	$(CC) $(CFLAGS) ${COMMON_SRC} ${MASTER_SRC} -D MEMMGR_TEST -o startMaster

@@ -35,10 +35,10 @@ ca_init_buf(BUF *bp, BLOCK *blk, BUF *sstab)
 	bp->bsstab = sstab;
 	bp->bsstab_size = BLK_CNT_IN_SSTABLE;
 
-	/* clear hash chain ptr */
+	
 	bp->bhash = NULL;
 
-	/* Dirty link */
+	
 	bp->bdnew = bp->bdold = bp;
 
 //	bp->bsstabnew = bp->bsstabold = NULL;
@@ -48,7 +48,7 @@ static void
 ca_init_blk(BLOCK *blk, int blkno, int sstabid, int bp_cnt)
 {
 	MEMSET(blk, BLOCKSIZE);
-	blk->bblkno = blkno;	/* This is a static value, change is not allowed in the running. */
+	blk->bblkno = blkno;	
 
 	blk->bnextblkno = (blkno < (bp_cnt-1)) ? (blkno + 1) : -1;
 	
@@ -82,7 +82,7 @@ ca_init_sstab(BUF *sstab, BLOCK *blk, int sstabid, int bp_cnt)
 long
 ca_get_struct_size()
 {
-	long		struct_size;	/* Discount this size for the true memory. */
+	long		struct_size;	
 
 
 	struct_size = 0;
@@ -95,10 +95,7 @@ ca_get_struct_size()
 
 	return struct_size;
 }
-/*
-**
-** | buffer1 structure | buffer2 structure |buffern structure |block1 structure | block2 structure |blockn structure |
-*/
+
 int
 ca_setup_pool()
 {
@@ -106,12 +103,12 @@ ca_setup_pool()
 	BUF		*bp, *bp2, *sbufptr; 
 	BLOCK		*blkptr;
 	int		i,j, count;
-	long		struct_size;	/* Discount this size for the true memory. */
+	long		struct_size;	
 	long		temp;
 
 
 	struct_size = 0;
-	/* Create a 16M block cache pool */
+	
 	ca_memptr = mem_os_malloc(BLOCK_CACHE_SIZE);
 	MEMSET(ca_memptr, BLOCK_CACHE_SIZE);
 
@@ -119,13 +116,13 @@ ca_setup_pool()
 	ca_memptr += bufhashsize();
 	struct_size += bufhashsize();
 	
-	/* Dummy buffer for LRU/MRU chain and dummy buffer only has the buffer structure without block. */
+	
 	sbufptr = (BUF *) ca_memptr;
 	ca_memptr += sizeof (BUF);
 	struct_size += sizeof (BUF);
 
-	/* Setup rest of buffers */
-	/* First true buffer. */
+	
+	
 	bp = (BUF *) ca_memptr;
 	ca_memptr += (sizeof(BUF) * BLOCK_MAX_COUNT);
 	struct_size += (sizeof(BUF) * BLOCK_MAX_COUNT);
@@ -134,22 +131,22 @@ ca_setup_pool()
 	ca_memptr += temp;
 	struct_size += temp;
 
-	/* First block. */
+	
 	blkptr = (BLOCK *) ca_memptr;
 
-	/* Get the count of the consumed block. */
+	
 	temp = struct_size/(sizeof (BLOCK)) + ((struct_size % (sizeof (BLOCK))) ? 1:0);
 
 	//ca_memptr += (sizeof (BLOCK) * BLOCK_MAX_COUNT);
 
-	/* Mark head of LRU/MRU chain */
+	
 	Kernel->ke_buflru = sbufptr;
 
-	/* bp is at head of real buffers */
+	
 	bp->bsstabold = sbufptr;
 	sbufptr->bsstabnew = bp;
 
-	/* bp2 is the head of second sstab */
+	
 	bp2 = bp + BLK_CNT_IN_SSTABLE;
 
 	count = BLOCK_MAX_COUNT - temp - 1;
@@ -163,10 +160,10 @@ ca_setup_pool()
 		i += BLK_CNT_IN_SSTABLE;
 		if (i < count)
 		{
-			/* trailing buffers next ptr */
+			
 			bp->bsstabnew = bp2;
 
-			/* leading buffers prev ptr */
+			
 			bp2->bsstabold = bp;	
 
 			ca_init_sstab(bp, blkptr, j, BLK_CNT_IN_SSTABLE);
@@ -186,7 +183,7 @@ ca_setup_pool()
 		{
 			//assert(temp == (i - count - 1));
 			
-			/* finish off last sstable */
+			
 			bp->bsstabnew = sbufptr;
 			sbufptr->bsstabold = bp;
 			ca_init_sstab(bp, blkptr, j, (BLK_CNT_IN_SSTABLE - (i - count)));

@@ -113,6 +113,10 @@ conn_chk_reqmagic(char *str);
 int
 conn_chk_respmagic(char *str);
 
+void
+conn_destroy_resp_byte(char* resp);
+
+
 
 void 
 start_daemon(int listenfd, char * (*handler_request)(char *req_buf));
