@@ -129,6 +129,10 @@ bufgrab(TABINFO *tabinfo)
 	{
 		bp->bsstabid = tabinfo->t_insmeta->res_sstab_id;
 	}
+	else if (tabinfo->t_stat & TAB_TABLET_SPLIT)
+	{
+		bp->bsstabid = tabinfo->t_split_tabletid;
+	}
 	else
 	{
 		bp->bsstabid = tabinfo->t_sstab_id;
@@ -250,16 +254,10 @@ bufhashsize()
 BUF *
 bufhash(BUF *bp)
 {
-	LOCALTSS(tss);
 	BUF	**hashptr;	/* array of hashed buf ptrs */
 	BUF	*bufptr;
 
 
-	if (tss->topid & TSS_OP_METASERVER)
-	{
-		return NULL;
-	}
-	
 	/* make sure buffer not already hashed */
 	assert(!(SSTABLE_STATE(bp) & BUF_HASHED));	
 

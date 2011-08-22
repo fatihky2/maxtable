@@ -38,6 +38,8 @@ extern	TSS	*Tss;
 
 #define	INVALID_TABLETID	1
 
+#define TABLETSCHM_ID	0
+
 // char *rp - the row in the tablet (sstabid|sstable row | ranger |key col)
 // int minlen - min length of the row in the tablet
 void
@@ -96,7 +98,7 @@ tablet_crt(TABLEHDR *tablehdr, char *tabledir, char *rp, int minlen)
 	
 	tablet_schm_bld_row(temprp, rlen, tablehdr->tab_tablet, tablet_name, keycol, keycolen);
 	
-	tablet_schm_ins_row(tablehdr->tab_id, 0, tab_meta_dir, temprp, tablehdr->tab_tablet);
+	tablet_schm_ins_row(tablehdr->tab_id, TABLETSCHM_ID, tab_meta_dir, temprp, tablehdr->tab_tablet);
 
 	/* Maybe we should call table close and add a new function neamed with session_open. */
 	session_close( &tabinfo);
@@ -139,6 +141,11 @@ tablet_ins_row(TABLEHDR *tablehdr, int tabid, int sstabid, char *tablet_name, ch
 	blkins(&tabinfo, rp);
 
 	session_close(&tabinfo);
+
+	if (tabinfo.t_stat & TAB_TABLET_CRT_NEW)
+	{
+		(tablehdr->tab_tablet)++;
+	}
 
 	tabinfo_pop();
 }
@@ -457,6 +464,39 @@ tablet_namebyname(char *old_sstab, char *new_sstab)
 	return;
 }
 
+void
+tablet_namebyid(TABINFO *tabinfo, char *new_sstab)
+{
+	char	nameidx[64];
+	int	idxpos;
+	char	tmpsstab[SSTABLE_NAME_MAX_LEN];
+	int	old_sstab_len;
+	char	*old_sstab;
+
+
+
+	old_sstab = tabinfo->t_sstab_name;
+
+	old_sstab_len = STRLEN(old_sstab);
+	idxpos = str1nstr(old_sstab, "tablet", old_sstab_len);
+
+	MEMSET(nameidx, 64);
+
+	assert(tabinfo->t_stat & TAB_TABLET_SPLIT);
+	sprintf(nameidx, "%d", tabinfo->t_split_tabletid);
+	
+	MEMSET(tmpsstab, SSTABLE_NAME_MAX_LEN);
+	MEMCPY(tmpsstab, old_sstab, idxpos);
+
+//	printf("tabinfo->t_insmeta->res_sstab_id = %d \n", tabinfo->t_insmeta->res_sstab_id);
+
+	sprintf(new_sstab, "%s%s", tmpsstab,nameidx);
+
+	printf("new_sstab = %s--------%d---\n", new_sstab,tabinfo->t_split_tabletid);
+
+	return;
+}
+
 
 void
 tablet_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
@@ -483,8 +523,12 @@ tablet_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 		nextblk = (BLOCK *) ((char *)nextblk + BLOCKSIZE);
 	}
 
+	/* This falg is just only for the buffer grabbing. */
+	srctabinfo->t_stat |= TAB_TABLET_SPLIT;
 
 	destbuf = bufgrab(srctabinfo);
+
+	
 	
 	bufhash(destbuf);
 
@@ -510,7 +554,9 @@ tablet_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 
 	MEMSET(destbuf->bsstab_name, 256);
 
-	tablet_namebyname(srctabinfo->t_sstab_name, destbuf->bsstab_name);
+	tablet_namebyid(srctabinfo, destbuf->bsstab_name);
+
+	srctabinfo->t_stat &= ~TAB_TABLET_SPLIT;
 
 	table_nameidx = str01str(srctabinfo->t_sstab_name, "tablet", STRLEN(srctabinfo->t_sstab_name));
 	tabinfo = MEMALLOCHEAP(sizeof(TABINFO));
@@ -555,13 +601,14 @@ tablet_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 	str1_to_str2(tab_meta_dir, '/', "tabletscheme");
 
 	table_nameidx = str01str(destbuf->bsstab_name, "tablet", STRLEN(destbuf->bsstab_name));
-	tablet_schm_bld_row(temprp, rlen, INVALID_TABLETID, destbuf->bsstab_name + table_nameidx + 1, tablet_key, tablet_keylen);
+	tablet_schm_bld_row(temprp, rlen, srctabinfo->t_split_tabletid, destbuf->bsstab_name + table_nameidx + 1, tablet_key, tablet_keylen);
 
 	/* 0 is reserved for tablet_schem. */
-	tablet_schm_ins_row(srctabinfo->t_tabid, 0, tab_meta_dir, temprp, INVALID_TABLETID);
+	tablet_schm_ins_row(srctabinfo->t_tabid, TABLETSCHM_ID, tab_meta_dir, temprp, INVALID_TABLETID);
 
 	session_close(tabinfo);
 
+	srctabinfo->t_stat |= TAB_TABLET_CRT_NEW;
 	
 	MEMFREEHEAP(temprp);
 

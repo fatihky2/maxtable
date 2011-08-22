@@ -427,7 +427,7 @@ blkdel(TABINFO *tabinfo, char *rp)
 	
 	bp = blkget(tabinfo);
 
-	
+	bufpredirty(bp);
 
 	offset = blksrch(tabinfo, bp);
 
@@ -438,9 +438,7 @@ blkdel(TABINFO *tabinfo, char *rp)
 	}
 
 	ign = 0;
-	rlen = ROW_GET_LENGTH(rp, minlen);
-
-	bufpredirty(bp);
+	rlen = ROW_GET_LENGTH(rp, minlen);	
 	
 	if (bp->bblk->bfreeoff - offset)
 	{
