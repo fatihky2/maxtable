@@ -16,7 +16,6 @@ int main()
 		char resp[256], cmd[256];
 		int i;
 
-
 		/* Commit a CREAT TABLE command for a table scheme. */
 		memset(resp, 0, 256);
 		sprintf(cmd, "create table gu(id1 varchar, id2 varchar)");
@@ -35,7 +34,6 @@ int main()
 			printf("cmd: %s, ret: %s\n", cmd, resp);
 
 		}
-
 		
 		/* Commit a SELECT command for the selected data. */                               
 		printf("***begin to select\n");
