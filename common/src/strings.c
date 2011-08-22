@@ -192,4 +192,3 @@ str0n_trunc_0t(char *buf, int len, int *start, int *end)
 	return TRUE;
 }
 
-

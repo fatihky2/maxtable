@@ -37,28 +37,29 @@ struct insert_meta;
 
 typedef struct tss
 {
-	
-	EXC_PROC	*texcptr;	
+	/* Warning: texcptr must be first field is tss */
+	EXC_PROC	*texcptr;	/* ptr to exception handler data */
 
-	struct tssobj	*tssobjp;	
+	struct tssobj	*tssobjp;	/* pointer to tssobj struct */
 
-	struct mempool	*ttmemfrag;	
+	struct mempool	*ttmemfrag;	/* handle to task's memory fragment */
 
-	
-	int		sstat;  	
+	/* Status, flags, options */
+	int		sstat;  	/* process status */
 	struct tree     *tcmd_parser;
 
-	RPCREQ		trecvbuf;	
-	char		*tsendbuf;	
+	RPCREQ		trecvbuf;	/* receive host buffer */
+	char		*tsendbuf;	/* send host buffer */
 
-	short		topid;		
+	short		topid;		/* current opration */
 
+	/* Exception stack */
+	EXC_PROC	texcproc;	/* exception handler data */
 	
-	EXC_PROC	texcproc;	
-	
-	struct col_info	*tcol_info;	
+	struct col_info	*tcol_info;	/* column information */
 
-	struct insert_meta	*tmeta_hdr;	
+	struct insert_meta
+			*tmeta_hdr;	/* metadata of table */
 
 	struct tab_info	*ttabinfo;
 	struct tab_info *toldtabinfo;
@@ -67,16 +68,18 @@ typedef struct tss
 
 typedef struct tssobj
 {
-	LINK	to_link;	
-	TSS	to_tssp;	
+	LINK	to_link;	/* Must be first field as required by
+				** memory object manager.
+				*/
+	TSS	to_tssp;	/* points to the actual tss */
 } TSSOBJ;
 
 #ifndef LOCALTSS
 #define	LOCALTSS(tss)	TSS	*tss = Tss
-#endif 
+#endif /* LOCALTSS */
 
 
-
+/* topid definitions */
 
 #define		TSS_OP_METASERVER	0x0001
 

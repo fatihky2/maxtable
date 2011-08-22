@@ -58,6 +58,9 @@ tss_init(TSS *tss)
 {
 	tss->texcptr = &tss->texcproc;
 	tss->sstat = 0;
+	tss->ttabinfo = tss->toldtabinfo = NULL;
+	tss->tcmd_parser = NULL;
+	tss->tmeta_hdr = NULL;
 
 	ex_init(tss);
 
@@ -81,7 +84,7 @@ tss_setup(int opid)
 {
 	TSS	*new_tss;
 
-	
+	/* allocate a TSS for it */
 	if ((new_tss = tss_alloc()) == NULL)
 	{
 		return FALSE;

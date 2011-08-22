@@ -83,7 +83,7 @@ dstartio(BLKIO * blkiop)
 	** Check that the requested number of bytes have been
 	** read or written
 	*/
-	if ((blkiop->biobp->bstat & BUF_READ_EMPTY) && (status == 0))
+	if ((blkiop->bioflags & DBREAD) && (blkiop->biobp->bstat & BUF_READ_EMPTY) && (status == 0))
 	{
 		return TRUE;
 	}

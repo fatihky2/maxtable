@@ -250,7 +250,7 @@ conn_again:
 
 					
 					char *cli_add_sstab = "addsstab into ";				
-
+					int	sstab_id;
 
 					send_buf_size = resp->result_length + 64 + STRLEN(cli_add_sstab);
 					send_rg_bp = MEMALLOCHEAP(send_buf_size);				
@@ -263,8 +263,10 @@ conn_again:
 
 					MEMCPY(newsstabname, resp->result, SSTABLE_NAME_MAX_LEN);
 
-					sprintf(send_rg_bp, "addsstab into %s (%s, %s)", tab_name, newsstabname,
-					resp->result + SSTABLE_NAME_MAX_LEN);
+					sstab_id = *(int *)(resp->result + SSTABLE_NAME_MAX_LEN);
+
+					sprintf(send_rg_bp, "addsstab into %s (%s, %d, %s)", tab_name, newsstabname,
+						sstab_id, resp->result + SSTABLE_NAME_MAX_LEN + sizeof(int));
 
 					cli_str = send_rg_bp;
 
@@ -501,9 +503,9 @@ conn_again:
 
 				
 				char *cli_add_sstab = "addsstab into ";				
-
+				int	sstab_id;
 				
-				send_buf_size = resp->result_length + 64 + STRLEN(cli_add_sstab);
+				send_buf_size = resp->result_length + 128 + STRLEN(cli_add_sstab);
 				send_rg_bp = MEMALLOCHEAP(send_buf_size);				
 
 				MEMSET(send_rg_bp, send_buf_size);
@@ -513,10 +515,11 @@ conn_again:
 				MEMSET(newsstabname, SSTABLE_NAME_MAX_LEN);
 
 				MEMCPY(newsstabname, resp->result, SSTABLE_NAME_MAX_LEN);
-
-				sprintf(send_rg_bp, "addsstab into %s (%s, %s)", tab_name, newsstabname,
-					resp->result + SSTABLE_NAME_MAX_LEN);
-
+				
+				sstab_id = *(int *)(resp->result + SSTABLE_NAME_MAX_LEN);
+				sprintf(send_rg_bp, "addsstab into %s (%s, %d, %s)", tab_name, newsstabname,
+						sstab_id, resp->result + SSTABLE_NAME_MAX_LEN + sizeof(int));
+				
 				cli_str = send_rg_bp;
 
 				
@@ -667,7 +670,7 @@ int main(int argc, char **argv)
 	printf("Begain to SELECT data from the table yxue\n");
 	/* 3rd step: select data from table. */
 
-	for(i = 1530; i < 1540; i++)
+	for(i = 1535; i < 1560; i++)
 	{
 		MEMSET(c1, 32);
 		sprintf(c1, "%s%d", "gggg", i);
@@ -677,6 +680,16 @@ int main(int argc, char **argv)
 		cli_test_main(seltab);
 	}
 
+	
+	for(i = 5535; i < 5560; i++)
+	{
+		MEMSET(c1, 32);
+		sprintf(c1, "%s%d", "gggg", i);
+		MEMSET(seltab, 128);
+		sprintf(seltab,"select yxue (%s)", c1);
+
+		cli_test_main(seltab);
+	}
 
 	return -1;
 }

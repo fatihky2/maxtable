@@ -42,6 +42,7 @@
 #include "type.h"
 #include "trace.h"
 #include "session.h"
+#include "tabinfo.h"
 
 
 
@@ -54,7 +55,7 @@ extern KERNEL	*Kernel;
 
 #define	RANGE_CONF_PATH_MAX_LEN	64
 
-
+/** This struct will also be used at cli side**/
 typedef struct rg_info
 {
 	char	conf_path[RANGE_CONF_PATH_MAX_LEN];
@@ -83,7 +84,7 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 	char	 	*resp;
 	char		rp[1024];
 	int		rp_idx;
-	char		col_off_tab[COL_OFFTAB_MAX_SIZE];
+	char		col_off_tab[COL_OFFTAB_MAX_SIZE];/* Max of var-column is 16 */
 	char		col_off_idx;
 	int		col_offset;
 	char		*col_val;
@@ -108,7 +109,7 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 	MEMSET(tab_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_dir, MT_RANGE_TABLE, STRLEN(MT_RANGE_TABLE));
 
-	
+	/* Current table dir. */
 	str1_to_str2(tab_dir, '/', tab_name);
 
 	if (STAT(tab_dir, &st) != 0)
@@ -121,7 +122,10 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 		}
 	}
 
-	
+	/* 
+	** sstable name = "tablet name _ sstable_id", so sstable name is unique 
+	** in one table. 
+	*/
 	printf("ins_meta->sstab_name =%s \n", ins_meta->sstab_name);
 	sstable = ins_meta->sstab_name;
 
@@ -129,7 +133,7 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 	MEMSET(ins_meta->sstab_name, SSTABLE_NAME_MAX_LEN);
 	MEMCPY(ins_meta->sstab_name, tab_dir, STRLEN(tab_dir));
 
-		
+	/* Flag if it's the first insertion. */	
 	if (STAT(tab_dir, &st) != 0)
 	{
 		ins_meta->status |= INS_META_1ST;
@@ -139,7 +143,7 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 	printf("tab_dir =%s \n", tab_dir);
 
 
-	
+	/* Begin to build row. */
 	row_build_hdr(rp, 0, 0, ins_meta->varcol_num);
 
 	col_offset = sizeof(ROWFMT);
@@ -155,7 +159,7 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 
 		if (col_offset == tabinfo->t_key_coloff)
 		{
-			
+			/* Fill search information for the searching in the block. */
 			tabinfo->t_sinfo->sicolval = col_val;
 			tabinfo->t_sinfo->sicollen = col_len;
 			tabinfo->t_sinfo->sicolid = tabinfo->t_key_colid;
@@ -191,13 +195,16 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 			{
 				ex_raise(EX_ANY);
 			}
+			/* 
+			** col_offset will increase until it's an invalid one, and then we start
+			** to parse the var-col case.
+			*/
 			
-			
-			
+			/* Var-col case. */
 
 			if (col_num > 0)
 			{
-				
+				/* Row length */
 				rp_idx += sizeof(int);
 				col_offset = -1;
 			}
@@ -230,20 +237,27 @@ exit:
 	
 	if (tabinfo->t_stat & TAB_SSTAB_SPLIT)
 	{
-		resp_len = tabinfo->t_insrg->new_keylen + SSTABLE_NAME_MAX_LEN;
+		resp_len = tabinfo->t_insrg->new_keylen + SSTABLE_NAME_MAX_LEN + sizeof(int);
 		resp_buf = (char *)MEMALLOCHEAP(resp_len);
+
+		MEMSET(resp_buf, resp_len);
 
 		int i = 0;
 
+		printf("tabinfo->t_insrg->new_sstab_name = %s \n", tabinfo->t_insrg->new_sstab_name);
+		//MEMCPY(resp_buf, tabinfo->t_insrg->new_sstab_name, STRLEN(tabinfo->t_insrg->new_sstab_name));
 		PUT_TO_BUFFER(resp_buf, i, tabinfo->t_insrg->new_sstab_name, SSTABLE_NAME_MAX_LEN);
+		//i += SSTABLE_NAME_MAX_LEN;
+		PUT_TO_BUFFER(resp_buf, i, &tabinfo->t_insmeta->res_sstab_id, sizeof(int));
 		PUT_TO_BUFFER(resp_buf, i, tabinfo->t_insrg->new_sstab_key, tabinfo->t_insrg->new_keylen);
-
+		
+//		printf("tabinfo->t_insmeta->sstab_id = %d,  tabinfo->t_insmeta->res_sstab_id = %d\n", tabinfo->t_insmeta->sstab_id, tabinfo->t_insmeta->res_sstab_id);
 		assert(resp_len == i);
 	}
 	
 	if (rtn_stat)
 	{
-		
+		/* Send to client. */
 		resp = conn_build_resp_byte(RPC_SUCCESS, resp_len, resp_buf);
 	}
 	else
@@ -291,7 +305,7 @@ rg_seltab(TREE *command, TABINFO *tabinfo)
 	MEMSET(tab_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_dir, MT_RANGE_TABLE, STRLEN(MT_RANGE_TABLE));
 
-	
+	/* Current table dir. */
 	str1_to_str2(tab_dir, '/', tab_name);
 
 	if (STAT(tab_dir, &st) != 0)
@@ -304,7 +318,10 @@ rg_seltab(TREE *command, TABINFO *tabinfo)
 		}
 	}
 
-	
+	/* 
+	** sstable name = "tablet name _ sstable_id", so sstable name is unique 
+	** in one table. 
+	*/
 	printf("ins_meta->sstab_name =%s \n", ins_meta->sstab_name);
 	sstable = ins_meta->sstab_name;
 
@@ -322,28 +339,29 @@ rg_seltab(TREE *command, TABINFO *tabinfo)
 
 	keycol = par_get_colval_by_colid(command, tabinfo->t_key_colid, &keycolen);
 
-	TABINFO_INIT(tabinfo, ins_meta->sstab_name, tabinfo->t_sinfo, tabinfo->t_row_minlen, 0);
+	TABINFO_INIT(tabinfo, ins_meta->sstab_name, tabinfo->t_sinfo, tabinfo->t_row_minlen, 
+			0, tabinfo->t_tabid, tabinfo->t_sstab_id);
 	SRCH_INFO_INIT(tabinfo->t_sinfo, keycol, keycolen, 1, VARCHAR, -1);
 
 	bp = blkget(tabinfo);
 	offset = blksrch(tabinfo, bp);
 
-	
+	/* The selecting value is not exist. */
 	if (tabinfo->t_sinfo->sistate & SI_NODATA)
 	{
 		goto exit;
 	}
 
-	
+	/* TODO: rp, rlen just be the future work setting. */
 	char *rp = (char *)(bp->bblk) + offset;
 	int rlen = ROW_GET_LENGTH(rp, bp->bblk->bminlen);
 
-	
+	/* Building the response information. */
 	col_buf = MEMALLOCHEAP(rlen);
 	MEMSET(col_buf, rlen);
 
-	
-	char	*filename = meta_get_coldata(bp, offset, sizeof(ROWFMT) + sizeof(int));
+	/* Get the sstable file name. */
+	char	*filename = meta_get_coldata(bp, offset, -1);
 	MEMCPY(col_buf, filename, rlen - sizeof(ROWFMT) + sizeof(int));
 	
 	rtn_stat = TRUE;
@@ -351,7 +369,7 @@ rg_seltab(TREE *command, TABINFO *tabinfo)
 	exit:
 	if (rtn_stat)
 	{
-		
+		/* Send to client, just send the sstable name. */
 		resp = conn_build_resp_byte(RPC_SUCCESS, SSTABLE_NAME_MAX_LEN, col_buf);
 	}
 	else
@@ -366,6 +384,12 @@ rg_seltab(TREE *command, TABINFO *tabinfo)
 	
 	return resp;
 
+}
+
+char *
+rg_seltab(TREE *command, TABINFO *tabinfo)
+{
+	return NULL;
 }
 
 int
@@ -450,7 +474,7 @@ rg_handler(char *req_buf)
 	}
 	
 	
-	
+	/* Initialize the meta data for build RESDOM. */
 	tss->tcol_info = col_info;
 	tss->tmeta_hdr = ins_meta;
 	
@@ -476,11 +500,12 @@ rg_handler(char *req_buf)
 	tabinfo->t_key_coltype = tab_hdr->tab_key_coltype;
 	tabinfo->t_key_coloff = tab_hdr->tab_key_coloff;
 	tabinfo->t_row_minlen = tab_hdr->tab_row_minlen;
+	tabinfo->t_tabid = tab_hdr->tab_id;
 
-
+	tabinfo->t_sstab_id = ins_meta->sstab_id;
 	tabinfo->t_sstab_name = ins_meta->sstab_name;
 	
-	tss->ttabinfo = tabinfo;
+	tabinfo_push(tabinfo);
 
 	switch(command->sym.command.querytype)
 	{
@@ -516,6 +541,8 @@ rg_handler(char *req_buf)
 
 close:
 
+	tabinfo_pop();
+	
 	if (tabinfo!= NULL)
 	{
 		MEMFREEHEAP(tabinfo->t_sinfo);
@@ -528,7 +555,7 @@ close:
 		}
 		
 		MEMFREEHEAP(tabinfo);
-		tss->ttabinfo = NULL;
+//		tss->ttabinfo = NULL;
 	}
 	
 	parser_close();
@@ -588,7 +615,28 @@ main(int argc, char *argv[])
 	conf_get_path(argc, argv, &conf_path);
 
 	rg_setup(conf_path);
+/*	
+        if((pthread_create(&tid1, NULL, (void *) (&hkgc_boot), NULL)) != 0)
+        {
+		printf("hkgc boot fail!\n");
+       	}
+        else
+        {
+		printf("hkgc boot success! \n");
+        }
 
+        if((pthread_create(&tid2, NULL, (void *)(&rg_boot), NULL)) != 0)
+	{
+		printf("ranger service fail!\n");
+        }
+        else
+	{
+		printf("ranger service success!\n");
+        }
+
+	assert ( pthread_join (tid1, NULL) == 0 );
+	assert ( pthread_join (tid2, NULL) == 0 );
+*/
 	rg_boot();
 	return TRUE;
 }

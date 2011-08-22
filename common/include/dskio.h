@@ -22,24 +22,26 @@
 
 struct buf;
 
-
+/*
+** Block I/O buffer structure used by block I/O system calls.
+*/
 typedef struct blkio
 {
- 	char		*biomaddr;	
-	int		biosize;	
+ 	char		*biomaddr;	/* memory address */
+	int		biosize;	/* number of bytes to read/write */
 	int		bioflags;
 	struct buf	*biobp;
 
 } BLKIO;
 
 
+/* command bits */
+#define	DBREAD		0x0001	/* read request */
+#define	DBWRITE		0x0002	/* unordered write request */
 
-#define	DBREAD		0x0001	
-#define	DBWRITE		0x0002	
 
-
-#define	D_READ_ONLY	0x1	
-#define	D_O_DIRECT	0x2 	
+#define	D_READ_ONLY	0x1	/* Device is read-only */
+#define	D_O_DIRECT	0x2 	/* Use O_DIRECT flag  */
 #define	D_CREATE	0x4
 #define	D_WRITE_ONLY	0x8
 
