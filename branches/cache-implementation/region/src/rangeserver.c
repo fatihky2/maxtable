@@ -55,7 +55,7 @@ extern KERNEL	*Kernel;
 
 #define	RANGE_CONF_PATH_MAX_LEN	64
 
-/** This struct will also be used at cli side**/
+
 typedef struct rg_info
 {
 	char	conf_path[RANGE_CONF_PATH_MAX_LEN];
@@ -84,7 +84,7 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 	char	 	*resp;
 	char		rp[1024];
 	int		rp_idx;
-	char		col_off_tab[COL_OFFTAB_MAX_SIZE];/* Max of var-column is 16 */
+	char		col_off_tab[COL_OFFTAB_MAX_SIZE];
 	char		col_off_idx;
 	int		col_offset;
 	char		*col_val;
@@ -109,7 +109,7 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 	MEMSET(tab_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_dir, MT_RANGE_TABLE, STRLEN(MT_RANGE_TABLE));
 
-	/* Current table dir. */
+	
 	str1_to_str2(tab_dir, '/', tab_name);
 
 	if (STAT(tab_dir, &st) != 0)
@@ -122,10 +122,7 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 		}
 	}
 
-	/* 
-	** sstable name = "tablet name _ sstable_id", so sstable name is unique 
-	** in one table. 
-	*/
+	
 	printf("ins_meta->sstab_name =%s \n", ins_meta->sstab_name);
 	sstable = ins_meta->sstab_name;
 
@@ -133,7 +130,7 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 	MEMSET(ins_meta->sstab_name, SSTABLE_NAME_MAX_LEN);
 	MEMCPY(ins_meta->sstab_name, tab_dir, STRLEN(tab_dir));
 
-	/* Flag if it's the first insertion. */	
+		
 	if (STAT(tab_dir, &st) != 0)
 	{
 		ins_meta->status |= INS_META_1ST;
@@ -143,7 +140,7 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 	printf("tab_dir =%s \n", tab_dir);
 
 
-	/* Begin to build row. */
+	
 	row_build_hdr(rp, 0, 0, ins_meta->varcol_num);
 
 	col_offset = sizeof(ROWFMT);
@@ -159,7 +156,7 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 
 		if (col_offset == tabinfo->t_key_coloff)
 		{
-			/* Fill search information for the searching in the block. */
+			
 			tabinfo->t_sinfo->sicolval = col_val;
 			tabinfo->t_sinfo->sicollen = col_len;
 			tabinfo->t_sinfo->sicolid = tabinfo->t_key_colid;
@@ -195,16 +192,13 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 			{
 				ex_raise(EX_ANY);
 			}
-			/* 
-			** col_offset will increase until it's an invalid one, and then we start
-			** to parse the var-col case.
-			*/
 			
-			/* Var-col case. */
+			
+			
 
 			if (col_num > 0)
 			{
-				/* Row length */
+				
 				rp_idx += sizeof(int);
 				col_offset = -1;
 			}
@@ -257,7 +251,7 @@ exit:
 	
 	if (rtn_stat)
 	{
-		/* Send to client. */
+		
 		resp = conn_build_resp_byte(RPC_SUCCESS, resp_len, resp_buf);
 	}
 	else
@@ -305,7 +299,7 @@ rg_seltab(TREE *command, TABINFO *tabinfo)
 	MEMSET(tab_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_dir, MT_RANGE_TABLE, STRLEN(MT_RANGE_TABLE));
 
-	/* Current table dir. */
+	
 	str1_to_str2(tab_dir, '/', tab_name);
 
 	if (STAT(tab_dir, &st) != 0)
@@ -318,10 +312,7 @@ rg_seltab(TREE *command, TABINFO *tabinfo)
 		}
 	}
 
-	/* 
-	** sstable name = "tablet name _ sstable_id", so sstable name is unique 
-	** in one table. 
-	*/
+	
 	printf("ins_meta->sstab_name =%s \n", ins_meta->sstab_name);
 	sstable = ins_meta->sstab_name;
 
@@ -346,21 +337,21 @@ rg_seltab(TREE *command, TABINFO *tabinfo)
 	bp = blkget(tabinfo);
 	offset = blksrch(tabinfo, bp);
 
-	/* The selecting value is not exist. */
+	
 	if (tabinfo->t_sinfo->sistate & SI_NODATA)
 	{
 		goto exit;
 	}
 
-	/* TODO: rp, rlen just be the future work setting. */
+	
 	char *rp = (char *)(bp->bblk) + offset;
 	int rlen = ROW_GET_LENGTH(rp, bp->bblk->bminlen);
 
-	/* Building the response information. */
+	
 	col_buf = MEMALLOCHEAP(rlen);
 	MEMSET(col_buf, rlen);
 
-	/* Get the sstable file name. */
+	
 	char	*filename = meta_get_coldata(bp, offset, -1);
 	MEMCPY(col_buf, filename, rlen - sizeof(ROWFMT) + sizeof(int));
 	
@@ -369,7 +360,7 @@ rg_seltab(TREE *command, TABINFO *tabinfo)
 	exit:
 	if (rtn_stat)
 	{
-		/* Send to client, just send the sstable name. */
+		
 		resp = conn_build_resp_byte(RPC_SUCCESS, SSTABLE_NAME_MAX_LEN, col_buf);
 	}
 	else
@@ -468,7 +459,7 @@ rg_handler(char *req_buf)
 	}
 	
 	
-	/* Initialize the meta data for build RESDOM. */
+	
 	tss->tcol_info = col_info;
 	tss->tmeta_hdr = ins_meta;
 	
@@ -609,28 +600,7 @@ main(int argc, char *argv[])
 	conf_get_path(argc, argv, &conf_path);
 
 	rg_setup(conf_path);
-/*	
-        if((pthread_create(&tid1, NULL, (void *) (&hkgc_boot), NULL)) != 0)
-        {
-		printf("hkgc boot fail!\n");
-       	}
-        else
-        {
-		printf("hkgc boot success! \n");
-        }
 
-        if((pthread_create(&tid2, NULL, (void *)(&rg_boot), NULL)) != 0)
-	{
-		printf("ranger service fail!\n");
-        }
-        else
-	{
-		printf("ranger service success!\n");
-        }
-
-	assert ( pthread_join (tid1, NULL) == 0 );
-	assert ( pthread_join (tid2, NULL) == 0 );
-*/
 	rg_boot();
 	return TRUE;
 }

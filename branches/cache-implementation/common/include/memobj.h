@@ -24,7 +24,7 @@
 
 #include "memcom.h"
 
-/* Per Object Information */
+
 typedef struct objinfo
 {
 	MEMBLK	*oi_memblk;
@@ -32,27 +32,27 @@ typedef struct objinfo
 	int	oi_flags;
 } MEM_OBJINFO;
 
-/* Generic Freelist */
+
 typedef struct memobject 
 {
-	MEMCOM		f_mc;		/* must be the first field */
-	LINK		f_block;	/* heading memblock list */
-	LINK		f_free;		/* Free items */
-	LINK		f_used;		/* Used items */
-	size_t		f_itemsize;	/* size of items */
-	size_t		f_maxengines;	/* maximum number of engines */
-	int		f_status;	/* properties of an object pool */
-	long		f_count;	/* # of free items in central list */
-	long		f_destr_count;	/* # of objects in destroy state */
-	size_t		f_security;	/* zero memory brfore release? */
-	long		f_spares[2];	/* for development and debugging */
+	MEMCOM		f_mc;		
+	LINK		f_block;	
+	LINK		f_free;		
+	LINK		f_used;		
+	size_t		f_itemsize;	
+	size_t		f_maxengines;	
+	int		f_status;	
+	long		f_count;	
+	long		f_destr_count;	
+	size_t		f_security;	
+	long		f_spares[2];	
 } MEMOBJECT;
 
 
 #define	MOBJ_CALC_OBJECT_SIZE(_objsize)						\
 	ROUNDSIZE((_objsize) + sizeof(MEM_OBJINFO), sizeof(ALIGNDATATYPE))	\
 
-/* Following are for object memory pool. */
+
 MEMOBJECT *
 mp_obj_crt(size_t itemsize, size_t minitems, size_t maxitems);
 

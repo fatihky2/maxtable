@@ -84,7 +84,7 @@ tss_setup(int opid)
 {
 	TSS	*new_tss;
 
-	/* allocate a TSS for it */
+	
 	if ((new_tss = tss_alloc()) == NULL)
 	{
 		return FALSE;

@@ -40,7 +40,7 @@ extern	TSS	*Tss;
 #define NAMEIDX(sstab)	((sstab) ^ ((sstab)<<4))
 
 
-/* Random nameing for the new sstable by the creating time. */
+
 void
 sstab_namebyname(char *old_sstab, char *new_sstab)
 {
@@ -178,7 +178,7 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 		
 		key = row_locate_col(rp, srctabinfo->t_key_coloff, srcbp->bblk->bminlen, &keylen);
 		
-		/* VIRTUAL OFFSET. */
+		
 		SRCH_INFO_INIT(tabinfo->t_sinfo, key, keylen, srctabinfo->t_key_colid, 
 				srctabinfo->t_key_coltype, srctabinfo->t_key_coloff);
 
@@ -190,9 +190,7 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 		bufdirty(destbuf);
 	}
 
-	/*
-	** Build some infotmation for the response to the Master so that this new sstab can be seen by others.
-	*/
+	
 	srctabinfo->t_stat |= TAB_SSTAB_SPLIT;
 
 	srctabinfo->t_insrg = (INSRG *)MEMALLOCHEAP(sizeof(INSRG));

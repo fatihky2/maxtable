@@ -31,31 +31,30 @@ extern "C" {
 #include <stdio.h>
 #include <setjmp.h>
 
-/* number of EXCEPT structs for backout on process stack */
+
 #define EX_BACKOUT_STACKSIZE    32
 
 typedef int (* EXC_FUNC_PTR)(int );
 
 typedef struct mt_except
 {
-	int             exc_number;     /* exception number */
-	EXC_FUNC_PTR    exc_func;       /* handler to call upon exception */
-	jmp_buf         exc_buf;        /* saved state for returning control to
-                                        			** point following ex_handle call */
+	int             exc_number;     
+	EXC_FUNC_PTR    exc_func;       
+	jmp_buf         exc_buf;        
 } EXCEPT;
 
 typedef struct exc_manage
 {
-	EXCEPT  *ex_start;      /* set to bottom of stack */
-	EXCEPT  *ex_top;        /* current top of stack */
-	EXCEPT  *ex_end;        /* maximum top of stack */
+	EXCEPT  *ex_start;      
+	EXCEPT  *ex_top;        
+	EXCEPT  *ex_end;        
 } EXC_MANAGE;
 
-/* Exception stack */
+
 typedef struct exc_proc
 {
-	EXC_MANAGE      exp_manage;     /* ex stack bounds for this process */
-	EXCEPT          exp_stack[EX_BACKOUT_STACKSIZE];     /* ex stack for this process */
+	EXC_MANAGE      exp_manage;     
+	EXCEPT          exp_stack[EX_BACKOUT_STACKSIZE];     
 } EXC_PROC;
 
 struct tss;

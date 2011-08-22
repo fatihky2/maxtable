@@ -80,7 +80,7 @@ par_bld_const(char *data, int datalen, int datatype)
 
 	if (!TYPE_IS_INVALID(datatype) && TYPE_IS_FIXED(datatype))
 	{
-		/* Save the type length if the type is a fixed column. */
+		
 		len = TYPE_GET_LEN(datatype);
 	}
       
@@ -104,10 +104,7 @@ par_destroy_const(TREE *node)
 	return;
 }
 
-/* 
-** The data for the creating table will include column name and column type,
-** like "c1 int".
-*/
+
 TREE*
 par_bld_resdom(char *colname, char *coltype, int col_id)
 {
@@ -130,7 +127,7 @@ par_bld_resdom(char *colname, char *coltype, int col_id)
 
 	if (coltype)
 	{
-		/* Get the type of column. */
+		
 		col_idx = type_get_index_by_name(coltype);
 
 		assert(!TYPE_IS_INVALID(col_idx));
@@ -148,11 +145,8 @@ par_bld_resdom(char *colname, char *coltype, int col_id)
 	}
 
 
-	/* Column offset for insert to build row */
-	/* 
-	** Working Notes:
-	** 	1. How to get the offset.
-	*/
+	
+	
 
 	return node;
 }
@@ -164,7 +158,7 @@ par_destroy_resdom(TREE * node)
 
 	if(node->right)
 	{
-		/* Constant has no child, so we can delete it in RESDOM. */
+		
 		par_destroy_const(node->right);
 	}
 	
@@ -200,12 +194,12 @@ parser_open(char *s_str)
 	        break;
 
 	    case CRTINDEX:
-	        /* delay this implementation. */
+	        
 	        break;
 
 	    case SELECT:
-	        /* select c1, c2 from tab_name where */
-		/* Need further investigation. */
+	        
+		
 		par_sel_tab((s_str + s_idx), SELECT);
 
 	        break;
@@ -234,7 +228,7 @@ parser_close(void)
 	TREE    *tree_left_tmp;
 	TREE    *tree_right;
 
-	/* Free memory from the root of parser tree. */
+	
 	tree = tss->tcmd_parser;
 
 	if (tree == NULL)
@@ -244,7 +238,7 @@ parser_close(void)
 
 	while(tree && PAR_NODE_IS_COMMAND(tree->type))
 	{
-		/* Resdom branch. */
+		
 		tree_left = tree->left;
 		while(tree_left && PAR_NODE_IS_RESDOM(tree_left->type))
 		{            
@@ -253,7 +247,7 @@ parser_close(void)
 			tree_left = tree_left_tmp;
 		}
 
-		/* Command branch. */
+		
 		tree_right = tree->right;
 		par_destroy_cmd(tree);
 
@@ -263,7 +257,7 @@ parser_close(void)
 	return;
 }
 
-/* This TREE should be a tree of a whole table. */
+
 char *
 par_get_colval_by_coloff(TREE *command, int coloff, int *col_len)
 {
@@ -287,7 +281,7 @@ par_get_colval_by_coloff(TREE *command, int coloff, int *col_len)
 	
 }
 
-/* This TREE should be a tree of a whole table. */
+
 char *
 par_get_colval_by_colid(TREE *command, int colid, int *colen)
 {
@@ -353,7 +347,7 @@ par_prt_tree(TREE *command)
 int 
 par_get_query(char *s_str, int *s_idx)
 {
-	char		start[64]; /* Limit one token's size as 64 byte*/
+	char		start[64]; 
 	int		len;
 	char 		separator;
 	int 		querytype;
@@ -371,13 +365,13 @@ par_get_query(char *s_str, int *s_idx)
 	
 double_parse:  
 
-	/* Normalize this command. It's just a simple op. */
+	
 	while ((*s_str == ' ') || (*s_str == '\t'))
 	{
 		s_str++;
 	}
 
-	/* Begin Parse. */
+	
 	while(   (*s_str != separator) && (*s_str != ' ') 
 	      && (*s_str != '\t'))
 	{
@@ -386,10 +380,7 @@ double_parse:
 
 	*s_idx = len;
 
-	/* 
-	** Parse double token,  such as create table/create index and 
-	** insert into, add server. 
-	*/
+	
 	if(   (!strncasecmp("create", start, len))
 	   || (!strncasecmp("insert", start, len))
 	   || (!strncasecmp("add", start, len))
@@ -407,9 +398,7 @@ double_parse:
 }
 
 
-/* 
-** add server svr_name ("192.168.0.100") 
-*/
+
 int 
 par_add_server(char *s_str, int querytype)
 {
@@ -435,10 +424,10 @@ par_add_server(char *s_str, int querytype)
 	len = str1nstr(s_str, "(\0", cmd_len);
 
 	MEMSET(tab_name, 64);
-	/* Aquire the table name. */	
+		
 	MEMCPY(tab_name, s_str, len - 1);
 
-	/* Truncate the space and tab key of the string*/
+	
 	str0n_trunc_0t(tab_name, len - 1, &start, &end);
 	tab_name_len = end - start;
 
@@ -482,10 +471,10 @@ par_crtins_tab(char *s_str, int querytype)
 	len = str1nstr(s_str, "(\0", cmd_len);
 
 	MEMSET(tab_name, 64);
-	/* Aquire the table name. */	
+		
 	MEMCPY(tab_name, s_str, len - 1);
 
-	/* Truncate the space and tab key of the string*/
+	
 	str0n_trunc_0t(tab_name, len - 1, &start, &end);
 	tab_name_len = end - start;
 
@@ -503,7 +492,7 @@ par_crtins_tab(char *s_str, int querytype)
 	return TRUE;
 }
 
-/* select tab_name (c1_value ) */
+
 int 
 par_sel_tab(char *s_str, int querytype)
 {
@@ -529,10 +518,10 @@ par_sel_tab(char *s_str, int querytype)
 	len = str1nstr(s_str, "(\0", cmd_len);
 
 	MEMSET(tab_name, 64);
-	/* Aquire the table name. */	
+		
 	MEMCPY(tab_name, s_str, len - 1);
 
-	/* Truncate the space and tab key of the string*/
+	
 	str0n_trunc_0t(tab_name, len - 1, &start, &end);
 	tab_name_len = end - start;
 
@@ -578,10 +567,10 @@ par_addsstab(char *s_str, int querytype)
 	len = str1nstr(s_str, "(\0", cmd_len);
 
 	MEMSET(tab_name, 64);
-	/* Aquire the table name. */	
+		
 	MEMCPY(tab_name, s_str, len - 1);
 
-	/* Truncate the space and tab key of the string*/
+	
 	str0n_trunc_0t(tab_name, len - 1, &start, &end);
 	tab_name_len = end - start;
 

@@ -33,7 +33,7 @@ extern TSS	*Tss;
 
 
 #define	BLK_BUF_NEED_CHANGE	0x0001
-#define BLK_ROW_NEXT_SSTAB	0x0002	/* The inserting row is moved to next sstab when it hits the sstable split. */
+#define BLK_ROW_NEXT_SSTAB	0x0002	
 #define BLK_ROW_NEXT_BLK	0x0004
 
 
@@ -51,24 +51,13 @@ blkget(TABINFO *tabinfo)
 
 	if (BLOCK_IS_EMPTY(lastbp))
 	{
-		/* Return 1st buffer. */
+		
 		return lastbp->bsstab;
 	}
 
-	/* Locate the buffer we need. */
+	
 
-	/* 
-	** TODO:
-	** Following is the block index row format:
-	**
-	** row # stand for the block #
-	** other field of this row is same with the first row of each block
-	** so, we only need to fix the row # while save the block index.
-	**
-	** (2011-07-25)
-	** Current implementation will not use the index in the range server.
-	**
-	*/
+	
 	tabinfo->t_sinfo->sistate |= SI_INDEX_BLK;
 	blkidx = blksrch(tabinfo, lastbp);
 
@@ -82,7 +71,7 @@ blkget(TABINFO *tabinfo)
 
 }
 
-/* Return offset of row in the block */
+
 int
 blksrch(TABINFO *tabinfo, BUF *bp)
 {
@@ -110,7 +99,7 @@ blksrch(TABINFO *tabinfo, BUF *bp)
 	keylen = tabinfo->t_sinfo->sicollen;	
 	blkidx = -1;
 	
-	/* Empty Block. */
+	
 	if (BLK_GET_NEXT_ROWNO(bp) == 0)
 	{
 		last_offset = bp->bblk->bfreeoff;
@@ -137,7 +126,7 @@ srch_again:
         	result = row_col_compare(coltype, key, keylen, key_in_blk, 
 				keylen_in_blk);
 
-		/* Find the index file. We should clear it with the data search in the ranger server. */
+		
 		if (tabinfo->t_stat & TAB_SCHM_SRCH)
 		{
 			if ((result == GR) || (rowno == 0))
@@ -163,7 +152,7 @@ srch_again:
 	//	blkidx = ROW_GET_ROWNO(rp); 
 	}
 
-	/* In the select case, we need to use it to flag if the return value is valid. */
+	
 	if ((result != EQ) && !(tabinfo->t_stat & TAB_SCHM_SRCH))
 	{
 		tabinfo->t_sinfo->sistate |= SI_NODATA;
@@ -171,13 +160,13 @@ srch_again:
 
 	blkidx = bp->bblk->bblkno;
 	
-	/* New row offset is returned if the search is not triggered by the tabletscheme search. */
+	
 
 	if (rowno == BLK_GET_NEXT_ROWNO(bp))
 	{
 		if (!(tabinfo->t_stat & TAB_SCHM_SRCH))
 		{
-			/* We got the end of this block. */
+			
 			last_offset += ROW_GET_LENGTH(rp, minrowlen);
 		}
 		
@@ -191,7 +180,7 @@ srch_again:
 
 			assert(bp->bblk->bblkno != -1);
 
-			/* Continue to scan the next block if it's not an empty one. */
+			
 			if (bp->bblk->bfreeoff != BLKHEADERSIZE)
 			{
 				tabinfo->t_sinfo->sistate &= ~SI_NODATA;
@@ -204,12 +193,12 @@ srch_again:
 	{
 		assert(last_offset == BLKHEADERSIZE);
 
-		/* If don't hit the first block, we need to use the previous block. */
+		
 		if ((bp->bblk->bblkno != 0) && (bp->bblk->bfreeoff > BLKHEADERSIZE))
 		{
 			bp--;
 			
-			/* We got the end of this block. */
+			
 			last_offset = end_row_offset;
 
 			blkidx = bp->bblk->bblkno;
@@ -220,7 +209,7 @@ srch_again:
 finish:
 	if (tabinfo->t_sinfo->sistate & SI_INDEX_BLK)
 	{
-		/* -1 stands for empty sstable. */		
+				
 		return blkidx;
 	}
 		
@@ -236,7 +225,7 @@ blk_init(BLOCK *blk)
 		blk->bnextrno = 0;
 		blk->bstat = 0;
 
-		/* Just for testing to have a clear overview look, in production, we can omit it. */
+		
 		MEMSET(blk->bdata, BLOCKSIZE - BLKHEADERSIZE - 4);
 		
 		blk = (BLOCK *) ((char *)blk + BLOCKSIZE);
@@ -248,11 +237,7 @@ blk_init(BLOCK *blk)
 	blk->bstat = 0;
 }
 
-/* 
-** Return the last block of the sstable
-**
-** Last block save the block index
-*/
+
 BUF *
 blk_getsstable(TABINFO *tabinfo)
 {
@@ -266,7 +251,7 @@ blk_getsstable(TABINFO *tabinfo)
 	{
 		assert(tabinfo->t_keptbuf);
 
-		/* Brifly solution: it must have been hashed if we got it here. */
+		
 		return tabinfo->t_keptbuf;
 	}
 
@@ -277,7 +262,7 @@ blk_getsstable(TABINFO *tabinfo)
 		
 		bufhash(bp);
 
-		/* TODO: we can remove it in the future. */
+		
 		blk_init(bp->bblk);
 	
 		sstab_name = tabinfo->t_sstab_name;
@@ -294,12 +279,7 @@ blk_getsstable(TABINFO *tabinfo)
 		}
 		
 		bufread(bp);
-/*
-		if (tabinfo->t_stat & TAB_CRT_NEW_FILE)
-		{
-			bp->bblk->bsstabid = tabinfo->t_insmeta->sstab_id;
-		}
-*/
+
 	}
 
 	if (SSTABLE_STATE(bp) != BUF_IOERR)
@@ -357,7 +337,7 @@ blkins(TABINFO *tabinfo, char *rp)
 
 	if (bp->bblk->bfreeoff - offset)
 	{
-		/* Shift right the offset table.*/
+		
 		offtab = ROW_OFFSET_PTR(bp->bblk);
 		
 		BACKMOVE((char *)bp->bblk + offset, (char *)bp->bblk + offset + rlen, 
@@ -377,21 +357,16 @@ blkins(TABINFO *tabinfo, char *rp)
 		offtab[-i] = offset;
 	}
 	
-	/*TODO: scope multi-buffers. */	
+		
 
 	PUT_TO_BUFFER((char *)bp->bblk + offset, ign, rp, rlen);
 
 	if (bp->bblk->bfreeoff == offset)
 	{
-		/* Update the offset table in the block */
+		
 		ROW_SET_OFFSET(bp->bblk, BLK_GET_NEXT_ROWNO(bp), offset);
 	}
 	
-	//offtab = ROW_OFFSET_PTR(bp->bblk);
-	//offtab += BLK_GET_NEXT_ROWNO(bp);
-
-	//*offtab = offset;	
-
 	bp->bblk->bfreeoff += rlen;
 
 	bp->bblk->bminlen = minlen;
@@ -447,18 +422,10 @@ blkdel(TABINFO *tabinfo, char *rp)
 
 	offtab = ROW_OFFSET_PTR(bp->bblk);
 
-	/* 
-	** Currently we can not trust the row number in the row header, so we have to get the 
-	** right row num by the scanning offset table.
-	*/
+	
 	for (i = bp->bblk->bnextrno; i > 0; i--)
 	{
-		/* 
-		**	          del
-		** 	0 1 2    3    4 5 6
-		** rtn: i = 3
-		**
-		*/
+		
 		if (offtab[-(i-1)] < offset)
 		{
 			break;
@@ -484,17 +451,7 @@ blkdel(TABINFO *tabinfo, char *rp)
 	return TRUE;
 }
 
-/*
-** It must be the back move is scoping multi-blocks.
-** 
-** NOTE: in this version we just fix the issue in the same file "ssatble".
-**
-** TODO: we need to fix the multi-files issue. in that word, it will split the
-**	file sstable when one new is inserting.
-**
-** Parameters:
-**	blk:	it must be the one that has no space to contain the new inserting row.
-*/
+
 void
 blk_file_back_move(BLOCK *blk)
 {
@@ -511,13 +468,13 @@ blk_file_back_move(BLOCK *blk)
 	rminlen = blk->bminlen;
 
 	
-	/* Get the last row and let it out of this block for the new row. */
+	
 	i = blk->bnextrno;
 	offset = offtab[-(i-1)];
 	rp = (char *)blk + offset;
 	rlen = ROW_GET_LENGTH(rp, rminlen);
 
-	/* Get the next block and check if its space is enough to contain this row.*/
+	
 	tmpblk = (BLOCK *) ((char *)blk + BLOCKSIZE);
 
 	
@@ -526,7 +483,7 @@ blk_file_back_move(BLOCK *blk)
 		BACKMOVE((char *)blk + offset, (char *)blk + offset + rlen, 
 				blk->bfreeoff - offset);
 
-		/* Shift right the offset table.*/
+		
 		offtab = ROW_OFFSET_PTR(blk);
 		for (i = blk->bnextrno; i > 0; i--)
 		{
@@ -546,13 +503,7 @@ blk_file_back_move(BLOCK *blk)
 
 
 
-/* 
-** Check if the sstab located by this buffer has enough space to contain one row. 
-**
-** Note:
-**		We need only to check these blocks following given buffer, for example:
-**		the given block no is 7, we need only to check 7,8,9,10,11,12,13,14,15.
-*/
+
 
 
 int
@@ -581,7 +532,7 @@ blk_check_sstab_space(TABINFO *tabinfo, BUF *bp, char *rp, int rlen, int ins_off
 	
 	while(1)
 	{
-		/* TODO: we need to check the case '='. */
+		
 		if ((blk->bfreeoff + rlen) < (BLOCKSIZE - BLK_TAILSIZE - (ROW_OFFSET_ENTRYSIZE * (row_cnt + 1))))
 		{
 			break;
@@ -589,7 +540,7 @@ blk_check_sstab_space(TABINFO *tabinfo, BUF *bp, char *rp, int rlen, int ins_off
 		
 		if (blk->bnextblkno == -1)
 		{
-			/* The inserting row locate at the first half. */
+			
 			if (blk->bblkno > ((BLK_CNT_IN_SSTABLE / 2) - 1))
 			{
 				rtn_stat |= BLK_ROW_NEXT_SSTAB;
@@ -609,7 +560,7 @@ blk_check_sstab_space(TABINFO *tabinfo, BUF *bp, char *rp, int rlen, int ins_off
 
 		nextblk = (BLOCK *) ((char *)blk + BLOCKSIZE);
 
-		/* Check if this block is empty. */
+		
 		if (nextblk->bfreeoff == BLKHEADERSIZE)
 		{
 			thisofftab = ROW_OFFSET_PTR(blk);
@@ -636,7 +587,7 @@ blk_check_sstab_space(TABINFO *tabinfo, BUF *bp, char *rp, int rlen, int ins_off
 			}
 			else
 			{
-				/* The inserting row locate at the first half. */
+				
 				if (blk->bblkno > ((BLK_CNT_IN_SSTABLE / 2) - 1))
 				{
 					rtn_stat |= BLK_ROW_NEXT_SSTAB;
@@ -661,12 +612,7 @@ blk_check_sstab_space(TABINFO *tabinfo, BUF *bp, char *rp, int rlen, int ins_off
 }
 
 
-/*
-** The solution of split is the Middle Split. Before making this decision, we have a deep consideration for some
-** solution, such as head split, tail split, middle split, and inserting point split.
-**
-** Now, we choose the middle split, though we may hit some issue, such as the unused free space.
-*/
+
 void
 blk_split(BLOCK *blk)
 {
@@ -684,7 +630,7 @@ blk_split(BLOCK *blk)
 	assert((blk->bnextblkno!= -1) && (nextblk->bfreeoff == BLKHEADERSIZE)
 		&& (rowcnt > 1));
 
-	/* Get the middle row of this block. */
+	
 	i = rowcnt / 2;
 	
 	thisofftab = ROW_OFFSET_PTR(blk);
