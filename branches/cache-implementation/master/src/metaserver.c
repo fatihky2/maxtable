@@ -1091,7 +1091,11 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
 	str1_to_str2(tab_meta_dir, '/', name);
 
-	tablet_ins_row(&tab_hdr, tab_hdr.tab_id, tab_hdr.tab_sstab, tab_meta_dir, sstab_rp, ROW_MINLEN_IN_TABLET);
+	int tabletid;
+	tabletid = *(int *)row_locate_col(rp, sizeof(ROWFMT), ROW_MINLEN_IN_TABLETSCHM, 
+					&namelen);
+
+	tablet_ins_row(&tab_hdr, tab_hdr.tab_id, tabletid, tab_meta_dir, sstab_rp, ROW_MINLEN_IN_TABLET);
 
 	MEMFREEHEAP(sstab_rp);
 
