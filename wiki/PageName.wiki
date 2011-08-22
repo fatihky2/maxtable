@@ -20,14 +20,19 @@ int main()
 		int i;
 
 		/* Commit a CREAT TABLE command for a table scheme. */
+
 		memset(resp, 0, 256);
 		sprintf(cmd, "create table gu(id1 varchar, id2 varchar)");
+
 		cli_commit(connection, cmd, resp);
+
 		printf("ret: %s\n", resp);
 
 
 		/* Commit a INSERT data command for user data. */
+
 		printf("###begin to insert!\n");
+
 		for(i = 0; i < 10000; i ++)
 		{
 			memset(resp, 0, 256);
@@ -39,6 +44,7 @@ int main()
 		}
 		
 		/* Commit a SELECT command for the selected data. */                               
+
 		printf("***begin to select\n");
 		for(i = 0; i < 100; i ++)
 		{
