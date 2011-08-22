@@ -28,9 +28,9 @@
 
 KERNEL *Kernel;
 
-MEMPOOL *Globle_mp;	
+MEMPOOL *Globle_mp;	/* Only used for DEBUG */
 
-
+/* Internal Function Declaration */
 
 static int
 mp_frag_grow(MEMPOOL * mp, size_t grow_size);
@@ -42,7 +42,10 @@ static void
 mem_prt_fragmp(MEMPOOL *mp);
 
 
-
+/**
+ *  Description:
+ *	Allocate a block of memory using the 'malloc' routine.
+ **/
 void * 
 mem_os_malloc(unsigned long size)
 {
@@ -50,7 +53,7 @@ mem_os_malloc(unsigned long size)
 	unsigned long   alloc_size;
 	void		*start_addr;
 
-	
+	/* Round size to MY_MEMPAGESIZE. */
 	rnd = MY_MEMPAGESIZE;
 
 	if (size % rnd)
@@ -62,13 +65,13 @@ mem_os_malloc(unsigned long size)
 		alloc_size = size;
 	}
 
-	
+	/* Allocate the memory */
 	alloc_size += (unsigned long) MY_MEMPAGESIZE;
 	start_addr = (void *)malloc((unsigned int)alloc_size);
 
 	assert(start_addr != NULL);
 
-	
+	/* Align start_addr */
 	if ((long) start_addr % MY_MEMPAGESIZE)
 	{
 		start_addr = (start_addr + MY_MEMPAGESIZE) -
@@ -77,30 +80,33 @@ mem_os_malloc(unsigned long size)
 
 	if (start_addr != NULL)
 	{
-		
+		/* Clear it */
 		MEMSET(start_addr, size);
 	}
 
 	return(start_addr);
 }
 
-
+/**
+ * Description:
+ *	Create allocation region for the region server.
+ */
 int
 mem_init_alloc_regions()
 {
-	void *		kmem_ptr;	
+	void *		kmem_ptr;	/* Ptr to the kernel memory. */
 	size_t		size;
 
 	size = MY_KERNEL_MEM_SIZE;
 
-	
+	/* Allocate the 1st region. */
 	kmem_ptr = mem_os_malloc(size);
 
 	Kernel = (KERNEL *)kmem_ptr;
 	kmem_ptr += sizeof(KERNEL);
 	size -= sizeof(KERNEL);
 
-	
+	/* Initialize the frag MEMPLIST struct */
 	Kernel->ke_fragpool_list = (MEMPLIST *)kmem_ptr;
 	Kernel->ke_fragpool_list->mpl_count = 0;
 	INITQUE(&(Kernel->ke_fragpool_list->mpl_link));
@@ -108,7 +114,7 @@ mem_init_alloc_regions()
 	kmem_ptr += sizeof(MEMPLIST);
 	size -= sizeof(MEMPLIST);
 
-	
+	/* Initialize the object MEMPLIST struct */
 	Kernel->ke_objpool_list = (MEMPLIST *)kmem_ptr;
 	Kernel->ke_objpool_list->mpl_count = 0;
 	INITQUE(&(Kernel->ke_objpool_list->mpl_link));
@@ -116,18 +122,18 @@ mem_init_alloc_regions()
 	kmem_ptr += sizeof(MEMPLIST);
 	size -= sizeof(MEMPLIST);
 	
-	
+	/* Create frag memory pool. */
 	Kernel->ke_mp_frag = mp_frag_crt(size, MAXSIZE_FRAGPOOL);
 
-	
+	/* Link the Kernel Frag Pool to the frag memory pool list. */
 	mp_list_insert(Kernel->ke_mp_frag, MEMPOOL_FRAG);
 
-	
+	/* Create TSS object memory pool. */
 	Kernel->ke_tss_objpool = (void *)mp_obj_crt(sizeof(TSSOBJ), 
 						TSS_MIN_ITEMS, TSS_MAX_ITEMS);
 	mp_list_insert((MEMOBJECT *)Kernel->ke_tss_objpool, MEMPOOL_OBJECT);
 
-        
+        /* Create buffer pool. */
         Kernel->ke_buf_objpool = (void *)mp_obj_crt(sizeof(BUF), 
 						TSS_MIN_ITEMS, TSS_MAX_ITEMS);
 	mp_list_insert((MEMOBJECT *)Kernel->ke_buf_objpool, MEMPOOL_OBJECT);
@@ -135,7 +141,11 @@ mem_init_alloc_regions()
 	return TRUE;
 }
 
-
+/**
+ *  Description:
+ *	Create a new mempool. A memory block of min_size bytes is allocated
+ *	and initialized. Then a pointer to the MEMPOOL is returned.
+ **/
 MEMPOOL *
 mp_frag_crt(size_t min_size, size_t max_size)
 {
@@ -145,7 +155,7 @@ mp_frag_crt(size_t min_size, size_t max_size)
 	MEMBLK	   	*mbp;
 	MEMFRAG		*mfp;
 
-	
+	/* validate and alignments */
 	if ( min_size < MY_MEMPAGESIZE )
 	{
 		min_size = MY_MEMPAGESIZE;
@@ -168,7 +178,7 @@ mp_frag_crt(size_t min_size, size_t max_size)
 		init_size = MAX_FRAG_SIZE;
 	}
 
-	
+	/* Allocate mempool. */
 	if ( Kernel && !Kernel->ke_mp_frag )
 	{
 		mp = (MEMPOOL *)((char *)Kernel + sizeof(KERNEL)
@@ -191,7 +201,7 @@ mp_frag_crt(size_t min_size, size_t max_size)
 	INITQUE(&mp->mp_free_frags);                              
 	mp->mp_free_frags.start_addr = (char *)&mp->mp_free_frags;
 
-	
+	/* Initialize the MEMPOOL structure. */
 	MEMCOM_MINSIZE(mp) = min_size;
 	MEMCOM_MAXSIZE(mp) = max_size;
 	MEMCOM_GROWSIZE(mp) = MY_MEMPAGESIZE;
@@ -201,13 +211,13 @@ mp_frag_crt(size_t min_size, size_t max_size)
 	mp->mp_ovhd = sizeof(MEMPOOL);
 	strcpy(MEMCOM_POOLNAME(mp), "noname_fragpool");
 
-	
+	/* Initialize the MEMBLK structure. */
 	mbp = (MEMBLK *)(mp + 1);
 	mbp->mb_frags = 1;
 	mbp->mb_begin = (void *)(mbp + 1);
 	mbp->mb_end = (void *)((char *)mp + init_size);
 
-	
+	/* Initialize the MEMFRAG structure. */
 	mfp = (MEMFRAG *)mbp->mb_begin;
 	mfp->mf_flags = 0;
 	mfp->mf_block = mbp;
@@ -217,16 +227,19 @@ mp_frag_crt(size_t min_size, size_t max_size)
 
 	mp->mp_nfrags = 1;
 
-	
+	/* Count block header and the 1st fragment header */
 	MEMCOM_UPDATE_USED(mp, (sizeof(MEMBLK) + sizeof(MEMFRAG)));
 	mp->mp_ovhd += (sizeof(MEMBLK) + sizeof(MEMFRAG));
 
-	
+	/* Add the newly created MEMBLK and MEMFRAG onto the MEMPOOL. */
 	INSQUE(&(mp->mp_link), mbp);
 	INSQUE(&(mp->mp_frags), mfp);
 	MF_INS_FREEQUE(mp, mfp);
 
-	
+	/* 
+	** Grow the size of newly allocated frag memory pool if it's 
+	** less than the minimal size. 
+	*/
 	while ( init_size < min_size )
 	{
 		if ( min_size - init_size > MAX_FRAG_SIZE )
@@ -248,7 +261,12 @@ mp_frag_crt(size_t min_size, size_t max_size)
 	return mp;
 }
 
-
+/*
+** Description:
+**	mp_frag_alloc() is the working function for MEMALLOCREG
+**
+** (Bug record: allocate memory will NOT get the MAX fit size)
+*/
 void *
 mp_frag_alloc(MEMPOOL *mp, size_t size, char *file, int line)
 {
@@ -261,7 +279,7 @@ mp_frag_alloc(MEMPOOL *mp, size_t size, char *file, int line)
 	size_t	alloced;	
 	size_t  grow_size;
 
-	
+	/* Validation */
 	if ((size > MAX_FRAG_ALLOCSIZE) || !mp)
 	{
 		return (void *)NULL;
@@ -281,32 +299,35 @@ retry:
 			continue;
 		}
 
-		
+		/* check if fragment is large enough */
 		if (mfp->mf_size >= alloc_size)
         	{
 			addr = mfp + 1;
 			mfp->mf_flags |= MEMPOOL_USED;
 
-			
+			/* 
+			** Split only if the resulting fragment is at least
+			** 2*sizeof(MEMFRAG) bytes after allocation. 
+			*/
 			if (mfp->mf_size > alloc_size + 2)
             		{
 				nextmfp = mfp + (alloc_size + 1);
 
-				
+				/* List of all frags that include free and used. */
 				INSQUE(mfp, nextmfp);
 				nextmfp->mf_size = mfp->mf_size - (alloc_size + 1);
 				nextmfp->mf_flags = 0;
 
-				
+				/* Insert the new fragment into free queue */
 				MF_INS_FREEQUE(mp, nextmfp);
 
-				
+				/* Remove current fragment from free queue */
 				MF_REM_FREEQUE(mfp);
 
-				
+				/* copy the block pointer to the new frag */
 				nextmfp->mf_block = mfp->mf_block;
 
-				
+				/* incease # of frags by 1 for the block */
 				mfp->mf_block->mb_frags++;
 
 				mfp->mf_size = alloc_size;
@@ -323,7 +344,7 @@ retry:
 				MF_REM_FREEQUE(mfp);
 			}
 
-			
+			/* Break out  of the "for" loop. */
 			break;
 		}
 	}
@@ -332,7 +353,10 @@ retry:
 	{
 //		size_t	grow_size;
 
-		
+		/* 
+		** Increase the mempool if the maximum size of the pool 
+		** has not been reached and try again.
+		*/
 		grow_size = MEMPOOL_FRAG_GROWSIZE(size);
 
 		if ( MEMCOM_GROWSIZE(mp) > grow_size )
@@ -348,7 +372,10 @@ retry:
 		}
 	}
 
-	
+	/* 
+	** Hit a assertion if addr is invalid, in future we will replace it 
+	** using the logic of wait/abort. 
+	*/
 	if (addr == NULL)
 	{
 		assert(addr);
@@ -363,27 +390,30 @@ retry:
 }
 
 
-
+/*
+**  Description: 
+**	Check if the memfrag at address addr can be extended.
+*/
 void *
 mp_frag_realloc(MEMPOOL *mp, void * addr, size_t size)
 {
-	int	alloc_size;	
-	int	comb_size;	
-	void	*newaddr;	
-	MEMFRAG	*nextmfp;	
-	MEMFRAG	*mfp;		
-	MEMFRAG	*newmfp;	
+	int	alloc_size;	/* # of memfrags requested */
+	int	comb_size;	/* combined fregment size */
+	void	*newaddr;	/* new memory address */
+	MEMFRAG	*nextmfp;	/* point to the next memfrag in list */
+	MEMFRAG	*mfp;		/* point to the memfrag at addr */
+	MEMFRAG	*newmfp;	/* point to the new memfrag */
 
-	
+	/* Validation */
 	if ((size > MAX_FRAG_ALLOCSIZE) || !mp)
     	{
 		return (void *)NULL;
 	}
 
-	
+	/* have mfp point to the memfrag at address addr */
 	mfp = (MEMFRAG *)addr - 1;
 
-	
+	/* calculated the # of memfrags needed */
 	alloc_size = ROUNDSIZE(size, sizeof(MEMFRAG)) / sizeof(MEMFRAG);
 
 	if (alloc_size <= mfp->mf_size)
@@ -400,21 +430,21 @@ mp_frag_realloc(MEMPOOL *mp, void * addr, size_t size)
     	{
 		if ( comb_size == alloc_size )
         	{
-			
+			/* adjust the size of the current memfrag */
 			mfp->mf_size = alloc_size;
 			mfp->mf_flags |= MEMPOOL_USED;
-			
+			/* remove the next memfrag from the frag list */
 			REMQUE(nextmfp, nextmfp, MEMFRAG);
 
-			
+			/* Remove this entry from the free queue */
 			MF_REM_FREEQUE(nextmfp);
 
-			
+			/* adjust used, free stats, one memfrag less */
 			MEMCOM_UPDATE_USED(mp, (sizeof(MEMFRAG) * nextmfp->mf_size));
 			mp->mp_ovhd -= sizeof(MEMFRAG);
 			mp->mp_nfrags--;
 
-			
+			/* erase the header of memfrag */
 			MEMSET(nextmfp, sizeof(MEMFRAG));
 
 		}
@@ -422,39 +452,46 @@ mp_frag_realloc(MEMPOOL *mp, void * addr, size_t size)
 	        {
 			newmfp = nextmfp + (alloc_size - mfp->mf_size); 
 			nextmfp->mf_flags |= MEMPOOL_USED;
-			
+			/* remove the next frag */
 			REMQUE(nextmfp, nextmfp, MEMFRAG);
 
-			
+			/* Remove this entry from the free queue */
 			MF_REM_FREEQUE(nextmfp);
 
-			
+			/* form & insert the newly generated frag */
 			newmfp->mf_size = comb_size - alloc_size - 1;
 			newmfp->mf_block = nextmfp->mf_block;
 			newmfp->mf_flags = 0;
 			INSQUE(mfp, newmfp);
 
-			
+			/* Insert this fragment to the free queue */
 			MF_INS_FREEQUE(mp, newmfp);
 
-			
+			/* adjust used, free stats. ovhd unchanged */
 			MEMCOM_UPDATE_USED(mp, 
 				(sizeof(MEMFRAG) * (alloc_size - mfp->mf_size)));
 
-			
+			/* erase the header of removed memfrag */
 			MEMSET(nextmfp, sizeof(MEMFRAG));
 
-			
+			/* Reset the size of the current memfrag */
 			mfp->mf_size = alloc_size;
 
-			
+			/* 
+			** the # of frags in this block remains the same
+			** so the block reference count is unchanged.
+			*/
 		}
 
 		traceprint("MEMORY REALLOCATED BY ADDRESS == 0x%x\n", addr);
 		return addr;
 	}
 
-	
+	/* 
+	** The existing frag cannot be extended. So allocate
+	** a new memory block of requested size and copy the
+	** content of the original memory block to the new area.
+	*/
 	newaddr = mp_frag_alloc(mp, size, NULL,0);
 //	MEMSET(newaddr, 0, size);
 
@@ -473,7 +510,13 @@ mp_frag_realloc(MEMPOOL *mp, void * addr, size_t size)
 }
 
 
-
+/**
+ * Description:
+ *	mp_frag_free() releasese the memfrag back to the given mempool. 
+ *	The released fragment is merged with neighbor fragments if possible.
+ *	"addr" is an address returned by mp_frag_alloc().
+ *
+ **/
 int
 mp_frag_free(MEMPOOL *mp, void *addr, char *file, int line)
 {
@@ -485,7 +528,7 @@ mp_frag_free(MEMPOOL *mp, void *addr, char *file, int line)
 		return TRUE;
 	}
 
-	
+	/* Verify the mempool address is valid. */
 	if ( mp == (MEMPOOL *)NULL )
     	{
 		return FALSE;
@@ -498,30 +541,33 @@ mp_frag_free(MEMPOOL *mp, void *addr, char *file, int line)
 
 //	printf("\n print NULL list ---2 \n");
 //	prLINK((LINK *)mfp);
-	
+	/* Mark the fragment free. */
 	mfp->mf_flags = 0;
 
-	
+	/* Adjust used, free stats */
 	MEMCOM_UPDATE_USED(mp, -(sizeof(MEMFRAG) * mfp->mf_size));
 	
 
-	
+	/* Insert the free fragment into the free queue */
 	MF_INS_FREEQUE(mp, mfp);
 	
 	
-	
+	/* Check if adjacent free fragments can be coalesced. */
 	temp_mfp = (MEMFRAG *)(QUE_PREV(mfp));
 
 	if (   temp_mfp != (MEMFRAG *)(&(mp->mp_frags))	
 	    && MF_FREE(temp_mfp) 
 	    && temp_mfp->mf_block == mfp->mf_block )
 	{
-		
+		/* one memfrag less */
 		MEMCOM_UPDATE_USED(mp, -(sizeof(MEMFRAG)));
 		mp->mp_ovhd -= sizeof(MEMFRAG);
 		mp->mp_nfrags--;
 
-		
+		/*
+		** Merge this mfp with the previous mfp,
+		** and then unlink this mfp.
+		*/
 		temp_mfp->mf_size += (mfp->mf_size + 1);
 		REMQUE(mfp, mfp, MEMFRAG);
 		MF_REM_FREEQUE(mfp);
@@ -530,14 +576,14 @@ mp_frag_free(MEMPOOL *mp, void *addr, char *file, int line)
 		mfp->mf_block->mb_frags--;
 	}
 
-	
+	/* Merge this and the next fragment. */
 	temp_mfp = (MEMFRAG *)(QUE_NEXT(mfp));
 
 	if (   temp_mfp != (MEMFRAG *)(&(mp->mp_frags))	
 	    && MF_FREE(temp_mfp)			
 	    && temp_mfp->mf_block == mfp->mf_block )
     	{
-		
+		/* one memfrag less */
 		MEMCOM_UPDATE_USED(mp, -(sizeof(MEMFRAG)));
 		mp->mp_ovhd -= sizeof(MEMFRAG);
 		mp->mp_nfrags--;
@@ -559,19 +605,24 @@ mp_frag_free(MEMPOOL *mp, void *addr, char *file, int line)
 	return TRUE;
 }
 
-
+/**
+ * Description:
+ *	Increase the given mempool by grow_size bytes. The function allocates 
+ *	a block of memory of grow_size bytes, initializes it into a single memfrag, 
+ *	and then links the memfrag onto the mempool.
+ **/
 static int
 mp_frag_grow(MEMPOOL * mp, size_t grow_size)
 {
-	char		*mem_star_addr;	
-	MEMBLK	*mbp;		
-	MEMFRAG		*mfp;		
-	int		ret;		
+	char		*mem_star_addr;	/* memory address */
+	MEMBLK	*mbp;		/* ptr to MEMBLK struct */
+	MEMFRAG		*mfp;		/* ptr to MEMFRAG struct */
+	int		ret;		/* return status */
 
-	
+	/* Init */
 	ret = FALSE;
 
-	
+	/* Validation */
 	if ((grow_size > MAX_FRAG_SIZE) || (grow_size < MY_MEMPAGESIZE))
 	{
 		goto cleanup;
@@ -579,7 +630,7 @@ mp_frag_grow(MEMPOOL * mp, size_t grow_size)
 
 	grow_size = ROUNDSIZE(grow_size, MY_MEMPAGESIZE);
 
-	
+	/* Check if we are exceeding max_size before any allocation */
 	if (   ((MEMCOM_TOTAL(mp) + grow_size) > MEMCOM_MAXSIZE(mp)
 	    || (grow_size > MAX_FRAG_SIZE)))
 	{
@@ -593,27 +644,33 @@ mp_frag_grow(MEMPOOL * mp, size_t grow_size)
 		goto cleanup;
 	}
 
-	
+	/* 
+	** Initialize the MEMBLK structure which is located at the 
+	** very begining of this block of memory.
+	*/
 	mbp = (MEMBLK *)mem_star_addr;
 	mbp->mb_frags = 1;
 	mbp->mb_begin = (void *)(mbp + 1);
 	mbp->mb_end = (void *)((char *)mbp + grow_size);
 
-	
+	/* Initialize the entire block to be a single memfrag */
 	mfp = (MEMFRAG *)mbp->mb_begin;
 	mfp->mf_flags = 0;
 	mfp->mf_block = mbp;
 	mfp->mf_size = ((MEMFRAG *)mbp->mb_end - mfp) - 1;
 
-	
+	/* Link this block to the mempool */
 	INSQUE(&(mp->mp_link), mbp);
 
-	
+	/* 
+	** Link the newly created fragment to the fragment list of the 
+	** mempool and the free fragment queue.
+	*/
 	INSQTAIL(&(mp->mp_frags), mfp);
 
 	MF_INS_FREEQUE(mp, mfp);
 
-	
+	/* Track the current mempool size */
 	MEMCOM_TOTAL(mp) += grow_size;
 	MEMCOM_UPDATE_USED(mp, (sizeof(MEMFRAG) + sizeof(MEMBLK)));
 	mp->mp_ovhd += (sizeof(MEMFRAG) + sizeof(MEMBLK));
@@ -625,22 +682,25 @@ mp_frag_grow(MEMPOOL * mp, size_t grow_size)
 	return (ret);
 }
 
-
+/**
+ * Description:
+ *	Destroy the given memory pool.
+ **/
 int
 mp_frag_destroy(MEMPOOL *mp)
 {
-	MEMBLK	*mbp;		
+	MEMBLK	*mbp;		/* MEMBLK pointor for iteration */
 	void 		*temp_ptr;
 	int 		status = TRUE;
 	LINK		freeblocks;
 
-	
+	/* Validation */
 	if (mp == NULL)
     	{
 		return FALSE;
 	}
 
-	
+	/* Check if anyone is still using the memory pool. */
 	FOR_QUEUE(MEMBLK, &(mp->mp_link), mbp)
     	{
 		if (!MF_UNUSED_BLOCK(mbp))
@@ -649,29 +709,33 @@ mp_frag_destroy(MEMPOOL *mp)
 		}
 	}
 
-	
+	/* Move all the blocks to a private queue. */
 	INITQUE(&freeblocks);
 	MOVEQUE(&freeblocks, &mp->mp_link);
 
-	
+	/* Run through all the blocks, and free them. */
 	while ( (char *)QUE_NEXT(&freeblocks) != (char *)(mp+1) )
     	{
 		REMQHEAD(&freeblocks, temp_ptr, MEMBLK);
 		free(temp_ptr);
 	}
 
-	
+	/* First block is deleted later. */
 	free(mp);
 	return status;
 }
 
-
+/**
+ *  Description:
+ *	Adds the given memory pool to appropriate memory pool list
+ *	according to the pool type.
+ **/
 static int
 mp_list_insert(void * pool_hdl, int type) 
 {
-	MEMPLIST	*mpl;	
+	MEMPLIST	*mpl;	/* memory pool list */
 	
-	
+	/* Obtain the pool list */
 	mpl = MEMPOOL_TYPE_TO_LIST(type);
 
 	mpl->mpl_count++;
@@ -717,7 +781,7 @@ prLINK(LINK *link)
 	printf("\t prev=0x%p \t next=0x%p \n", link->prev, link->next);
 }
 
-
+/* Diagnose function */
 static void
 mem_prt_fragmp(MEMPOOL *mp)
 {

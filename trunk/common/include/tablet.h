@@ -28,23 +28,26 @@ tablet_crt(TABLEHDR *tablehdr, char *tabledir, char *rp, int minlen);
 
 int
 tablet_bld_row(char *sstab_rp, int sstab_rlen, char *tab_name, int tab_name_len,
-			int sstab_id, char *sstab_name, int sstab_name_len, char *rang_addr,
-			char *keycol, int keycolen, int keycol_type);
+			int sstab_id, int res_sstab_id, char *sstab_name, int sstab_name_len, 
+			char *rang_addr, char *keycol, int keycolen, int keycol_type);
 
 char *
-tablet_srch_row(char *systab, char *key, int keylen);
+tablet_srch_row(TABLEHDR *tablehdr, int tabid, int sstabid, char *systab, char *key, int keylen);
 
 void
-tablet_ins_row(char *tablet_name, char *rp, int minlen);
+tablet_ins_row(TABLEHDR *tablehdr, int tabid, int sstabid, char *tablet_name, char *rp, int minlen);
+
+void
+tablet_del_row(TABLEHDR *tablehdr, int tabid, int sstabid, char *tablet_name, char *rp, int minlen);
 
 void 
 tablet_schm_bld_row(char *rp, int rlen, int tabletid, char *tabletname, char *keycol, int keycolen);
 
 void
-tablet_schm_ins_row(char *systab, char *row, int tabletnum);
+tablet_schm_ins_row(int tabid, int sstabid, char *systab, char *row, int tabletnum);
 
 char *
-tablet_schm_srch_row(char *systab, char *key, int keylen);
+tablet_schm_srch_row(TABLEHDR *tablehdr, int tabid, int sstabid, char *systab, char *key, int keylen);
 
 void
 tablet_namebyname(char *old_sstab, char *new_sstab);

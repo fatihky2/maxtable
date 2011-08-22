@@ -95,9 +95,6 @@ conn_req_byte_buf(char *rpc_buf, RPCREQ  *req);
 void
 conn_destroy_req(RPCREQ *req);
 
-void
-conn_destroy_resp_byte(char* resp);
-
 int 
 conn_open(char* ip_address, int port);
 

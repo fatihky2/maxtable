@@ -25,16 +25,28 @@
 #include "utils.h"
 
 
+/*
+** Following is the row format in MaxTable:
+** | row# | status | #varlen | data fixed | row length | data for var-column | column offset  |
+**
+** Var-column offset table
+** | last var-col (int) | second var-col (int) | first var-col (int) |
+**
+*/
 
-
-
+/*
+** Split Strategy -- tail row split
+**
+** Usage Note: the paraneter length will be valid when the 'coloffset' is less than 0.
+**
+*/
 
 char *
 row_locate_col(char * rowptr, int coloffset, int minrowlen, int * length)
 {
-	int		collen;		
-	int		varcolno;	
-	int		varcount;	
+	int		collen;		/* working length of column */
+	int		varcolno;	/* varlen column's relative ID */
+	int		varcount;	/* # varying-len columns */
 
 	if (coloffset > 0)
 	{
@@ -47,14 +59,14 @@ row_locate_col(char * rowptr, int coloffset, int minrowlen, int * length)
 
 	if (varcolno > varcount)
 	{
-		
+		/* Column doesn't exist in this row */
 		*length = 0;
 		return NULL;
 	}
 
 	ROW_GET_VARCOL_LEN(rowptr, minrowlen, varcolno, collen);
 
-	
+	/* Store the column length, return a pointer to the column. */
 	*length = collen;
 	return (rowptr + ROW_GET_VARCOL_OFFSET(ROW_GET_END(rowptr, minrowlen), varcolno));
 }
@@ -77,7 +89,9 @@ void
 row_build_row()
 {
 	;
-	
+	/*
+	** Delay this implementation till the introduction of buffer manager. 
+	*/
 
 }
 
@@ -123,7 +137,7 @@ row_col_compare(int coltype, char *colval1, int colen1, char *colval2, int colen
 
 	    break;
 
-        }   
+        }   /* end of switch on data type */
 	
 	return result;
 }
@@ -150,5 +164,5 @@ row_prt_offtab(int *offtab, int n)
 		printf("offtab[-%d] : %d \n", i, offtab[-i]);
 	}
 }
-
+/* Defination of the type of column. */
 

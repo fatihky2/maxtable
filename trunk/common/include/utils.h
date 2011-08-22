@@ -58,6 +58,11 @@ build_file_name(char	*filehdr, char *filename, int fileno);
 
 #define BACKMOVE(s, d, l)	backmove1((s), (d), l)
 
+unsigned long
+hashstring(char *bytes, int nbytes, int seed);
+
+int
+m_atoi(char *strval, int strlen);
 
 
 #ifdef __cplusplus

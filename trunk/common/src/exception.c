@@ -89,12 +89,15 @@ ex_raise(int exce_num)
 
 	exp1 = &(tss->texcproc.exp_manage);
 
-	
+	/* search the exception stack looking for a handler */
 	for(ex_elem = exp1->ex_top; ex_elem >= exp1->ex_start; ex_elem--)
 	{
 		ex_num = ex_elem->exc_number;
 
-		
+		/* 
+		** Find the right exception number and execute the handle 
+		** function. 
+		*/
 		if(ex_num == exce_num)
 		{
 			switch ((int)(*ex_elem->exc_func)(exce_num))
@@ -117,4 +120,21 @@ ex_delete()
 	Tss->texcproc.exp_manage.ex_top--;
 }
 
+/*
+int main(void)
+{
+    LOCALTSS(tss);
+	int i;
 
+    ex_setup_stack(tss);
+
+    if(ex_handle(1, yxue_handler))
+    {
+        printf("set_ret=%d\n",set_ret);
+        return 1;
+    }
+
+    i = 0;
+    return 0;
+}
+*/

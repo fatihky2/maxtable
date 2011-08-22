@@ -30,48 +30,75 @@ extern "C" {
 #include "list.h"
 
 
+/**
+ *     		The picture of memory in the region server.
+ *
+ *        MEMPLIST: the list of memory pool that includes Object Pool, Fragment Pool, 
+ *		    Block Pool, Stack Pool.
+ *        MEMPOOL:  only implement the fragment pool in the region server.
+ *        MEMBLK: the basic unit of memory allocation in the memory pool mechanism.
+ *        MEMFRAG:  tracks the address and size of each fragment.
+ *
+ *             |------------------|
+ *             |     KERNEL       |
+ *             |------------------|
+ *     +---|     MEMPLIST     |
+ *        |   |------------------|   +--->mp_link
+ *     +-->|     MEMPOOL               |---+--->mp_frags
+ *             |------------------|   +--->mp_freefrags--->|----------|
+ *             |     MEMBLK                  |                        |  LINK    |
+ *             |------------------|                        |----------|
+ *             |     MEMFRAG                |                        |start_addr|
+ *             |     the 1st                    |			   ------------
+ *             |   memory fragment      |
+ *             |------------------|
+ *             |     MEMFRAG      |
+ *             |     the 2nd      |
+ *             |   memory fragment|
+ *             |------------------|
+ *             |       nth        |
+ **/
 
-
-
-#define MEMPOOL_BLOCK	1	
-#define MEMPOOL_FRAG	2	
-#define MEMPOOL_OBJECT	3	
-#define MEMPOOL_STACK	4	
+/* Hold place to code for memory pool type */
+#define MEMPOOL_BLOCK	1	/* block memory pool */
+#define MEMPOOL_FRAG	2	/* fragment memory pool */
+#define MEMPOOL_OBJECT	3	/* object memory pool */
+#define MEMPOOL_STACK	4	/* stak memory pool */
 
 #define	ALIGNDATATYPE	long
 
 struct buf;
 
 
-
+/* Define for the fragment memory pool */
 typedef struct free_frag_link
 {
 	LINK f_link;	
 	void * start_addr; 
 } FLINK;
 
-
+/* Head global list of mempools */
 typedef struct memplist
 {
-	LINK 	mpl_link;	
-	size_t	mpl_count;	
+	LINK 	mpl_link;	/* head the global mempool list */
+	size_t	mpl_count;	/* # of mempool in use */
 } MEMPLIST;
 
 
-
+/* Memory Common Structure */
 typedef struct memcom
 {
-	LINK		mc_link;	
-	int		mc_pooltype;	
-	size_t		mc_total;	
-	size_t		mc_used;	
-	size_t		mc_maxsize;	
-	size_t		mc_minsize;	
-	size_t		mc_growsize;	
-	char		mc_name[32];	
+	LINK		mc_link;	/* link to the global list. */
+	int		mc_pooltype;	/* type of the pool */
+	size_t		mc_total;	/* total size of the pool */
+	size_t		mc_used;	/* currently used size of the pool */
+	size_t		mc_maxsize;	/* max size of the pool */
+	size_t		mc_minsize;	/* min size of the pool */
+	size_t		mc_growsize;	/* grow size of the pool */
+	char		mc_name[32];	/* pool name */
 } MEMCOM;
 
-
+/* Macros to get the field in the MEMCOM structure. */
 #define MEMCOM_POOLNAME(_mc)	(((struct memcom *) (_mc))->mc_name)
 #define MEMCOM_POOLTYPE(_mc)	(((struct memcom *) (_mc))->mc_pooltype)
 #define MEMCOM_MINSIZE(_mc)	(((struct memcom *) (_mc))->mc_minsize)
@@ -83,69 +110,72 @@ typedef struct memcom
 #define MEMCOM_MINITEMS(_mc)	MEMCOM_MINSIZE(_mc)
 
 
-
+/* Describes a memory pool. */
 typedef struct mempool
 {
-	MEMCOM	mp_mc;		
-	LINK	mp_link;	
-	LINK	mp_frags;	
-	FLINK   mp_free_frags;  
-	size_t	mp_ovhd;	
-	size_t	mp_nfrags;	
+	MEMCOM	mp_mc;		/* Must be the first field */
+	LINK	mp_link;	/* list of blocks */
+	LINK	mp_frags;	/* list of fragments */
+	FLINK   mp_free_frags;  /* list of free fragments */
+	size_t	mp_ovhd;	/* # of bytes wasted due headers */
+	size_t	mp_nfrags;	/* # of fragments in the pool */
 } MEMPOOL;
 
-
+/* Memory block header */
 typedef struct memblk
 {
-	LINK 	mb_link;	
-	void 	*mb_begin;	
-	void	*mb_end;	
-	int	mb_frags;	
+	LINK 	mb_link;	/* link all blocks in a pool */
+	void 	*mb_begin;	/* start addr of this block. */
+	void	*mb_end;	/* end addr of this block. */
+	int	mb_frags;	/* # of frags in this block. */
 } MEMBLK;
 
-
+/* memory fragment header */
 typedef struct memfrag
 {
-	LINK	mf_link;	
-	MEMBLK *mf_block;	
-	int	mf_size;	
-	short	mf_flags;	
+	LINK	mf_link;	/* the list of free frags or all frags */
+	MEMBLK *mf_block;	/* ptr to the containing block */
+	int	mf_size;	/* size of this fragment */
+	short	mf_flags;	/* Free, Used */
 	char	pad[2];
 } MEMFRAG;
 
-
-#define MEMPOOL_SUCCESS		0	
-#define MEMPOOL_FAIL		-1	
-#define MEMPOOL_INVALIDADDR 	-2	
-#define MEMPOOL_BUSY		-3	
-#define MEMPOOL_MAXEXCEEDED 	-4	
-#define MEMPOOL_OBJECT2BIG	-5	
-
-
-
-#define MEMPOOL_USED	0x1	
+/* Return codes for the memmgr functions */
+#define MEMPOOL_SUCCESS		0	/* success */
+#define MEMPOOL_FAIL		-1	/* failed for unknow reason */
+#define MEMPOOL_INVALIDADDR 	-2	/* passed in an invalid address */
+#define MEMPOOL_BUSY		-3	/* the memory pool is busy */
+#define MEMPOOL_MAXEXCEEDED 	-4	/* the maximum pool size is exceeded */
+#define MEMPOOL_OBJECT2BIG	-5	/* object size is too big */
 
 
+/* Values for memfrag.mf_flags. */
+#define MEMPOOL_USED	0x1	/* this memfrag or mempool is used. */
+
+/* Macros to check for used/free memfrags */
 #define MF_FREE(mfp) (((mfp)->mf_flags & MEMPOOL_USED) == 0)
 #define MF_USED(mfp) (((mfp)->mf_flags & MEMPOOL_USED) != 0)
 
-
+/*
+** If the memblk has just one fragment and if that fragment is free,
+** then it is unused.
+*/
 #define MF_UNUSED_BLOCK(_mbp) (((_mbp)->mb_frags == 1) && \
 	(MF_FREE((MEMFRAG *)((char *)(_mbp) + sizeof(MEMBLK)))))
 
-#define MY_MEMPAGESIZE		4096L	
+#define MY_MEMPAGESIZE		4096L	/* bytes */
 #define MY_KERNEL_MEM_SIZE	(32 * MY_MEMPAGESIZE + 1)
 
-
-
+/* rounding size upto the minimum multiple of parameter "round" */
+/* NOTE: the value of the round must be the power of 2. It's the root reason for some memory issue. */
 #define ROUNDSIZE(size, round)	(((size) + ((round) - 1)) & ~((round) - 1))
 
-
+/* Frag Pool */
 #define MAXSIZE_FRAGPOOL	MY_MEMPAGESIZE * 1024
 #define MAX_FRAG_SIZE		(65536 * sizeof(MEMFRAG))
 #define MAX_FRAG_ALLOCSIZE (MAX_FRAG_SIZE - sizeof(MEMFRAG) - sizeof(MEMBLK))
 
-
+/* Block Pool */
 #define MAXSIZE_BLKPOOL		MY_MEMPAGESIZE * 1024
 
 
@@ -156,19 +186,19 @@ typedef struct memfrag
 
 #define MF_GET_MFP(link)	(MEMFRAG *)((FLINK *)(link))->start_addr
 
-
+/* Returns the size needed for a given growsize with overheads */
 #define  MEMPOOL_FRAG_GROWSIZE(_growsize)				\
 	ROUNDSIZE((ROUNDSIZE((_growsize), sizeof(MEMFRAG)) +		\
 		(sizeof(MEMBLK) + sizeof(MEMFRAG))), MY_MEMPAGESIZE)
 
-
+/* Update the used counter in a memory pool. */
 #define MEMCOM_UPDATE_USED(_mc, _chg)		\
 	do {					\
 		MEMCOM_USED(_mc) += (_chg);	\
 	} while (0)
 
 
-
+/* Get the pool list by the given type. */
 #define MEMPOOL_TYPE_TO_LIST(_type) \
 	(((_type) == MEMPOOL_BLOCK) ? Kernel->ke_fragpool_list : \
 	 (((_type) == MEMPOOL_OBJECT) ? Kernel->ke_objpool_list : \
@@ -176,11 +206,14 @@ typedef struct memfrag
 	   (((_type) == MEMPOOL_STACK) ? Kernel->ke_fragpool_list : NULL))))
 
 
-
+/* 
+** Manage the global resource. Only implement the Fragment Pool 
+** in the current region server. 
+*/
 typedef struct kernel
 {
-	MEMPLIST	*ke_fragpool_list;	
-	MEMPLIST	*ke_objpool_list;	
+	MEMPLIST	*ke_fragpool_list;	/* Fragment pool list */
+	MEMPLIST	*ke_objpool_list;	/* Object mempool list */
 	MEMPLIST	*ke_blkpool_list;
 	MEMPOOL		*ke_mp_block;
 	MEMPOOL 	*ke_mp_object;
@@ -189,15 +222,18 @@ typedef struct kernel
 	void		*ke_tss_objpool;
         void            *ke_buf_objpool;
 	SPINLOCK	ke_buf_spinlock;
-	struct buf	*ke_buflru;		
-	struct buf	**ke_bufhash;		
+	struct buf	*ke_buflru;		/* Buffer LRU/MRU list */
+	struct buf	**ke_bufhash;		/* Buffer hash list that contains the 
+						** valid buffer but not used by any
+						** process.
+						*/
 } KERNEL;
 
 # define	BUF_SPIN	(Kernel->ke_buf_spinlock)
 
 
 
-
+/* Object Pool Section*/
 
 #define TSS_MIN_ITEMS   32
 #define TSS_MAX_ITEMS   256
@@ -207,7 +243,7 @@ typedef struct kernel
 
 
 
-
+/* Insert into the head of free queue at maintained at the Memory pool */
 #define MF_INS_FREEQUE(mp, mfp)						\
 	do{								\
 		INITQUE(((mfp)+1));					\
@@ -215,7 +251,7 @@ typedef struct kernel
 		INSQUE(&((mp)->mp_free_frags), (FLINK *)((mfp)+1));	\
 	}while(0);
 
-
+/* Remove the fragment entry from the free queue */
 #define MF_REM_FREEQUE(mfp)					\
 	do{							\
 		FLINK *tmplink;					\
@@ -272,5 +308,5 @@ memfreeheap(void *addr, char *file, int line);
 }
 # endif
 
-#endif 
+#endif /* MEMCOM_H_ */
 

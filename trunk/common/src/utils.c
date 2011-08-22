@@ -195,3 +195,45 @@ build_file_name(char	*filehdr, char *filename, int fileno)
 	sprintf(filename, "%s%d", filehdr,fileno);
 }
 
+
+unsigned long
+hashstring(char *bytes, int nbytes, int seed)
+{
+	register unsigned long	c, len, i;
+
+
+	len = nbytes;
+	c = seed;           	
+
+
+	while ((i < 12) && (i < (len - 2)))
+	{
+		c += ((unsigned long) bytes[len - i] << 24);
+		c += ((unsigned long) bytes[len - i - 1] << 16);
+		c += ((unsigned long) bytes[len - i - 2] << 8);
+
+		i += 3;
+	}
+
+	return c;
+}
+
+int
+m_atoi(char *strval, int strlen)
+{
+	char tmp_str[32];
+
+
+	if (strlen > 32)
+	{
+		return -1;
+	}
+	
+	MEMSET(tmp_str, 32);
+	MEMCPY(tmp_str, strval, strlen);
+	
+	return atoi(tmp_str);
+}
+
+
+

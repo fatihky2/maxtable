@@ -38,13 +38,17 @@ session_close(TABINFO *tabinfo)
 
 	for (bp = tabinfo->t_dnew; bp != (BUF *)tabinfo;)
 	{
+		assert(bp->bstat & BUF_DIRTY);
 		bufwrite(bp);
 
 		tmp_bp= bp;
 
 		bp = bp->bdnew;
+
 		
 		DIRTYUNLINK(tmp_bp);
+
+		tmp_bp->bstat &= ~BUF_DIRTY;
 
 		bufunkeep(tmp_bp);
 		
