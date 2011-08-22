@@ -53,6 +53,9 @@ void
 tablet_namebyname(char *old_sstab, char *new_sstab);
 
 void
+tablet_namebyid(TABINFO *tabinfo, char *new_sstab);
+
+void
 tablet_split(TABINFO *srctabinfo, BUF *srcbp, char *rp);
 
 

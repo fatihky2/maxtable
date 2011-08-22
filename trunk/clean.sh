@@ -8,6 +8,7 @@ rm -rf meta_table
 rm startClient
 rm startMaster
 rm startRegion
+rm sample
 
 cp config/cli.conf.template config/cli.conf
 cp config/master.conf.template config/master.conf

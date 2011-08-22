@@ -38,6 +38,8 @@ extern	TSS	*Tss;
 
 #define	INVALID_TABLETID	1
 
+#define TABLETSCHM_ID	0
+
 // char *rp - the row in the tablet (sstabid|sstable row | ranger |key col)
 // int minlen - min length of the row in the tablet
 void
@@ -66,44 +68,39 @@ tablet_crt(TABLEHDR *tablehdr, char *tabledir, char *rp, int minlen)
 	assert(tablehdr->tab_tablet == 0);
 
 	tablehdr->tab_tablet = 1;
-	/* 1st step: create the tablet name. */
+	
 	build_file_name("tablet", tablet_name, tablehdr->tab_tablet);
 	str1_to_str2(tab_meta_dir, '/', tablet_name);
 	
 	keycol = row_locate_col(rp, -1, minlen, &keycolen);
 	
-	/* 
-	** We are inserting one row into the file "tablet0", so the min row length is not 
-	** the one from header. 
-	*/
+	
 	TABINFO_INIT(&tabinfo, tab_meta_dir, &sinfo, minlen, TAB_CRT_NEW_FILE,
 			tablehdr->tab_id, tablehdr->tab_tablet);
 	SRCH_INFO_INIT(&sinfo, keycol, keycolen, TABLET_KEYCOLID, VARCHAR, -1);
 	
 	blkins(&tabinfo, rp);
 	
-	/* 2nd step: insert the tablet scheme into the table tabletscheme. */
+	
 	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_meta_dir, tabledir, STRLEN(tabledir));
 	str1_to_str2(tab_meta_dir, '/', "tabletscheme");
 	
-	/*
-	** Temp solution: tablet name | 1st key
-	*/
+	
 	int rlen = ROW_MINLEN_IN_TABLETSCHM + keycolen + sizeof(int) + sizeof(int);
 	char *temprp = (char *)MEMALLOCHEAP(rlen);
 	
 	
 	tablet_schm_bld_row(temprp, rlen, tablehdr->tab_tablet, tablet_name, keycol, keycolen);
 	
-	tablet_schm_ins_row(tablehdr->tab_id, 0, tab_meta_dir, temprp, tablehdr->tab_tablet);
+	tablet_schm_ins_row(tablehdr->tab_id, TABLETSCHM_ID, tab_meta_dir, temprp, tablehdr->tab_tablet);
 
-	/* Maybe we should call table close and add a new function neamed with session_open. */
+	
 	session_close( &tabinfo);
 
 	MEMFREEHEAP(temprp);
 
-	/* Restore the previous table information. */
+	
 	tabinfo_pop();
 
 }
@@ -127,10 +124,7 @@ tablet_ins_row(TABLEHDR *tablehdr, int tabid, int sstabid, char *tablet_name, ch
 
 	keycol = row_locate_col(rp, -1, minlen, &keycolen);
 	
-	/* 
-	** We are inserting one row into the file "tablet0", so the min row length is not 
-	** the one from header. 
-	*/
+	
 	TABINFO_INIT(&tabinfo, tablet_name, &sinfo, minlen, TAB_SCHM_INS, tabid, sstabid);
 	SRCH_INFO_INIT(&sinfo, keycol, keycolen, TABLET_KEYCOLID, VARCHAR, -1);
 
@@ -139,6 +133,11 @@ tablet_ins_row(TABLEHDR *tablehdr, int tabid, int sstabid, char *tablet_name, ch
 	blkins(&tabinfo, rp);
 
 	session_close(&tabinfo);
+
+	if (tabinfo.t_stat & TAB_TABLET_CRT_NEW)
+	{
+		(tablehdr->tab_tablet)++;
+	}
 
 	tabinfo_pop();
 }
@@ -163,10 +162,7 @@ tablet_del_row(TABLEHDR *tablehdr, int tabid, int sstabid, char *tablet_name, ch
 
 	keycol = row_locate_col(rp, -1, minlen, &keycolen);
 	
-	/* 
-	** We are inserting one row into the file "tablet0", so the min row length is not 
-	** the one from header. 
-	*/
+	
 	TABINFO_INIT(&tabinfo, tablet_name, &sinfo, minlen, TAB_SRCH_DATA, tabid, sstabid);
 	SRCH_INFO_INIT(&sinfo, keycol, keycolen, TABLET_KEYCOLID, VARCHAR, -1);
 	
@@ -179,10 +175,7 @@ tablet_del_row(TABLEHDR *tablehdr, int tabid, int sstabid, char *tablet_name, ch
 
 
 
-/* 
-** Following is the formate of SSTABLE row:
-**	| row header |sstab id | sstable name | ranger server addr | reserverd sstab id |key col value |
-*/
+
 int
 tablet_bld_row(char *sstab_rp, int sstab_rlen, char *tab_name, int tab_name_len,
 		int sstab_id, int res_sstab_id, char *sstab_name, int sstab_name_len, 
@@ -195,53 +188,41 @@ tablet_bld_row(char *sstab_rp, int sstab_rlen, char *tab_name, int tab_name_len,
 	sstab_idx = 0;
 	min_rlen = 0;
 	
-	/* 
-	** Building a row that save the information of sstable, 
-	** this row is also the index, so we have to specify a 
-	** key for this row.
-	**
-	** 64 : range addr
-	** 128 : sstable name length 
-	** 4 : offet of var-column
-	** 4 : row length
-	*/
+	
 	row_build_hdr((sstab_rp + sstab_idx), 0, 0, 1);
 
-	/* 
-	** The format of this row is difference with data row. 
-	** The row length is saved following the row header.
-	*/
+	
 	sstab_idx += sizeof(ROWFMT);
 
-	/* Put c1 to the row */
+	
 	PUT_TO_BUFFER(sstab_rp, sstab_idx, &sstab_id, sizeof(int));
 		
-	/* Put c2 to the row */		
+			
 	PUT_TO_BUFFER(sstab_rp, sstab_idx, sstab_name, sstab_name_len);
 
 	sstab_idx += (SSTABLE_NAME_MAX_LEN - sstab_name_len);
 
-	/* Put c3 to the row */
+	
 	PUT_TO_BUFFER(sstab_rp, sstab_idx, rang_addr, RANGE_ADDR_MAX_LEN);
 
-	/* Put c4 to the row */
+	
 	PUT_TO_BUFFER(sstab_rp, sstab_idx, &res_sstab_id, sizeof(int));
 
-	/* Put row length into the row after the done of fixed columns. */
+	
 	PUT_TO_BUFFER(sstab_rp, sstab_idx, &sstab_rlen, sizeof(int));
 
 //	*(int *)((char *)sstab_rp + sstab_idx) = sstab_rlen;
 //	sstab_idx += sizeof(int);
 	
 
-	/* The key of this row. */
+	
 	PUT_TO_BUFFER(sstab_rp, sstab_idx, keycol, keycolen);
 
 	min_rlen = sstab_idx - sizeof(int);
 
 	if (!TYPE_IS_FIXED(keycol_type))
 	{
-		/* Put the coloffset into the tail of row. */
+		
 		*(int *)(sstab_rp + sstab_idx) = sstab_idx - keycolen;
 
 		sstab_idx += COLOFFSETENTRYSIZE;
@@ -249,7 +230,7 @@ tablet_bld_row(char *sstab_rp, int sstab_rlen, char *tab_name, int tab_name_len,
 		min_rlen -= keycolen;
 	}
 	
-	/* Disable the offset */
+	
 	if (0)
 	{
 		TABLETHDR	tablet_hdr;
@@ -303,11 +284,7 @@ tablet_srch_row(TABLEHDR *tablehdr, int tabid, int sstabid, char *systab, char *
 
 
 
-/* 
-** Following is the row formate of the table tabletscheme:
-**	| row header | tabletid| tablet name | 1st key |
-** Maybe we should consider the tablet space.
-*/
+
 void 
 tablet_schm_bld_row(char *rp, int rlen, int tabletid, char *tabletname, char *keycol, int keycolen)
 {
@@ -318,27 +295,24 @@ tablet_schm_bld_row(char *rp, int rlen, int tabletid, char *tabletname, char *ke
 	
 	row_build_hdr((rp + rowidx), 0, 0, 1);
 
-	/* 
-	** The format of this row is difference with data row. 
-	** The row length is saved following the row header.
-	*/
+	
 	rowidx += sizeof(ROWFMT);
 
 	
-	/* Put c1 to the row */ 	
+	 	
 	PUT_TO_BUFFER(rp, rowidx, &tabletid, sizeof(int));
 	
-	/* Put c2 to the row */ 	
+	 	
 	PUT_TO_BUFFER(rp, rowidx, tabletname, TABLET_NAME_MAX_LEN);
 
-	/* Put row length into the row after the done of fixed columns. */
+	
 	PUT_TO_BUFFER(rp, rowidx, &rlen, sizeof(int));
 
-	/* Put c3 to the row */
+	
 	PUT_TO_BUFFER(rp, rowidx, keycol, keycolen);
 
 	
-	/* Put the coloffset into the tail of row. */
+	
 	*(int *)(rp + rowidx) = rowidx - keycolen;
 
 	rowidx += COLOFFSETENTRYSIZE;
@@ -367,10 +341,7 @@ tablet_schm_ins_row(int tabid, int sstabid, char *systab, char *row, int tabletn
 
 	minrowlen = ROW_MINLEN_IN_TABLETSCHM;
 
-	/* 
-	** We should pass the virtual value for coloffset of varchar column into row_locate_col,
-	** even if the true vaule is (minrowlen + sizeof(int)).
-	*/
+	
 	key = row_locate_col(row, -1, minrowlen, &keylen);
 	
 	TABINFO_INIT(tabinfo, systab, tabinfo->t_sinfo, minrowlen, tabletnum ? TAB_SCHM_INS : TAB_CRT_NEW_FILE,
@@ -413,7 +384,7 @@ tablet_schm_srch_row(TABLEHDR *tablehdr, int tabid, int sstabid, char *systab, c
 
 	TABINFO_INIT(tabinfo, systab, tabinfo->t_sinfo, minrowlen, TAB_SCHM_SRCH, tabid, sstabid);
 
-	/* VIRTUAL OFFSET. */
+	
 	SRCH_INFO_INIT(tabinfo->t_sinfo, key, keylen, TABLET_SCHM_KEYCOLID, VARCHAR, -1);
 			
 	
@@ -432,7 +403,7 @@ tablet_schm_srch_row(TABLEHDR *tablehdr, int tabid, int sstabid, char *systab, c
 }
 
 
-/* Random nameing for the new sstable by the creating time. */
+
 void
 tablet_namebyname(char *old_sstab, char *new_sstab)
 {
@@ -454,6 +425,39 @@ tablet_namebyname(char *old_sstab, char *new_sstab)
 
 	sprintf(new_sstab, "%s%s", tmpsstab,nameidx);
 	
+	return;
+}
+
+void
+tablet_namebyid(TABINFO *tabinfo, char *new_sstab)
+{
+	char	nameidx[64];
+	int	idxpos;
+	char	tmpsstab[SSTABLE_NAME_MAX_LEN];
+	int	old_sstab_len;
+	char	*old_sstab;
+
+
+
+	old_sstab = tabinfo->t_sstab_name;
+
+	old_sstab_len = STRLEN(old_sstab);
+	idxpos = str1nstr(old_sstab, "tablet", old_sstab_len);
+
+	MEMSET(nameidx, 64);
+
+	assert(tabinfo->t_stat & TAB_TABLET_SPLIT);
+	sprintf(nameidx, "%d", tabinfo->t_split_tabletid);
+	
+	MEMSET(tmpsstab, SSTABLE_NAME_MAX_LEN);
+	MEMCPY(tmpsstab, old_sstab, idxpos);
+
+//	printf("tabinfo->t_insmeta->res_sstab_id = %d \n", tabinfo->t_insmeta->res_sstab_id);
+
+	sprintf(new_sstab, "%s%s", tmpsstab,nameidx);
+
+	printf("new_sstab = %s--------%d---\n", new_sstab,tabinfo->t_split_tabletid);
+
 	return;
 }
 
@@ -483,8 +487,12 @@ tablet_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 		nextblk = (BLOCK *) ((char *)nextblk + BLOCKSIZE);
 	}
 
+	
+	srctabinfo->t_stat |= TAB_TABLET_SPLIT;
 
 	destbuf = bufgrab(srctabinfo);
+
+	
 	
 	bufhash(destbuf);
 
@@ -510,7 +518,9 @@ tablet_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 
 	MEMSET(destbuf->bsstab_name, 256);
 
-	tablet_namebyname(srctabinfo->t_sstab_name, destbuf->bsstab_name);
+	tablet_namebyid(srctabinfo, destbuf->bsstab_name);
+
+	srctabinfo->t_stat &= ~TAB_TABLET_SPLIT;
 
 	table_nameidx = str01str(srctabinfo->t_sstab_name, "tablet", STRLEN(srctabinfo->t_sstab_name));
 	tabinfo = MEMALLOCHEAP(sizeof(TABINFO));
@@ -521,7 +531,7 @@ tablet_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 
 	tabinfo_push(tabinfo);
 
-	/* sstable id is the tablet id and split_tabletid is the new splited tablet id. */
+	
 	TABINFO_INIT(tabinfo, destbuf->bsstab_name, tabinfo->t_sinfo, ROW_MINLEN_IN_TABLET, TAB_KEPT_BUF_VALID,
 			srctabinfo->t_tabid, srctabinfo->t_split_tabletid);
 
@@ -544,9 +554,7 @@ tablet_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 
 	tablet_key = row_locate_col(destbuf->bblk->bdata, -1, destbuf->bblk->bminlen, &tablet_keylen);
 	
-	/*
-	** Temp solution: tablet name | 1st key
-	*/
+	
 	int rlen = ROW_MINLEN_IN_TABLETSCHM + tablet_keylen + sizeof(int) + sizeof(int);
 	char *temprp = (char *)MEMALLOCHEAP(rlen);
 
@@ -555,13 +563,14 @@ tablet_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 	str1_to_str2(tab_meta_dir, '/', "tabletscheme");
 
 	table_nameidx = str01str(destbuf->bsstab_name, "tablet", STRLEN(destbuf->bsstab_name));
-	tablet_schm_bld_row(temprp, rlen, INVALID_TABLETID, destbuf->bsstab_name + table_nameidx + 1, tablet_key, tablet_keylen);
+	tablet_schm_bld_row(temprp, rlen, srctabinfo->t_split_tabletid, destbuf->bsstab_name + table_nameidx + 1, tablet_key, tablet_keylen);
 
-	/* 0 is reserved for tablet_schem. */
-	tablet_schm_ins_row(srctabinfo->t_tabid, 0, tab_meta_dir, temprp, INVALID_TABLETID);
+	
+	tablet_schm_ins_row(srctabinfo->t_tabid, TABLETSCHM_ID, tab_meta_dir, temprp, INVALID_TABLETID);
 
 	session_close(tabinfo);
 
+	srctabinfo->t_stat |= TAB_TABLET_CRT_NEW;
 	
 	MEMFREEHEAP(temprp);
 
