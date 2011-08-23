@@ -118,9 +118,9 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 	int	i;
 
 
-	nextblk = srcbp->bsstab->bblk;
+	ins_nxtsstab = (srcbp->bblk->bblkno > ((BLK_CNT_IN_SSTABLE / 2) - 1)) ? TRUE : FALSE;
 
-	ins_nxtsstab = (nextblk->bblkno > ((BLK_CNT_IN_SSTABLE / 2) - 1)) ? TRUE : FALSE;
+	nextblk = srcbp->bsstab->bblk;
 	
 	while (nextblk->bnextblkno < (BLK_CNT_IN_SSTABLE / 2))
 	{		
@@ -168,15 +168,15 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 
 	tabinfo_push(tabinfo);
 
-	TABINFO_INIT(tabinfo, destbuf->bsstab_name, tabinfo->t_sinfo, srcbp->bblk->bminlen, 
-			TAB_KEPT_BUF_VALID, tabinfo->t_tabid, tabinfo->t_sstab_id);
+	TABINFO_INIT(tabinfo, destbuf->bsstab_name, tabinfo->t_sinfo, srcbp->bsstab->bblk->bminlen, 
+			TAB_KEPT_BUF_VALID, srctabinfo->t_tabid, srctabinfo->t_insmeta->res_sstab_id);
 
 
 	if (ins_nxtsstab)
 	{
 		tabinfo->t_keptbuf = destbuf;
 		
-		key = row_locate_col(rp, srctabinfo->t_key_coloff, srcbp->bblk->bminlen, &keylen);
+		key = row_locate_col(rp, srctabinfo->t_key_coloff, srcbp->bsstab->bblk->bminlen, &keylen);
 		
 		
 		SRCH_INFO_INIT(tabinfo->t_sinfo, key, keylen, srctabinfo->t_key_colid, 

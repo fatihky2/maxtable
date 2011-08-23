@@ -456,6 +456,7 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 	int	tab_name_len;
 	char	tab_dir[TABLE_NAME_MAX_LEN];
 	char	tab_meta_dir[TABLE_NAME_MAX_LEN];
+	char	tab_tabletschm_dir[TABLE_NAME_MAX_LEN];
 	int	fd1;
 	int	rtn_stat;
 	TABLEHDR	tab_hdr;
@@ -473,6 +474,7 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 	int	namelen;
 	char	*name;
 	char	*rp;
+	char	*tabletschm_rp;
 	int	status;
 	char	rg_addr[RANGE_ADDR_MAX_LEN];
 	int	sstab_id;
@@ -524,13 +526,13 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 	if (tab_hdr.tab_tablet > 0)
 	{
 		
-		MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
-		MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
-		str1_to_str2(tab_meta_dir, '/', "tabletscheme");
+		MEMSET(tab_tabletschm_dir, TABLE_NAME_MAX_LEN);
+		MEMCPY(tab_tabletschm_dir, tab_dir, STRLEN(tab_dir));
+		str1_to_str2(tab_tabletschm_dir, '/', "tabletscheme");
 
-		rp = tablet_schm_srch_row(&tab_hdr, tab_hdr.tab_id, 0, tab_meta_dir, keycol, keycolen);
+		tabletschm_rp = tablet_schm_srch_row(&tab_hdr, tab_hdr.tab_id, 0, tab_tabletschm_dir, keycol, keycolen);
 
-		name = row_locate_col(rp, sizeof(int) + sizeof(ROWFMT), ROW_MINLEN_IN_TABLETSCHM, 
+		name = row_locate_col(tabletschm_rp, sizeof(int) + sizeof(ROWFMT), ROW_MINLEN_IN_TABLETSCHM, 
 						&namelen);
 
 		
@@ -542,10 +544,13 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 
 		int tabletid;
 
-		tabletid = *(int *)row_locate_col(rp, sizeof(ROWFMT), ROW_MINLEN_IN_TABLETSCHM, 
+		tabletid = *(int *)row_locate_col(tabletschm_rp, sizeof(ROWFMT), ROW_MINLEN_IN_TABLETSCHM, 
 						&namelen);
 
-		rp = tablet_srch_row(&tab_hdr, tab_hdr.tab_id, tabletid, tab_meta_dir, keycol, keycolen);
+		
+		tabinfo->t_stat &= ~TAB_TABLET_KEYROW_CHG;
+		
+		rp = tablet_srch_row(tabinfo, &tab_hdr, tab_hdr.tab_id, tabletid, tab_meta_dir, keycol, keycolen);
 
 		
 		name = row_locate_col(rp, sizeof(int) + sizeof(ROWFMT), ROW_MINLEN_IN_TABLET, &sstab_namelen);
@@ -561,33 +566,74 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 		
 		res_sstab_id = *(int *)testcol;
 
-		if(!SSTAB_MAP_RESERV(res_sstab_id))
+		if((!SSTAB_MAP_RESERV(res_sstab_id)) || (tabinfo->t_stat & TAB_TABLET_KEYROW_CHG))
 		{
-			assert(SSTAB_MAP_USED(res_sstab_id));
+			int rlen, rlen_c5, sstab_res;
 
-			res_sstab_id = meta_get_free_sstab();
+			sstab_res = FALSE;
+			if (!SSTAB_MAP_RESERV(res_sstab_id))
+			{
+				assert(SSTAB_MAP_USED(res_sstab_id));
 
-			SSTAB_MAP_SET(res_sstab_id, SSTAB_RESERVED);
+				res_sstab_id = meta_get_free_sstab();
 
-			int rlen = ROW_GET_LENGTH(rp, ROW_MINLEN_IN_TABLET);
-			char *rp_tmp = (char *)MEMALLOCHEAP(rlen);
+				SSTAB_MAP_SET(res_sstab_id, SSTAB_RESERVED);
 
-			MEMCPY(rp_tmp, rp, rlen);
+				sstab_res= TRUE;
+			}
 
+			if (tabinfo->t_stat & TAB_TABLET_KEYROW_CHG)
+			{
+				
+				rlen_c5 = ROW_MINLEN_IN_TABLET + sizeof(int) + keycolen + sizeof(int);
+			}
+
+			
+			rlen = (tabinfo->t_stat & TAB_TABLET_KEYROW_CHG) ? rlen_c5 : ROW_GET_LENGTH(rp, ROW_MINLEN_IN_TABLET);
+			
+			char	*newrp = (char *)MEMALLOCHEAP(rlen);
+
+			if (sstab_res)
+			{
+				tablet_upd_col(newrp, rp, ROW_GET_LENGTH(rp, ROW_MINLEN_IN_TABLET), 4, (char *)(&res_sstab_id), 
+						sizeof(int));
+			}
+
+			if (tabinfo->t_stat & TAB_TABLET_KEYROW_CHG)
+			{
+				tablet_upd_col(newrp, rp, ROW_GET_LENGTH(rp, ROW_MINLEN_IN_TABLET), TABLET_KEYCOLID, keycol, keycolen);
+
+								
+			}
+			
 			tablet_del_row(&tab_hdr, tab_hdr.tab_id, tabletid, tab_meta_dir, rp, ROW_MINLEN_IN_TABLET);
 
-			char *colptr;
-			colptr = row_locate_col(rp_tmp, sizeof(ROWFMT) + sizeof(int) + SSTABLE_NAME_MAX_LEN + RANGE_ADDR_MAX_LEN, 
-						ROW_MINLEN_IN_TABLET, &namelen);
+			tablet_ins_row(&tab_hdr, tab_hdr.tab_id, tabletid, tab_meta_dir, newrp, ROW_MINLEN_IN_TABLET);
 
-			*(int *)colptr = res_sstab_id;
+			MEMFREEHEAP(newrp);
 
-			tablet_ins_row(&tab_hdr, tab_hdr.tab_id, tabletid, tab_meta_dir, rp_tmp, ROW_MINLEN_IN_TABLET);
+			if (tabinfo->t_stat & TAB_TABLET_KEYROW_CHG)
+			{
+				char	*tabletschm_newrp;
+				int	rlen_c3;
 
-			MEMFREEHEAP(rp_tmp);
+				rlen_c3 = ROW_MINLEN_IN_TABLETSCHM + sizeof(int) + keycolen + sizeof(int);
+				tabletschm_newrp = (char *)MEMALLOCHEAP(rlen_c3);
+
+				
+				tablet_schm_upd_col(tabletschm_newrp, tabletschm_rp, TABLET_SCHM_KEYCOLID, keycol, keycolen);
+				
+				tablet_schm_del_row(tab_hdr.tab_id, 0, tab_tabletschm_dir, tabletschm_rp);
+
+				tablet_schm_ins_row(tab_hdr.tab_id, 0, tab_tabletschm_dir, tabletschm_newrp, tab_hdr.tab_tablet);
+
+				tabinfo->t_stat &= ~TAB_TABLET_KEYROW_CHG;
+				
+				MEMFREEHEAP(tabletschm_newrp);
+			}
 			
 		}
-		
+
 	}
 	else if (tab_hdr.tab_tablet == 0)
 	{
@@ -825,7 +871,7 @@ meta_seltab(TREE *command, TABINFO *tabinfo)
 	tabletid = *(int *)row_locate_col(rp, sizeof(ROWFMT), ROW_MINLEN_IN_TABLETSCHM, 
 					&namelen);
 
-	rp = tablet_srch_row(&tab_hdr, tab_hdr.tab_id, tabletid, tab_meta_dir, keycol, keycolen);
+	rp = tablet_srch_row(tabinfo, &tab_hdr, tab_hdr.tab_id, tabletid, tab_meta_dir, keycol, keycolen);
 
 	
 	name = row_locate_col(rp, sizeof(int) + sizeof(ROWFMT), ROW_MINLEN_IN_TABLET, &namelen);

@@ -173,7 +173,63 @@ tablet_del_row(TABLEHDR *tablehdr, int tabid, int sstabid, char *tablet_name, ch
 	tabinfo_pop();
 }
 
+int
+tablet_upd_col(char *newrp, char *oldrp, int rlen, int colid, char *newcolval, int newvalen)
+{
+	char	*colptr;
+	int	colen;
+	int	coloffset;
+	int	rtn_stat = TRUE;
 
+	switch (colid)
+	{
+	    case 1:	
+	    case 2:
+	    case 3:
+	    	break;
+	    case 4:
+
+		MEMCPY(newrp, oldrp, rlen);
+		colptr = row_locate_col(newrp, sizeof(ROWFMT) + sizeof(int) + SSTABLE_NAME_MAX_LEN + RANGE_ADDR_MAX_LEN, 
+					ROW_MINLEN_IN_TABLET, &colen);
+
+		*(int *)colptr = *(int *)newcolval;
+
+		assert (newvalen == sizeof(int));
+	    	
+	    	break;
+		
+	    case 5:
+
+		MEMCPY(newrp, oldrp, ROW_MINLEN_IN_TABLET);
+		
+	    	coloffset = ROW_MINLEN_IN_TABLET + sizeof(int);
+
+		
+		
+		PUT_TO_BUFFER(newrp, coloffset, newcolval, newvalen);
+
+		
+		*(int *)(newrp + coloffset) = coloffset - newvalen;
+
+		coloffset += sizeof(int);
+
+		colptr = newrp + ROW_MINLEN_IN_TABLET;
+
+		int ign = 0;
+		
+		PUT_TO_BUFFER(colptr, ign, &coloffset, sizeof(int));
+
+		break;
+		
+	    default:
+	    	rtn_stat = FALSE;
+	    	break;
+		
+	}
+
+	return rtn_stat;
+}
 
 
 int
@@ -246,7 +302,7 @@ tablet_bld_row(char *sstab_rp, int sstab_rlen, char *tab_name, int tab_name_len,
 
 
 char *
-tablet_srch_row(TABLEHDR *tablehdr, int tabid, int sstabid, char *systab, char *key, int keylen)
+tablet_srch_row(TABINFO *usertabinfo, TABLEHDR *tablehdr, int tabid, int sstabid, char *systab, char *key, int keylen)
 {
 	TABINFO	*tabinfo;
 	int	minrowlen;
@@ -274,6 +330,11 @@ tablet_srch_row(TABLEHDR *tablehdr, int tabid, int sstabid, char *systab, char *
 	bufunkeep(bp->bsstab);
 	session_close(tabinfo);
 
+	if (tabinfo->t_stat & TAB_TABLET_KEYROW_CHG)
+	{
+		usertabinfo->t_stat |= TAB_TABLET_KEYROW_CHG;
+	}
+	
 	MEMFREEHEAP(tabinfo->t_sinfo);
 	MEMFREEHEAP(tabinfo);
 
@@ -322,6 +383,44 @@ tablet_schm_bld_row(char *rp, int rlen, int tabletid, char *tabletname, char *ke
 
 
 void
+tablet_schm_upd_col(char *newrp, char *oldrp, int colid, char *newcolval, int newvalen)
+{
+	int	coloffset;
+	char	*colptr;
+
+	
+	switch (colid)
+	{
+	    case 1:
+	    case 2:
+	    	break;
+		
+	    case 3:
+	    	MEMCPY(newrp, oldrp, ROW_MINLEN_IN_TABLETSCHM);
+
+		coloffset = ROW_MINLEN_IN_TABLETSCHM + sizeof(int);
+
+		PUT_TO_BUFFER(newrp, coloffset, newcolval, newvalen);
+
+		
+		*(int *)(newrp + coloffset) = coloffset - newvalen;
+
+		coloffset += sizeof(int);
+
+		colptr = newrp + ROW_MINLEN_IN_TABLETSCHM;
+
+		int ign = 0;
+		
+		PUT_TO_BUFFER(colptr, ign, &coloffset, sizeof(int));
+	    	break;
+		
+	    default:
+	    	break;
+	}
+}
+
+
+void
 tablet_schm_ins_row(int tabid, int sstabid, char *systab, char *row, int tabletnum)
 {
 	TABINFO	*tabinfo;
@@ -360,6 +459,44 @@ tablet_schm_ins_row(int tabid, int sstabid, char *systab, char *row, int tabletn
 }
 
 
+
+
+void
+tablet_schm_del_row(int tabid, int sstabid, char *systab, char *row)
+{
+	TABINFO	*tabinfo;
+	int	minrowlen;
+	char	*key;
+	int	keylen;
+	
+	tabinfo = MEMALLOCHEAP(sizeof(TABINFO));
+	MEMSET(tabinfo, sizeof(TABINFO));
+
+	tabinfo->t_sinfo = (SINFO *)MEMALLOCHEAP(sizeof(SINFO));
+	MEMSET(tabinfo->t_sinfo, sizeof(SINFO));
+
+	tabinfo->t_dold = tabinfo->t_dnew = (BUF *) tabinfo;
+
+	tabinfo_push(tabinfo);
+
+	minrowlen = ROW_MINLEN_IN_TABLETSCHM;
+
+	
+	key = row_locate_col(row, -1, minrowlen, &keylen);
+	
+	TABINFO_INIT(tabinfo, systab, tabinfo->t_sinfo, minrowlen, TAB_SRCH_DATA,
+			tabid, sstabid);
+	SRCH_INFO_INIT(tabinfo->t_sinfo, key, keylen, TABLET_SCHM_KEYCOLID, VARCHAR, -1);
+			
+	blkdel(tabinfo, row);
+	
+	session_close(tabinfo);
+
+	MEMFREEHEAP(tabinfo->t_sinfo);
+	MEMFREEHEAP(tabinfo);
+
+	tabinfo_pop();
+}
 
 
 char *
@@ -478,9 +615,9 @@ tablet_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 	char	tab_meta_dir[TABLE_NAME_MAX_LEN];
 
 
-	nextblk = srcbp->bsstab->bblk;
+	ins_nxtsstab = (srcbp->bblk->bblkno > ((BLK_CNT_IN_SSTABLE / 2) - 1)) ? TRUE : FALSE;
 
-	ins_nxtsstab = (nextblk->bblkno > ((BLK_CNT_IN_SSTABLE / 2) - 1)) ? TRUE : FALSE;
+	nextblk = srcbp->bsstab->bblk;
 	
 	while (nextblk->bnextblkno < (BLK_CNT_IN_SSTABLE / 2))
 	{		
