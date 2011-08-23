@@ -1,8 +1,2 @@
-#summary One-sentence summary of this page.
-#labels MaxTablefeatures,FeaturessupportedinMaxTable
-
-*MaxTable features*
-
-
-
+#labels FeaturessupportedinMaxTable
 *Data writes*: When an application insert a data, for performance, writes are cached at the Ranger server. Periodically, the cache is flushed. Also, applications can force data to be flushed to the Ranger server. In either case, once data is flushed to the server, it is available for reading. In the Metaserver, all the metadata will be cached if your memory is enough.
