@@ -649,7 +649,24 @@ int main(int argc, char **argv)
 
 	Trace = 0;
 
+
 	printf("Begain to INSERT data into the table yxue\n");
+
+	for(i = 5; i < 10; i++)
+	{
+		MEMSET(c1, 32);
+		sprintf(c1, "%s%d", "gggg", i);
+		MEMSET(instab, 128);
+		sprintf(instab,"insert into yxue (%s, bbbb%d)", c1, i);
+
+		if((i > 99) && ((i % 100) == 0))
+		{
+			printf("inserting %d rows into yxue\n", i);
+		}
+		cli_test_main(instab);
+	}
+
+	
 	/* 2nd step: insert into table. */
 	for(i = 0; i < 10000; i++)
 	{

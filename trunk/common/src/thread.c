@@ -160,7 +160,7 @@ void * msg_recv(void *args)
 					new_msg->fd = sockfd;
 					new_msg->n_size = n;
 					new_msg->next = NULL;
-
+			
 					pthread_mutex_lock(&mutex);
 					if (msg_list_head == NULL)
 					{
@@ -173,7 +173,7 @@ void * msg_recv(void *args)
 						msg_list_tail = new_msg;
 					}
 					msg_list_len ++;
-
+			
 					pthread_cond_signal(&cond);
 					pthread_mutex_unlock(&mutex);
 				}
@@ -190,7 +190,7 @@ void * msg_recv(void *args)
 				write(sockfd, resp_msg->data, resp_msg->n_size);
 				printf("write %d->[%s]\n", resp_msg->n_size, resp_msg->data);
 
-
+	
 				ev.data.fd = sockfd;
 				ev.events = EPOLLIN;
 				epoll_ctl(epfd, EPOLL_CTL_MOD, sockfd, &ev);
@@ -222,7 +222,7 @@ void msg_process(char * (*handler_request)(char *req_buf))
 		while (msg_list_head == NULL)
 			pthread_cond_wait(&cond, &mutex);
 
-
+	
 		req_msg = msg_list_head;
 		msg_list_head = msg_list_head->next;
 		msg_list_len --;
@@ -247,10 +247,11 @@ void msg_process(char * (*handler_request)(char *req_buf))
 		MEMCPY(resp_msg->data, resp, resp_size);
 		resp_msg->fd = fd;
 
-		ev.data.ptr = resp_msg;
-
-		ev.events = EPOLLOUT;
 	
+		ev.data.ptr = resp_msg;
+	
+		ev.events = EPOLLOUT;
+
 		epoll_ctl(epfd, EPOLL_CTL_MOD, fd, &ev);
   
 		conn_destroy_req(req);

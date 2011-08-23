@@ -129,13 +129,21 @@ srch_again:
 		
 		if (tabinfo->t_stat & TAB_SCHM_SRCH)
 		{
-			if ((result == GR) || (rowno == 0))
+			if ((result == GR) || (result == EQ) || (rowno == 0))
 			{
 				last_offset = *offset;
 			}
 
-			if ((result == EQ) || (result == LE))
+			if (result == LE)
 			{
+				if (   (tabinfo->t_sstab_id == 1) && (rowno == 0) 
+				    && (bp->bblk->bblkno == 0))
+				{
+					assert(last_offset == *offset);
+					
+					tabinfo->t_stat |= TAB_TABLET_KEYROW_CHG;
+				}
+				
 				break;
 			}				
 		}
@@ -324,15 +332,17 @@ blkins(TABINFO *tabinfo, char *rp)
 	{
 		goto finish;
 	}
+
+	
+	if (blk_stat & BLK_ROW_NEXT_BLK)
+	{
+		bp++;
+	}
+
 	
 	if ((blk_stat & BLK_BUF_NEED_CHANGE))
 	{
 		offset = blksrch(tabinfo, bp);
-	}
-
-	if (blk_stat & BLK_ROW_NEXT_BLK)
-	{
-		bp++;
 	}
 
 	if (bp->bblk->bfreeoff - offset)
@@ -367,6 +377,8 @@ blkins(TABINFO *tabinfo, char *rp)
 		ROW_SET_OFFSET(bp->bblk, BLK_GET_NEXT_ROWNO(bp), offset);
 	}
 	
+
+
 	bp->bblk->bfreeoff += rlen;
 
 	bp->bblk->bminlen = minlen;

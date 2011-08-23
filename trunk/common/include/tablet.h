@@ -32,7 +32,7 @@ tablet_bld_row(char *sstab_rp, int sstab_rlen, char *tab_name, int tab_name_len,
 			char *rang_addr, char *keycol, int keycolen, int keycol_type);
 
 char *
-tablet_srch_row(TABLEHDR *tablehdr, int tabid, int sstabid, char *systab, char *key, int keylen);
+tablet_srch_row(TABINFO *usertabinfo, TABLEHDR *tablehdr, int tabid, int sstabid, char *systab, char *key, int keylen);
 
 void
 tablet_ins_row(TABLEHDR *tablehdr, int tabid, int sstabid, char *tablet_name, char *rp, int minlen);
@@ -46,6 +46,9 @@ tablet_schm_bld_row(char *rp, int rlen, int tabletid, char *tabletname, char *ke
 void
 tablet_schm_ins_row(int tabid, int sstabid, char *systab, char *row, int tabletnum);
 
+void
+tablet_schm_del_row(int tabid, int sstabid, char *systab, char *row);
+
 char *
 tablet_schm_srch_row(TABLEHDR *tablehdr, int tabid, int sstabid, char *systab, char *key, int keylen);
 
@@ -57,6 +60,14 @@ tablet_namebyid(TABINFO *tabinfo, char *new_sstab);
 
 void
 tablet_split(TABINFO *srctabinfo, BUF *srcbp, char *rp);
+
+int
+tablet_upd_col(char *newrp, char *oldrp, int rlen, int colid, char *newcolval, int newvalen);
+
+void
+tablet_schm_upd_col(char *newrp, char *oldrp, int colid, char *newcolval, int newvalen);
+
+
 
 
 #endif
