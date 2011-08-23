@@ -1,0 +1,8 @@
+#summary High-level overview of MaxTable.
+
+*Overview*
+
+Maxtable consists of three components: 
+# Metadata server: This provides the global namespace for all the tables in this system. It keeps the B-tree structure in memory.
+# Ranger server: SStable is one file saved in the Ranger sever and it is split into blocks. Each block is 64KB in size. One SSTable contains 16 blocks.
+# Client library: The client library is linked with applications. This enables applications to read/write files stored in Maxtable. 
