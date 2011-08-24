@@ -7,7 +7,7 @@
     * *Ranger server*: SStable is one file saved in the Ranger sever and it is split into blocks. Each block is 64KB in size. One SSTable contains 16 blocks.
     * *Client library*: The client library is linked with applications. This enables applications to read/write files stored in Maxtable.                                 
   # How to store the table in the disk ?
-http://m3.img.libdd.com/farm2/71/ECF58755A989D7E167B3DF8034EBD547_800_236.jpg
+http://m2.img.libdd.com/farm2/169/21C7BED5898F70E408FBA4F9A52CFEA9_587_170.jpg
     * One SSTable = 1 M data.
     * One Tablet = 4K SSTable.
     * One Table = 4K Tablet.
