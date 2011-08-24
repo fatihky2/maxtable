@@ -42,7 +42,7 @@
 #include "trace.h"
 #include "session.h"
 #include "tabinfo.h"
-
+#include "sstab.h"
 
 
 extern	TSS	*Tss;
@@ -52,13 +52,16 @@ extern	TSS	*Tss;
 #define MIN_REGION_AVAILABLE_SIZE 100 //Unit is MB
 #define DEFAULT_MASTER_FLUSH_CHECK_INTERVAL 600 //10Min
 
-#define SSTAB_MAP_SIZE	(1024 * 1024 * sizeof(int))
 #define SSTAB_FREE	0
 #define SSTAB_USED	1
 #define SSTAB_RESERVED	2
 
 
+
 int	*sstab_map;
+
+TAB_SSTAB_MAP *tab_sstabmap;
+
 
 #define SSTAB_MAP_SET(i, flag)	(sstab_map[i] = flag)
 
@@ -166,12 +169,8 @@ meta_server_setup(char *conf_path)
 		MKDIR(status, MT_META_INDEX, 0755); 
 	}
 
-	
-	sstab_map = (int *)malloc(SSTAB_MAP_SIZE);
-
-	
-
-	MEMSET(sstab_map, 1024 * 1024 * sizeof(int));
+	tab_sstabmap = NULL;
+	sstab_map = NULL;
 	
 	ca_setup_pool();
 
@@ -379,6 +378,16 @@ meta_crtab(TREE *command)
 
 
 	
+
+	int *sstab_map_tmp;
+	
+	
+	sstab_map_tmp = (int *)malloc(SSTAB_MAP_SIZE);
+
+	
+
+	MEMSET(sstab_map_tmp, 1024 * 1024 * sizeof(int));
+	
 	MEMSET(tab_dir1, 256);
 
 	
@@ -394,9 +403,11 @@ meta_crtab(TREE *command)
 	}
 	
 	
-	WRITE(fd, sstab_map, 1024 * 1024 * sizeof(int));
+	WRITE(fd, sstab_map_tmp, SSTAB_MAP_SIZE);
 
 	CLOSE(fd);
+
+	free(sstab_map_tmp);
 	
 	rtn_stat = TRUE;
 	
@@ -523,6 +534,10 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 
 	MEMSET(sstab_name, SSTABLE_NAME_MAX_LEN);
 
+	sstab_map = sstab_map_get(tab_hdr.tab_id, tab_dir, &tab_sstabmap);
+
+	assert(sstab_map != NULL);
+	
 	if (tab_hdr.tab_tablet > 0)
 	{
 		
@@ -1046,10 +1061,12 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 	int colen;
 	char *colptr = par_get_colval_by_colid(command, 2, &colen);
 
+	sstab_map = sstab_map_get(tab_hdr.tab_id, tab_dir, &tab_sstabmap);
+	
 	int sstab_id;
 
 	sstab_id = m_atoi(colptr, colen);
-	
+
 	SSTAB_MAP_SET(sstab_id, SSTAB_USED);
 	
 	

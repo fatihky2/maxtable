@@ -30,5 +30,12 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp);
 void
 sstab_namebyid(TABINFO *tabinfo, char *new_sstab);
 
+int *
+sstab_map_get(int tabid, char *tab_dir, TAB_SSTAB_MAP **tab_sstab_map);
+
+void
+sstab_map_release(int tabid, int flag, TAB_SSTAB_MAP *tab_sstab_map);
+
+
 
 #endif

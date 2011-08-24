@@ -104,6 +104,19 @@ typedef union infor_hdr
 	char		magic[RPC_MAGIC_MAX_LEN];
 } INFOR_HDR;
 
+#define SSTAB_MAP_SIZE	(1024 * 1024 * sizeof(int))
+
+
+typedef struct tab_sstab_map
+{
+	int	tabid;
+	int	stat;
+	struct tab_sstab_map *nexttabmap;
+	int	sstab_map[SSTAB_MAP_SIZE];
+	
+}TAB_SSTAB_MAP;
+
+
 
 typedef struct insert_meta
 {

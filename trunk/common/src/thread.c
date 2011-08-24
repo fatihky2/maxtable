@@ -99,12 +99,13 @@ void * msg_recv(void *args)
 
 	while(TRUE)
 	{
-		printf("waiting...\n");
+		//printf("waiting...\n");
 
 		nfds = epoll_wait(epfd, events, 20, -1);
 		if(nfds == -1)
 		{
-			perror("epoll_wait");
+			;
+			//perror("epoll_wait");
 		}
 
 
