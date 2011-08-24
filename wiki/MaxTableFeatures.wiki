@@ -4,6 +4,6 @@
 
   * *SSTable Map*: This feature will reduce the data consistency control and improve the performance of data write.
 
-  * *Cache All Data*: In MaxTable we cache all the data include the whole metadata management and cache the hot point data in ranger server.
+  * *Cache All Data*: In MaxTable we cache all the metadata management and the hot point data in ranger server.
 
   * *Range Query*: Range query is supported in MaxTable, because we support the data sort automatically .
