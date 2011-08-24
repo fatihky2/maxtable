@@ -16,7 +16,7 @@ LIB_OBJS_C = $(patsubst %.c,%.o,$(LIB_SRCS_C))
 LIB_SRCS_CPP = $(wildcard ${SERVICE_SRC})
 LIB_OBJS_CPP = $(patsubst %.cpp,%.o,$(LIB_SRCS_CPP))
 
-all: client master region sample
+all: client master region sample service service_sample
 
 %.o : %.c
 	$(CC) -o $@ -c $< $(CFLAGS)

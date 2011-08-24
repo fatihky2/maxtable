@@ -111,6 +111,7 @@ typedef struct tab_sstab_map
 {
 	int	tabid;
 	int	stat;
+	char	sstabmap_path[TABLE_NAME_MAX_LEN];
 	struct tab_sstab_map *nexttabmap;
 	int	sstab_map[SSTAB_MAP_SIZE];
 	

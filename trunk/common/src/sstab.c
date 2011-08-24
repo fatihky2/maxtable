@@ -277,6 +277,8 @@ sstab_map_get(int tabid, char *tab_dir, TAB_SSTAB_MAP **tab_sstab_map)
 	READ(fd, sstab_map_tmp->sstab_map, SSTAB_MAP_SIZE);
 
 	sstab_map_tmp->tabid = tabid;
+	MEMCPY(sstab_map_tmp->sstabmap_path, tab_dir1, STRLEN(tab_dir1));
+	
 	
 	if (*tab_sstab_map != NULL)
 	{
@@ -334,4 +336,42 @@ sstab_map_release(int tabid, int flag, TAB_SSTAB_MAP *tab_sstab_map)
 	return;
 }
 
+
+int
+sstab_map_put(int tabid, TAB_SSTAB_MAP *tab_sstab_map)
+{
+	TAB_SSTAB_MAP	*sstab_map_tmp;
+	int		fd;
+
+
+	sstab_map_tmp = tab_sstab_map;
+
+	while(sstab_map_tmp != NULL)
+	{
+		if (sstab_map_tmp->tabid == tabid)
+		{
+			break;
+		}
+
+		sstab_map_tmp = sstab_map_tmp->nexttabmap;
+	}
+	
+	if (sstab_map_tmp == NULL)
+	{
+		return TRUE;
+	}
+	
+	OPEN(fd, sstab_map_tmp->sstabmap_path, (O_RDWR));
+
+	if (fd < 0)
+	{
+		return FALSE;
+	}
+	
+	WRITE(fd, sstab_map_tmp->sstab_map, SSTAB_MAP_SIZE);
+
+	CLOSE(fd);
+
+	return TRUE;
+}
 
