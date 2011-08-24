@@ -2,14 +2,13 @@
 
 *Overview*
 
-Maxtable consists of three components:
-  # *Metadata server*: This provides the global namespace for all the tables in this system. It keeps the B-tree structure in memory.
-  # *Ranger server*: SStable is one file saved in the Ranger sever and it is split into blocks. Each block is 64KB in size. One SSTable contains 16 blocks.
-  # *Client library*: The client library is linked with applications. This enables applications to read/write files stored in Maxtable. 
-
-How to store the table in the disk ?
-http://m3.img.libdd.com/farm2/125/ED3CE65CAE226ABB3A086FC4E8011F7D_891_346.jpg
-  # One SSTable = 1 M data.
-  # One Tablet = 4K SSTable.
-  # One Table = 4K Tablet.
+  # Maxtable consists of three components:
+    * *Metadata server*: This provides the global namespace for all the tables in this system. It keeps the B-tree structure in memory.
+    * *Ranger server*: SStable is one file saved in the Ranger sever and it is split into blocks. Each block is 64KB in size. One SSTable contains 16 blocks.
+    * *Client library*: The client library is linked with applications. This enables applications to read/write files stored in Maxtable.                                 
+  # How to store the table in the disk ?
+ http://m3.img.libdd.com/farm2/125/ED3CE65CAE226ABB3A086FC4E8011F7D_891_346.jpg
+    * One SSTable = 1 M data.
+    * One Tablet = 4K SSTable.
+    * One Table = 4K Tablet.
 So, one table can contain 16T data, or 64 PB data if we use two tablet levels to save index data. 
