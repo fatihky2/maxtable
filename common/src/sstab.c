@@ -29,6 +29,7 @@
 #include "utils.h"
 #include <time.h>
 #include "tabinfo.h"
+#include "file_op.h"
 
 
 extern	TSS	*Tss;
@@ -227,6 +228,110 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 }
 
 
+int *
+sstab_map_get(int tabid, char *tab_dir, TAB_SSTAB_MAP **tab_sstab_map)
+{
+	char	tab_dir1[TABLE_NAME_MAX_LEN];
+	int	fd;
+	int	*sstab_map = NULL;
+	TAB_SSTAB_MAP *sstab_map_tmp;
 
+
+	sstab_map_tmp = *tab_sstab_map;
+
+	while(sstab_map_tmp != NULL)
+	{
+		if (sstab_map_tmp->tabid == tabid)
+		{
+			sstab_map = sstab_map_tmp->sstab_map;
+
+			
+			goto exit;
+		}
+
+		sstab_map_tmp = sstab_map_tmp->nexttabmap;
+	}
+	
+	
+	
+	MEMSET(tab_dir1, TABLE_NAME_MAX_LEN);
+
+	
+	MEMCPY(tab_dir1, tab_dir, STRLEN(tab_dir));
+
+	str1_to_str2(tab_dir1, '/', "sstabmap");
+	
+	OPEN(fd, tab_dir1, (O_RDONLY));
+
+	if (fd < 0)
+	{
+		goto exit;
+	}
+
+	
+	sstab_map_tmp = (TAB_SSTAB_MAP *)malloc(sizeof(TAB_SSTAB_MAP));
+
+	MEMSET(sstab_map_tmp, sizeof(TAB_SSTAB_MAP));
+	
+	
+	READ(fd, sstab_map_tmp->sstab_map, SSTAB_MAP_SIZE);
+
+	sstab_map_tmp->tabid = tabid;
+	
+	if (*tab_sstab_map != NULL)
+	{
+		sstab_map_tmp->nexttabmap = (*tab_sstab_map)->nexttabmap;
+		(*tab_sstab_map)->nexttabmap = sstab_map_tmp;
+	}
+	else
+	{
+		*tab_sstab_map = sstab_map_tmp;
+	}
+
+	sstab_map = sstab_map_tmp->sstab_map;
+	
+	CLOSE(fd);
+
+exit:
+
+	return sstab_map;
+}
+
+
+
+void
+sstab_map_release(int tabid, int flag, TAB_SSTAB_MAP *tab_sstab_map)
+{
+	
+	TAB_SSTAB_MAP *sstab_map_cur;
+	TAB_SSTAB_MAP *sstab_map_last;
+
+
+	sstab_map_last = sstab_map_cur = tab_sstab_map;
+
+	while(sstab_map_cur != NULL)
+	{
+		if (sstab_map_cur->tabid == tabid)
+		{
+			if (sstab_map_last == sstab_map_cur)
+			{
+				free(tab_sstab_map);
+				tab_sstab_map = NULL;
+			}
+			else
+			{
+				sstab_map_last->nexttabmap = sstab_map_cur->nexttabmap;
+
+				free(sstab_map_cur);
+			}
+			
+			break;
+		}
+		sstab_map_last = sstab_map_cur;
+		sstab_map_cur = sstab_map_cur->nexttabmap;
+	}
+
+	return;
+}
 
 
