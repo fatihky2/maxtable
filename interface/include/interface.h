@@ -44,7 +44,7 @@ extern void cli_exit(conn * connection);
 /*
 commit one request
 */
-extern int cli_commit(conn * connection, char * cmd, char * response);
+extern int cli_commit(conn * connection, char * cmd, char * response, int * length);
 
 
 #endif

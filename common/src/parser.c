@@ -85,10 +85,12 @@ par_bld_const(char *data, int datalen, int datatype)
 	}
       
 	const_node->len = len;        
-	const_node->value = (char *)MEMALLOCHEAP(len);
-	MEMSET(const_node->value, len);
+	const_node->value = (char *)MEMALLOCHEAP(datalen+1);
+	MEMSET(const_node->value, datalen+1);
 
-	MEMCPY(const_node->value, data, MIN(datalen, len));
+	MEMCPY(const_node->value, data, datalen);
+
+	const_node->value[datalen] = '\0';
 
 	return node;    
 }
