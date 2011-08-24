@@ -352,15 +352,15 @@ rg_seltab(TREE *command, TABINFO *tabinfo)
 	MEMSET(col_buf, rlen);
 
 	
-	char	*filename = meta_get_coldata(bp, offset, -1);
-	MEMCPY(col_buf, filename, rlen - sizeof(ROWFMT) + sizeof(int));
+	char	*filename = meta_get_coldata(bp, offset, sizeof(ROWFMT));
+	MEMCPY(col_buf, filename, rlen - sizeof(ROWFMT));
 	
 	rtn_stat = TRUE;
 
 	exit:
 	if (rtn_stat)
 	{
-		resp = conn_build_resp_byte(RPC_SUCCESS, SSTABLE_NAME_MAX_LEN, col_buf);
+		resp = conn_build_resp_byte(RPC_SUCCESS, rlen - sizeof(ROWFMT), col_buf);
 	}
 	else
 	{

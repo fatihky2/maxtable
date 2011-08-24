@@ -10,10 +10,13 @@
 #include "memcom.h"
 #include "strings.h"
 #include "trace.h"
+#include "row.h"
+#include "type.h"
 #include "interface.h"
 
 extern	TSS	*Tss;
 
+extern int sel_resp_rejoin(char * src_buf, char * dest_buf, int src_len, int * dest_len, char *index_buf);
 
 int validation_request(char * request)
 {
@@ -66,7 +69,7 @@ void cli_exit(conn * connection)
 /*
 commit one request
 */
-int cli_commit(conn * connection, char * cmd, char * response)
+int cli_commit(conn * connection, char * cmd, char * response, int * resp_len)
 {
     LOCALTSS(tss);
 	
@@ -194,10 +197,12 @@ int cli_commit(conn * connection, char * cmd, char * response)
 
     if(querytype == SELECT)
     {
-        strcpy(response, rg_resp->result);
+        sel_resp_rejoin(rg_resp->result, response, rg_resp->result_length, resp_len, resp->result);
+        //strcpy(response, rg_resp->result);
     }
     else
     {
+        *resp_len = sizeof(SUC_RET);
         strcpy(response, SUC_RET);
     }
 
@@ -206,6 +211,73 @@ int cli_commit(conn * connection, char * cmd, char * response)
         conn_destroy_resp(rg_resp);
 
     parser_close();
+
+    return TRUE;
+}
+
+int sel_resp_rejoin(char * src_buf, char * dest_buf, int src_len, int * dest_len, char *index_buf)
+{
+    char col_off_tab[COL_OFFTAB_MAX_SIZE];
+    int col_off_idx = COL_OFFTAB_MAX_SIZE;
+
+    INSMETA *ins_meta = (INSMETA *)index_buf;
+	index_buf += sizeof(INSMETA);
+
+	TABLEHDR *tab_hdr = (TABLEHDR *)index_buf;
+	index_buf += sizeof(TABLEHDR);
+
+	COLINFO *col_info = (COLINFO *)index_buf;
+
+	int i, src_buf_index1, src_buf_index2, dest_buf_index;
+
+	int volcol_count = 1;
+
+	int offset = sizeof(ROWFMT);
+
+	src_buf_index1 = 0;
+	src_buf_index2 = src_len - sizeof(int);
+	dest_buf_index = 0;
+
+	col_off_idx -= sizeof(int);
+    //column number
+    *((int *)(col_off_tab + col_off_idx)) = tab_hdr->tab_col;
+
+    for(i = 0; i < tab_hdr->tab_col; i++)
+    {
+        int col_type = (col_info+i)->col_type;
+        if(TYPE_IS_FIXED(col_type))
+        {
+            MEMCPY(dest_buf + dest_buf_index, src_buf + src_buf_index1, TYPE_GET_LEN(col_type));
+
+            col_off_idx -= sizeof(int);
+            *((int *)(col_off_tab + col_off_idx)) = dest_buf_index;
+
+            dest_buf_index += TYPE_GET_LEN(col_type);
+            src_buf_index1 += TYPE_GET_LEN(col_type);
+        }
+        else
+        {
+            int valcol_len = (ins_meta->varcol_num == volcol_count)?
+                                   src_buf_index2 - (*((int *)(src_buf + src_buf_index2)) - offset):
+                                   *((int *)(src_buf + src_buf_index2 - sizeof(int))) - *((int *)(src_buf + src_buf_index2));
+            MEMCPY(dest_buf + dest_buf_index, src_buf + *((int *)(src_buf + src_buf_index2)) - offset, valcol_len);
+
+            col_off_idx -= sizeof(int);
+            *((int *)(col_off_tab + col_off_idx)) = dest_buf_index;
+            
+            dest_buf_index += valcol_len;
+            src_buf_index2 -= sizeof(int);
+            volcol_count ++;
+        }
+    }
+
+    if (COL_OFFTAB_MAX_SIZE > col_off_idx)
+    {
+        MEMCPY(dest_buf + dest_buf_index, col_off_tab + col_off_idx, COL_OFFTAB_MAX_SIZE - col_off_idx);
+        dest_buf_index += (COL_OFFTAB_MAX_SIZE - col_off_idx);
+    }
+
+    *dest_len = dest_buf_index;
 
     return TRUE;
 }
