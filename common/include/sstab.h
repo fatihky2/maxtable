@@ -36,6 +36,8 @@ sstab_map_get(int tabid, char *tab_dir, TAB_SSTAB_MAP **tab_sstab_map);
 void
 sstab_map_release(int tabid, int flag, TAB_SSTAB_MAP *tab_sstab_map);
 
+int
+sstab_map_put(int tabid, TAB_SSTAB_MAP *tab_sstab_map);
 
 
 #endif

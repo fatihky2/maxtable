@@ -640,10 +640,10 @@ int main(int argc, char **argv)
 	seltab = (char *)MEMALLOCHEAP(128);	
 	
 	/* 1st step: create table. */
-	crtab = "create table yxue (filename varchar, servername varchar)";
+	crtab = "create table yxue (filename varchar, filesize int, servername varchar)";
 
 	printf("CRATING TABLE yxue\n");
-	printf("create table yxue (filename varchar, servername varchar)\n");
+	printf("create table yxue (filename varchar, filesize int, servername varchar)\n");
 	cli_test_main(crtab);
 
 
@@ -657,7 +657,7 @@ int main(int argc, char **argv)
 		MEMSET(c1, 32);
 		sprintf(c1, "%s%d", "gggg", i);
 		MEMSET(instab, 128);
-		sprintf(instab,"insert into yxue (%s, bbbb%d)", c1, i);
+		sprintf(instab,"insert into yxue (%s, %d, bbbb%d)", c1, i, i);
 
 		if((i > 99) && ((i % 100) == 0))
 		{
@@ -673,7 +673,7 @@ int main(int argc, char **argv)
 		MEMSET(c1, 32);
 		sprintf(c1, "%s%d", "gggg", i);
 		MEMSET(instab, 128);
-		sprintf(instab,"insert into yxue (%s, bbbb%d)", c1, i);
+		sprintf(instab,"insert into yxue (%s, %d, bbbb%d)", c1, i,i);
 
 		if((i > 99) && ((i % 100) == 0))
 		{

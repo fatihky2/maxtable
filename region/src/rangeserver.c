@@ -171,17 +171,8 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 				col_off_idx -= sizeof(int);
 				*((int *)(col_off_tab + col_off_idx)) = rp_idx;
 			}
-
-			if(col_offset < 0)
-			{
-				PUT_TO_BUFFER(rp, rp_idx, col_val, col_len);
-			}
-			else
-			{
-				int tmp_val = atoi(col_val);
-				PUT_TO_BUFFER(rp, rp_idx, &tmp_val, col_len);
-			}
 			
+			PUT_TO_BUFFER(rp, rp_idx, col_val, col_len);
 			if (col_offset > 0)
 			{
 				col_offset += col_len;
@@ -361,20 +352,15 @@ rg_seltab(TREE *command, TABINFO *tabinfo)
 	MEMSET(col_buf, rlen);
 
 	
-	//char	*filename = meta_get_coldata(bp, offset, -1);
-	char	*filename = meta_get_coldata(bp, offset, sizeof(ROWFMT));
-	//MEMCPY(col_buf, filename, rlen - sizeof(ROWFMT) + sizeof(int));
-	MEMCPY(col_buf, filename, rlen - sizeof(ROWFMT));
+	char	*filename = meta_get_coldata(bp, offset, -1);
+	MEMCPY(col_buf, filename, rlen - sizeof(ROWFMT) + sizeof(int));
 	
 	rtn_stat = TRUE;
 
 	exit:
 	if (rtn_stat)
 	{
-		
-		//resp = conn_build_resp_byte(RPC_SUCCESS, SSTABLE_NAME_MAX_LEN, col_buf);
-		int col_buf_length = rlen - sizeof(ROWFMT);
-		resp = conn_build_resp_byte(RPC_SUCCESS, col_buf_length, col_buf);
+		resp = conn_build_resp_byte(RPC_SUCCESS, SSTABLE_NAME_MAX_LEN, col_buf);
 	}
 	else
 	{

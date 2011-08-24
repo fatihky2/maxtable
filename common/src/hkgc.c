@@ -39,6 +39,12 @@ hkgc_write_block()
 }
 
 void
+hkgc_grab_dirty_resource()
+{
+
+}
+
+void
 hkgc_boot()
 {
 	while(TRUE)
