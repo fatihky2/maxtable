@@ -6,14 +6,16 @@
 int main()
 {
     conn * connection;
+	
 
     if(cli_connection("127.0.0.1", 1959, &connection))
     {
         char resp[256], cmd[256];
         int i, len;
+	int	schmem = 1;
         
         memset(resp, 0, 256);
-        sprintf(cmd, "create table gu(id1 varchar, id2 int)");
+        sprintf(cmd, "create table gu(id1 varchar, id2 int, id3 varchar)");
         cli_commit(connection, cmd, resp, &len);
         printf("ret: %s\n", resp);
 
@@ -21,9 +23,12 @@ int main()
         {
             memset(resp, 0, 256);
             memset(cmd, 0, 256);
-            sprintf(cmd, "insert into gu(gggg%d, %d)", i, i);
+            sprintf(cmd, "insert into gu(gggg%d, %d,bbbb%d)", i, i, i);
             cli_commit(connection, cmd, resp, &len);
-            printf("cmd: %s, ret(%d): %s\n", cmd, len, resp);
+		if((i > 99) && ((i % 100) == 0))
+		{
+            		printf("cmd: %s, ret(%d): %s\n", cmd, len, resp);
+		}
         }
         for(i = 100; i < 200; i ++)
         {
