@@ -791,7 +791,7 @@ exit:
 
 
 char *
-meta_seltab(TREE *command, TABINFO *tabinfo)
+meta_seldeltab(TREE *command, TABINFO *tabinfo)
 {
 	
 	char	*tab_name;
@@ -988,8 +988,6 @@ exit:
 
 	return resp;
 }
-
-
 
 
 
@@ -1235,11 +1233,13 @@ parse_again:
 	    	break;
 
 	    case SELECT:
-		resp = meta_seltab(command, tabinfo);
+		resp = meta_seldeltab(command, tabinfo);
 		printf("I got here - SELECTING TABLE\n");
 	    	break;
 
 	    case DELETE:
+	    	resp = meta_seldeltab(command, tabinfo);
+		printf("I got here - DELETE TABLE\n");
 	    	break;
 	    case ADDSSTAB:
 	    	resp = meta_addsstab(command, tabinfo);

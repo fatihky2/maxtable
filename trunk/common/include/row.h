@@ -30,6 +30,17 @@ typedef struct rowfmt
 	int		vattcnt;
 }ROWFMT;
 
+
+#define	ROW_DELETED	0x0001		
+
+
+
+#define	ROW_SET_STATUS(rp, flag)	((((ROWFMT *)rp)->status) |= flag)
+#define	ROW_GET_STATUS(rp)	((int) ((ROWFMT *)rp)->status)
+
+#define ROW_IS_DELETED(rp)	(ROW_GET_STATUS(rp) & ROW_DELETED)
+
+
 #define GETINT(p)	(*(int *) (p))
 
 #define COLOFFSETENTRYSIZE	4	

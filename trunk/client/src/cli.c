@@ -316,6 +316,38 @@ conn_again:
 			break;
 			
 		    case DELETE:
+			if (CLI_IS_CONN2MASTER(Cli_infor))
+			{
+				resp_ins = (INSMETA *)resp->result;
+
+				MEMCPY(Cli_infor->cli_region_ip, 
+				       resp_ins->i_hdr.rg_info.rg_addr, 
+				       CLI_CONN_REGION_MAX_LEN);
+
+				Cli_infor->cli_region_port = 
+					resp_ins->i_hdr.rg_info.rg_port;
+
+				/* Override the UNION part for this reques. */
+				MEMCPY(resp->result, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
+
+				send_buf_size = resp->result_length + STRLEN(cli_str);
+				send_rg_bp = MEMALLOCHEAP(send_buf_size);				
+
+				send_rg_bp_idx = 0;
+				PUT_TO_BUFFER(send_rg_bp, send_rg_bp_idx, 
+					      resp->result, resp->result_length);
+				PUT_TO_BUFFER(send_rg_bp, send_rg_bp_idx, 
+					      cli_str, STRLEN(cli_str));
+
+				cli_str = send_rg_bp;
+
+				meta_only = FALSE;
+			}
+			else
+			{
+				printf("Result : %s\n",resp->result);
+				meta_only = TRUE;
+			}
 			break;
 			
 		    default:
@@ -569,6 +601,38 @@ conn_again:
 		break;
 		
 	    case DELETE:
+	    	if (CLI_IS_CONN2MASTER(Cli_infor))
+		{
+			resp_ins = (INSMETA *)resp->result;
+
+			MEMCPY(Cli_infor->cli_region_ip, 
+			       resp_ins->i_hdr.rg_info.rg_addr, 
+			       CLI_CONN_REGION_MAX_LEN);
+
+			Cli_infor->cli_region_port = 
+				resp_ins->i_hdr.rg_info.rg_port;
+
+			/* Override the UNION part for this reques. */
+			MEMCPY(resp->result, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
+
+			send_buf_size = resp->result_length + STRLEN(cli_str);
+			send_rg_bp = MEMALLOCHEAP(send_buf_size);				
+
+			send_rg_bp_idx = 0;
+			PUT_TO_BUFFER(send_rg_bp, send_rg_bp_idx, 
+				      resp->result, resp->result_length);
+			PUT_TO_BUFFER(send_rg_bp, send_rg_bp_idx, 
+				      cli_str, STRLEN(cli_str));
+
+			cli_str = send_rg_bp;
+
+			meta_only = FALSE;
+		}
+		else
+		{
+			printf("Result : %s\n",resp->result);
+			meta_only = TRUE;
+		}
 		break;
 		
 	    default:
@@ -638,20 +702,12 @@ int main(int argc, char **argv)
 
 	instab = (char *)MEMALLOCHEAP(128);	
 	seltab = (char *)MEMALLOCHEAP(128);	
-
-	int schmem = 1;	
+	
 	/* 1st step: create table. */
-	if (schmem)
-	{
-		crtab = "create table yxue (filename varchar, filesize int, servername varchar)";
-	}
-	else
-	{
-		crtab = "create table yxue (filename varchar, servername varchar)";
-	}
+	crtab = "create table yxue (filename varchar, servername varchar)";
 
 	printf("CRATING TABLE yxue\n");
-	//printf("create table yxue (filename varchar, filesize int, servername varchar)\n");
+	printf("create table yxue (filename varchar, servername varchar)\n");
 	cli_test_main(crtab);
 
 
@@ -665,14 +721,7 @@ int main(int argc, char **argv)
 		MEMSET(c1, 32);
 		sprintf(c1, "%s%d", "gggg", i);
 		MEMSET(instab, 128);
-		if (schmem)
-		{
-			sprintf(instab,"insert into yxue (%s, %d, bbbb%d)", c1, i, i);
-		}
-		else
-		{
-			sprintf(instab,"insert into yxue (%s, bbbb%d)", c1, i);
-		}
+		sprintf(instab,"insert into yxue (%s, bbbb%d)", c1, i);
 
 		if((i > 99) && ((i % 100) == 0))
 		{
@@ -688,14 +737,7 @@ int main(int argc, char **argv)
 		MEMSET(c1, 32);
 		sprintf(c1, "%s%d", "gggg", i);
 		MEMSET(instab, 128);
-		if (schmem)
-		{
-			sprintf(instab,"insert into yxue (%s, %d, bbbb%d)", c1, i,i);
-		}
-		else
-		{
-			sprintf(instab,"insert into yxue (%s, bbbb%d)", c1, i);
-		}
+		sprintf(instab,"insert into yxue (%s, bbbb%d)", c1, i);
 
 		if((i > 99) && ((i % 100) == 0))
 		{
@@ -704,6 +746,17 @@ int main(int argc, char **argv)
 		cli_test_main(instab);
 	}
 	Trace = 0;
+
+	printf("Begain to DELETE data from the table yxue\n");
+        for(i = 1550; i < 1555; i++)
+        {
+                MEMSET(c1, 32);
+                sprintf(c1, "%s%d", "gggg", i);
+                MEMSET(seltab, 128);
+                sprintf(seltab,"delete yxue (%s)", c1);
+
+                cli_test_main(seltab);
+        }
 
 
 	printf("Begain to SELECT data from the table yxue\n");
