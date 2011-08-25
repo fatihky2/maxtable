@@ -161,7 +161,7 @@ int cli_commit(conn * connection, char * cmd, char * response, int * resp_len)
 		if((querytype == INSERT) && (rg_resp->result_length))
         {
             char *cli_add_sstab = "addsstab into ";
-            int new_size = resp->result_length + 64 + STRLEN(cli_add_sstab);
+            int new_size = rg_resp->result_length + 128 + STRLEN(cli_add_sstab);
 
             char * new_buf = MEMALLOCHEAP(new_size);
             MEMSET(new_buf, new_size);
@@ -170,10 +170,12 @@ int cli_commit(conn * connection, char * cmd, char * response, int * resp_len)
 
             MEMSET(newsstabname, SSTABLE_NAME_MAX_LEN);
 
-            MEMCPY(newsstabname, resp->result, SSTABLE_NAME_MAX_LEN);
+            MEMCPY(newsstabname, rg_resp->result, SSTABLE_NAME_MAX_LEN);
 
-            sprintf(new_buf, "addsstab into %s (%s, %s)", tab_name, newsstabname,
-                resp->result + SSTABLE_NAME_MAX_LEN);
+            int sstab_id = *(int *)(rg_resp->result + SSTABLE_NAME_MAX_LEN);
+
+            sprintf(new_buf, "addsstab into %s (%s, %d, %s)", tab_name, newsstabname, sstab_id, 
+                rg_resp->result + SSTABLE_NAME_MAX_LEN + sizeof(int));
 
 			MEMSET(send_buf, LINE_BUF_SIZE);
             MEMCPY(send_buf, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
