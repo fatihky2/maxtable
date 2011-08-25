@@ -85,7 +85,7 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 	char		rp[1024];
 	int		rp_idx;
 	char		col_off_tab[COL_OFFTAB_MAX_SIZE];
-	char		col_off_idx;
+	int		col_off_idx;
 	int		col_offset;
 	char		*col_val;
 	int		col_len;
@@ -283,6 +283,7 @@ rg_seldeltab(TREE *command, TABINFO *tabinfo)
 	int		keycolen;
 	int		offset;
 	char   		*col_buf;
+	int 		rlen;
 
 
 	assert(command);
@@ -357,15 +358,15 @@ rg_seldeltab(TREE *command, TABINFO *tabinfo)
 		
 		char *rp = (char *)(bp->bblk) + offset;
 		
-		int rlen = ROW_GET_LENGTH(rp, bp->bblk->bminlen);
+		rlen = ROW_GET_LENGTH(rp, bp->bblk->bminlen);
 
 		
 		col_buf = MEMALLOCHEAP(rlen);
 		MEMSET(col_buf, rlen);
 
 		
-		char	*filename = meta_get_coldata(bp, offset, -1);
-		MEMCPY(col_buf, filename, rlen - sizeof(ROWFMT) + sizeof(int));
+		char	*filename = meta_get_coldata(bp, offset, sizeof(ROWFMT));
+		MEMCPY(col_buf, filename, rlen - sizeof(ROWFMT));
 	}
 	
 	rtn_stat = TRUE;
@@ -381,7 +382,7 @@ rg_seldeltab(TREE *command, TABINFO *tabinfo)
 		else
 		{
 			
-			resp = conn_build_resp_byte(RPC_SUCCESS, SSTABLE_NAME_MAX_LEN, col_buf);
+			resp = conn_build_resp_byte(RPC_SUCCESS, rlen - sizeof(ROWFMT), col_buf);
 		}
 	}
 	else

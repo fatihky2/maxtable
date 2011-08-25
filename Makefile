@@ -16,7 +16,7 @@ LIB_OBJS_C = $(patsubst %.c,%.o,$(LIB_SRCS_C))
 LIB_SRCS_CPP = $(wildcard ${SERVICE_SRC})
 LIB_OBJS_CPP = $(patsubst %.cpp,%.o,$(LIB_SRCS_CPP))
 
-all: client master region sample service service_sample
+all: client master region sample
 
 %.o : %.c
 	$(CC) -o $@ -c $< $(CFLAGS)
@@ -24,8 +24,8 @@ all: client master region sample service service_sample
 	$(CPP) -o $@ -c $< $(CFLAGS)
 
 client: ${COMMON_SRC} ${CLI_SRC}
-#	$(CC) $(CFLAGS) ${COMMON_SRC} ${CLI_SRC} -D MEMMGR_TEST -D MAXTABLE_UNIT_TEST -o startClient
-	$(CC) $(CFLAGS) ${COMMON_SRC} ${CLI_SRC} -D MEMMGR_TEST -o startClient
+	$(CC) $(CFLAGS) ${COMMON_SRC} ${CLI_SRC} -D MEMMGR_TEST -D MAXTABLE_UNIT_TEST -o startClient
+#	$(CC) $(CFLAGS) ${COMMON_SRC} ${CLI_SRC} -D MEMMGR_TEST -o startClient
 
 master: ${COMMON_SRC} ${MASTER_SRC}
 	$(CC) $(CFLAGS) ${COMMON_SRC} ${MASTER_SRC} -D MEMMGR_TEST -o startMaster
