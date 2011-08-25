@@ -85,7 +85,7 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 	char		rp[1024];
 	int		rp_idx;
 	char		col_off_tab[COL_OFFTAB_MAX_SIZE];
-	int		col_off_idx;
+	char		col_off_idx;
 	int		col_offset;
 	char		*col_val;
 	int		col_len;
@@ -265,7 +265,7 @@ exit:
 
 
 char *
-rg_seltab(TREE *command, TABINFO *tabinfo)
+rg_seldeltab(TREE *command, TABINFO *tabinfo)
 {
 	char		*sstable;
 	char		*tab_name;
@@ -334,33 +334,55 @@ rg_seltab(TREE *command, TABINFO *tabinfo)
 			0, tabinfo->t_tabid, tabinfo->t_sstab_id);
 	SRCH_INFO_INIT(tabinfo->t_sinfo, keycol, keycolen, 1, VARCHAR, -1);
 
-	bp = blkget(tabinfo);
-	offset = blksrch(tabinfo, bp);
-
+	
+	if (tabinfo->t_stat & TAB_DEL_DATA)
+	{
+		blkdel(tabinfo);
+	}
+	else
+	{
+		
+		bp = blkget(tabinfo);
+		offset = blksrch(tabinfo, bp);
+	}
+	
 	
 	if (tabinfo->t_sinfo->sistate & SI_NODATA)
 	{
 		goto exit;
 	}
 
-	
-	char *rp = (char *)(bp->bblk) + offset;
-	int rlen = ROW_GET_LENGTH(rp, bp->bblk->bminlen);
+	if (!(tabinfo->t_stat & TAB_DEL_DATA))
+	{
+		
+		char *rp = (char *)(bp->bblk) + offset;
+		
+		int rlen = ROW_GET_LENGTH(rp, bp->bblk->bminlen);
 
-	
-	col_buf = MEMALLOCHEAP(rlen);
-	MEMSET(col_buf, rlen);
+		
+		col_buf = MEMALLOCHEAP(rlen);
+		MEMSET(col_buf, rlen);
 
-	
-	char	*filename = meta_get_coldata(bp, offset, sizeof(ROWFMT));
-	MEMCPY(col_buf, filename, rlen - sizeof(ROWFMT));
+		
+		char	*filename = meta_get_coldata(bp, offset, -1);
+		MEMCPY(col_buf, filename, rlen - sizeof(ROWFMT) + sizeof(int));
+	}
 	
 	rtn_stat = TRUE;
 
 	exit:
 	if (rtn_stat)
 	{
-		resp = conn_build_resp_byte(RPC_SUCCESS, rlen - sizeof(ROWFMT), col_buf);
+		if (tabinfo->t_stat & TAB_DEL_DATA)
+		{
+			
+			resp = conn_build_resp_byte(RPC_SUCCESS, 0, NULL);
+		}
+		else
+		{
+			
+			resp = conn_build_resp_byte(RPC_SUCCESS, SSTABLE_NAME_MAX_LEN, col_buf);
+		}
 	}
 	else
 	{
@@ -495,25 +517,28 @@ rg_handler(char *req_buf)
 	{
 	    case TABCREAT:
 				
-			printf("I got here - CREATING TABLE\n");
-			break;
+		printf("I got here - CREATING TABLE\n");
+		break;
 
 	    case INSERT:
-	    		tabinfo->t_stat |= TAB_INS_DATA;
-			resp = rg_instab(command, tabinfo);
-			printf("I got here - INSERTING TABLE\n");
+    		tabinfo->t_stat |= TAB_INS_DATA;
+		resp = rg_instab(command, tabinfo);
+		printf("I got here - INSERTING TABLE\n");
 	    	break;
 
 	    case CRTINDEX:
 	    	break;
 
 	    case SELECT:
-	    		tabinfo->t_stat |= TAB_SRCH_DATA;
-			resp = rg_seltab(command, tabinfo);
-			printf("I got here - SELECTING TABLE\n");
+    		tabinfo->t_stat |= TAB_SRCH_DATA;
+		resp = rg_seldeltab(command, tabinfo);
+		printf("I got here - SELECTING TABLE\n");
 	    	break;
 
 	    case DELETE:
+	    	tabinfo->t_stat |= TAB_DEL_DATA;
+		resp = rg_seldeltab(command, tabinfo);
+		printf("I got here - DELETE TABLE\n");
 	    	break;
 
 	    default:

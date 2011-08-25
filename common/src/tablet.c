@@ -166,7 +166,7 @@ tablet_del_row(TABLEHDR *tablehdr, int tabid, int sstabid, char *tablet_name, ch
 	TABINFO_INIT(&tabinfo, tablet_name, &sinfo, minlen, TAB_SRCH_DATA, tabid, sstabid);
 	SRCH_INFO_INIT(&sinfo, keycol, keycolen, TABLET_KEYCOLID, VARCHAR, -1);
 	
-	blkdel(&tabinfo, rp);
+	blkdel(&tabinfo);
 
 	session_close(&tabinfo);
 
@@ -488,7 +488,7 @@ tablet_schm_del_row(int tabid, int sstabid, char *systab, char *row)
 			tabid, sstabid);
 	SRCH_INFO_INIT(tabinfo->t_sinfo, key, keylen, TABLET_SCHM_KEYCOLID, VARCHAR, -1);
 			
-	blkdel(tabinfo, row);
+	blkdel(tabinfo);
 	
 	session_close(tabinfo);
 

@@ -116,7 +116,7 @@ int
 par_crtins_tab(char *s_str, int querytype);
 
 int 
-par_sel_tab(char *s_str, int querytype);
+par_seldel_tab(char *s_str, int querytype);
 
 int 
 par_get_query(char *s_str, int *s_idx);

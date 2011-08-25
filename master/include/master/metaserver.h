@@ -184,6 +184,7 @@ typedef struct tab_info
 #define TAB_TABLET_SPLIT	0x0400
 #define TAB_TABLET_CRT_NEW	0x0800	
 #define TAB_TABLET_KEYROW_CHG	0x1000	
+#define TAB_DEL_DATA		0x2000	
 
 
 #define TAB_IS_SYSTAB(tabinfo)	(tabinfo->t_stat & TAB_META_SYSTAB)

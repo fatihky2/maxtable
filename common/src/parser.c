@@ -88,15 +88,7 @@ par_bld_const(char *data, int datalen, int datatype)
 	const_node->value = (char *)MEMALLOCHEAP(len);
 	MEMSET(const_node->value, len);
 
-	if(!TYPE_IS_FIXED(datatype))
-	{
-		MEMCPY(const_node->value, data, MIN(datalen, len));
-	}
-	else
-	{
-		int tmp_val = m_atoi(data, datalen);
-		MEMCPY(const_node->value, &tmp_val, len);
-	}
+	MEMCPY(const_node->value, data, MIN(datalen, len));
 
 	return node;    
 }
@@ -208,11 +200,13 @@ parser_open(char *s_str)
 	    case SELECT:
 	        
 		
-		par_sel_tab((s_str + s_idx), SELECT);
+		par_seldel_tab((s_str + s_idx), SELECT);
 
 	        break;
 
 	    case DELETE:
+	    	
+	    	par_seldel_tab((s_str + s_idx), DELETE);
 	        break;
 	    case ADDSSTAB:
 	    	par_addsstab(s_str + s_idx, ADDSSTAB);
@@ -502,7 +496,7 @@ par_crtins_tab(char *s_str, int querytype)
 
 
 int 
-par_sel_tab(char *s_str, int querytype)
+par_seldel_tab(char *s_str, int querytype)
 {
 	LOCALTSS(tss);
 	int		len;
@@ -654,7 +648,7 @@ par_col_info(char *cmd, int cmd_len, int querytype)
 		        command->left = par_bld_resdom(colname, coltype, ++colid);
 		}
 		else if (   (querytype == INSERT) || (querytype == ADDSERVER) || (querytype == SELECT)
-			 || (querytype == ADDSSTAB))
+			 || (querytype == ADDSSTAB) || (querytype == DELETE))
 		{
 			command = tss->tcmd_parser;
 

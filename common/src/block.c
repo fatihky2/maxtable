@@ -75,6 +75,7 @@ blkget(TABINFO *tabinfo)
 int
 blksrch(TABINFO *tabinfo, BUF *bp)
 {
+	LOCALTSS(tss);
 	int	*offset;
 	BLOCK	*blk;
 	char	*rp;
@@ -154,6 +155,21 @@ srch_again:
 		
 	        if ((result == EQ) || ((tabinfo->t_sinfo->sistate & SI_INS_DATA) && (result == LE)))
 	        {
+	        	if (   (result == EQ) && (tabinfo->t_stat & TAB_SRCH_DATA) 
+			    && (tss->topid & TSS_OP_RANGESERVER))
+	        	{
+	        		
+	        		if (ROW_IS_DELETED(rp))
+	        		{
+	        			assert((bp->bblk->bblkno == 0) && (*offset == BLKHEADERSIZE));
+
+					
+					result = LE;
+	        			continue;
+	        		}
+	        		
+	        	}
+			
 	                break;
 	        }
 
@@ -397,15 +413,16 @@ finish:
 
 
 int
-blkdel(TABINFO *tabinfo, char *rp)
+blkdel(TABINFO *tabinfo)
 {
+	LOCALTSS(tss);
 	BUF	*bp;
 	int	offset;
 	int	minlen;
-	int	ign;
 	int	rlen;
 	int	i;
 	int	*offtab;
+	char	*rp;
 
 
 	minlen = tabinfo->t_row_minlen;
@@ -424,8 +441,20 @@ blkdel(TABINFO *tabinfo, char *rp)
 		return FALSE;
 	}
 
-	ign = 0;
-	rlen = ROW_GET_LENGTH(rp, minlen);	
+	rp = (char *)(bp->bblk) + offset;
+	rlen = ROW_GET_LENGTH(rp, minlen);
+
+	if (   (tss->topid & TSS_OP_RANGESERVER) && (bp->bblk->bblkno == 0) 
+	    && (offset == BLKHEADERSIZE))
+	{
+		
+		ROW_SET_STATUS(rp, ROW_DELETED);
+
+		
+		
+
+		goto finish;
+	}
 	
 	if (bp->bblk->bfreeoff - offset)
 	{
@@ -456,6 +485,7 @@ blkdel(TABINFO *tabinfo, char *rp)
 	
 	BLK_GET_NEXT_ROWNO(bp)--;
 
+finish:
 	bufdirty(bp);
 		
 	tabinfo->t_sinfo->sistate &= ~SI_DEL_DATA;
