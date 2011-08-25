@@ -88,8 +88,16 @@ par_bld_const(char *data, int datalen, int datatype)
 	const_node->value = (char *)MEMALLOCHEAP(len);
 	MEMSET(const_node->value, len);
 
-	MEMCPY(const_node->value, data, MIN(datalen, len));
-
+	if(!TYPE_IS_FIXED(datatype))
+	{
+		MEMCPY(const_node->value, data, MIN(datalen, len));
+	}
+	else
+	{
+		int tmp_val = m_atoi(data, datalen);
+		MEMCPY(const_node->value, &tmp_val, len);
+	}
+	
 	return node;    
 }
 
