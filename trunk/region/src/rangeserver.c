@@ -85,7 +85,7 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 	char		rp[1024];
 	int		rp_idx;
 	char		col_off_tab[COL_OFFTAB_MAX_SIZE];
-	char		col_off_idx;
+	int		col_off_idx;
 	int		col_offset;
 	char		*col_val;
 	int		col_len;
