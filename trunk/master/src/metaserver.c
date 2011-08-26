@@ -1186,7 +1186,14 @@ meta_handler(char *req_buf)
 	tmp_req_buf = req_buf;
 	
 parse_again:
-	parser_open(tmp_req_buf);
+	if (!parser_open(tmp_req_buf))
+	{
+		parser_close();
+		tss->tstat |= TSS_PARSER_ERR;
+		printf("PARSER ERR: Please input the command again by the 'help' signed.\n");
+		return NULL;
+	}
+	
 
 	command = tss->tcmd_parser;
 	resp_buf_idx = 0;

@@ -45,7 +45,7 @@ typedef struct tss
 	struct mempool	*ttmemfrag;	
 
 	
-	int		sstat;  	
+	int		tstat;  	
 	struct tree     *tcmd_parser;
 
 	RPCREQ		trecvbuf;	
@@ -65,6 +65,10 @@ typedef struct tss
 	struct tab_info *toldtabinfo;
 
 } TSS;
+
+
+#define TSS_PARSER_ERR		0x0001
+
 
 typedef struct tssobj
 {

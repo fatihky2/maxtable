@@ -14,9 +14,12 @@
 #include "type.h"
 #include "interface.h"
 
+
 extern	TSS	*Tss;
 
 extern int sel_resp_rejoin(char * src_buf, char * dest_buf, int src_len, int * dest_len, char *index_buf);
+
+static int cli_prt_help(char *cmd);
 
 int validation_request(char * request)
 {
@@ -85,8 +88,19 @@ int cli_commit(conn * connection, char * cmd, char * response, int * resp_len)
     if(!validation_request(cmd))
         return FALSE;
 
+    if (cli_prt_help(cmd))
+    {
+    	return TRUE;
+    }
+
     //querytype = par_get_query(cmd, &querytype_index);
-	parser_open(cmd);
+    if(!parser_open(cmd))
+    {
+    	parser_close();
+	tss->tstat |= TSS_PARSER_ERR;
+	printf("PARSER ERR: Please input the command again by the 'help' signed.\n");
+	return FALSE;
+    }
 
     querytype = ((TREE *)(tss->tcmd_parser))->sym.command.querytype;
     MEMSET(tab_name, 64);
@@ -284,4 +298,19 @@ int sel_resp_rejoin(char * src_buf, char * dest_buf, int src_len, int * dest_len
     return TRUE;
 }
 
+static int
+cli_prt_help(char *cmd)
+{
+	if (!strncasecmp("help", cmd, 4))
+	{
+		printf("CREATE TABLE: create table table_name (col1_name col1_type, col2_name col2_type)\n");
+		printf("INSERT DATA:  insert into table_name (col1_value, col2_value)\n");
+		printf("SELECT DATA:  select table_name (col1_value)\n");
+		printf("DELETE DATA:  delete table_name (col1_value)\n");
+
+		return TRUE;
+	}
+
+	return FALSE;
+}
 

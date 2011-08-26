@@ -102,7 +102,21 @@ cli_cmd_normalize(char *cmd)
 	return cmd;
 }
 
+int
+cli_prt_help(char *cmd)
+{
+	if (!strncasecmp("help", cmd, 4))
+	{
+		printf("CREATE TABLE: create table table_name (col1_name col1_type, col2_name col2_type)\n");
+		printf("INSERT DATA:  insert into table_name (col1_value, col2_value)\n");
+		printf("SELECT DATA:  select table_name (col1_value)\n");
+		printf("DELETE DATA:  delete table_name (col1_value)\n");
 
+		return TRUE;
+	}
+
+	return FALSE;
+}
 int
 cli_deamon()
 {
@@ -153,7 +167,17 @@ cli_deamon()
 		    continue;
 		}
 
-		parser_open(cli_str);
+		if (cli_prt_help(cli_str))
+		{
+			continue;
+		}
+		
+		if (!parser_open(cli_str))
+		{
+			parser_close();
+			printf("PARSER ERR: Please input the command again by the 'help' signed.\n");
+			continue;
+		}
 
 		querytype = ((TREE *)(tss->tcmd_parser))->sym.command.querytype;
 		MEMSET(tab_name, 64);
@@ -427,7 +451,7 @@ cli_test_main(char *cmd)
 	{
 	    ret = ferror(stdin);
 	    fprintf(stderr, "get cmd error %d\n", ret);
-	    return -1; 
+	    return FALSE; 
 	}
 
 	cli_str = cli_cmd_normalize(cli_str);
@@ -435,10 +459,20 @@ cli_test_main(char *cmd)
 	send_buf_size = STRLEN(cli_str);
 	if (send_buf_size == 0)
 	{
-	    return -1;
+	    return FALSE;
 	}
 
-	parser_open(cli_str);
+	if (cli_prt_help(cli_str))
+	{
+		return TRUE;
+	}
+	
+	if (!parser_open(cli_str))
+	{
+		parser_close();
+		printf("PARSER ERR: Please input the command again by the 'help' signed.\n");
+		return FALSE;
+	}
 
 	querytype = ((TREE *)(tss->tcmd_parser))->sym.command.querytype;
 	MEMSET(tab_name, 64);
