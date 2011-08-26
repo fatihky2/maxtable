@@ -235,9 +235,21 @@ void msg_process(char * (*handler_request)(char *req_buf))
 		if(req_msg->n_size)
 		{
 			resp = handler_request(req->data);
+
+			if (resp == NULL)
+			{
+				if (tss->tstat & TSS_PARSER_ERR)
+				{
+					resp = conn_build_resp_byte(RPC_PARSER_ERR, 0, NULL);
+				}
+				else
+				{
+					resp = conn_build_resp_byte(RPC_FAIL, 0, NULL);					
+				}
+			}
 		}
 		else
-		{	resp = conn_build_resp_byte(RPC_PARSER_ERR, 0, NULL);
+		{	resp = conn_build_resp_byte(RPC_FAIL, 0, NULL);
 		}
 
 		resp_size = conn_get_resp_size((RPCRESP *)resp);

@@ -130,5 +130,9 @@ par_prt_tree(TREE *command);
 int 
 par_addsstab(char *s_str, int querytype);
 
+int
+par_name_check(char *name, int len);
+
+
 
 #endif

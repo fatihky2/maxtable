@@ -57,7 +57,7 @@ void
 tss_init(TSS *tss)
 {
 	tss->texcptr = &tss->texcproc;
-	tss->sstat = 0;
+	tss->tstat = 0;
 	tss->ttabinfo = tss->toldtabinfo = NULL;
 	tss->tcmd_parser = NULL;
 	tss->tmeta_hdr = NULL;

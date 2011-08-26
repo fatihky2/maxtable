@@ -480,15 +480,20 @@ rg_handler(char *req_buf)
 		goto close;
 	}
 	
-	
-	
-	tss->tcol_info = col_info;
-	tss->tmeta_hdr = ins_meta;
-	
 	req_buf += sizeof(INSMETA) + sizeof(TABLEHDR) + 
 				ins_meta->col_num * sizeof(COLINFO);
 	
-	parser_open(req_buf);
+	if (!parser_open(req_buf))
+	{
+		parser_close();
+		tss->tstat |= TSS_PARSER_ERR;
+		printf("PARSER ERR: Please input the command again by the 'help' signed.\n");
+		return NULL;
+	}
+
+	
+	tss->tcol_info = col_info;
+	tss->tmeta_hdr = ins_meta;
 
 	command = tss->tcmd_parser;
 	resp_buf_idx = 0;

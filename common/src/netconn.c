@@ -440,6 +440,11 @@ _read_again:
 		if(n)
 		{
 			resp = handler_request(req->data);
+
+			if (resp == NULL)
+			{
+				resp = conn_build_resp_byte(RPC_PARSER_ERR, 0, NULL);
+			}
 		}
 		else
 		{	resp = conn_build_resp_byte(RPC_PARSER_ERR, 0, NULL);

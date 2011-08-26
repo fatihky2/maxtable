@@ -181,24 +181,26 @@ parser_open(char *s_str)
 	LOCALTSS(tss);
 	int 	querytype;
 	int	s_idx;
+	int	rtn_stat;
 	
-	
+
+	rtn_stat = TRUE;
 	querytype = par_get_query(s_str, &s_idx);
 	
 
 	switch (querytype)
 	{
 	    case ADDSERVER:
-		par_add_server((s_str + s_idx), ADDSERVER);
+		rtn_stat= par_add_server((s_str + s_idx), ADDSERVER);
 		break;
 	    case TABCREAT:
 	    	tss->topid |= TSS_OP_CRTTAB;
-		par_crtins_tab((s_str + s_idx), TABCREAT);
+		rtn_stat = par_crtins_tab((s_str + s_idx), TABCREAT);
 		break;
 		
 	    case INSERT:
 	    	tss->topid |= TSS_OP_INSTAB;
-		par_crtins_tab((s_str + s_idx), INSERT);
+		rtn_stat = par_crtins_tab((s_str + s_idx), INSERT);
 	        break;
 
 	    case CRTINDEX:
@@ -208,25 +210,26 @@ parser_open(char *s_str)
 	    case SELECT:
 	        
 		
-		par_seldel_tab((s_str + s_idx), SELECT);
+		rtn_stat = par_seldel_tab((s_str + s_idx), SELECT);
 
 	        break;
 
 	    case DELETE:
 	    	
-	    	par_seldel_tab((s_str + s_idx), DELETE);
+	    	rtn_stat = par_seldel_tab((s_str + s_idx), DELETE);
 	        break;
 	    case ADDSSTAB:
-	    	par_addsstab(s_str + s_idx, ADDSSTAB);
+	    	rtn_stat = par_addsstab(s_str + s_idx, ADDSSTAB);
 	    	break;
 
 	    default:
+	    	rtn_stat = FALSE;
 	        break;
 	}
 
 
 
-	return TRUE;
+	return rtn_stat;
 }
 
 void
@@ -440,6 +443,11 @@ par_add_server(char *s_str, int querytype)
 	
 	str0n_trunc_0t(tab_name, len - 1, &start, &end);
 	tab_name_len = end - start;
+	
+	if (!par_name_check(tab_name, tab_name_len))
+	{
+		return FALSE;
+	}
 
 	tss->tcmd_parser = par_bld_cmd(&(tab_name[start]), 
 					tab_name_len, querytype);
@@ -450,11 +458,38 @@ par_add_server(char *s_str, int querytype)
 
 	str0n_trunc_0t(col_info, len - 1, &start, &end);
 
-	par_col_info((col_info + start), (end - start), querytype);
+	
+	int		rtn_stat;
+	
+	rtn_stat = par_col_info((col_info + start), (end - start), querytype);
 
 	return TRUE;
 }
 
+
+int
+par_name_check(char *name, int len)
+{
+	int i = 0;
+
+	while (i < len)
+	{
+		if (   (!(*(name + i) < '0') && (!(*(name + i) > '9')))
+		     || (!(*(name + i) < 'a') && (!(*(name + i) > 'z')))
+		     || (!(*(name + i) < 'A') && (!(*(name + i) > 'Z')))
+		     || (*(name + i) == '_')
+		     || (*(name + i) == '-')
+		    )
+		{
+			i++;
+			continue;
+		}
+
+		break;		
+	}
+
+	return (i == len) ? TRUE : FALSE;
+}
 
 int 
 par_crtins_tab(char *s_str, int querytype)
@@ -467,7 +502,7 @@ par_crtins_tab(char *s_str, int querytype)
 	int		start;
 	int		end;
 	char		*col_info;
-	
+
 
 	if (s_str == NULL || (STRLEN(s_str) == 0))
 	{
@@ -481,6 +516,8 @@ par_crtins_tab(char *s_str, int querytype)
 	len = str1nstr(s_str, "(\0", cmd_len);
 
 	MEMSET(tab_name, 64);
+
+
 		
 	MEMCPY(tab_name, s_str, len - 1);
 
@@ -488,18 +525,32 @@ par_crtins_tab(char *s_str, int querytype)
 	str0n_trunc_0t(tab_name, len - 1, &start, &end);
 	tab_name_len = end - start;
 
+	if (!par_name_check(tab_name, tab_name_len))
+	{
+		return FALSE;
+	}
+
 	tss->tcmd_parser = par_bld_cmd(&(tab_name[start]), 
 					tab_name_len, querytype);
 	
 	start = len;
 	col_info = s_str + start;
-	len =  str1nstr(col_info, ")\0", cmd_len - len);
+	len =  str1nstr(col_info, ")\0", cmd_len - start);
+
+	if (len != (cmd_len - start))
+	{
+		
+		return FALSE;
+	}
 
 	str0n_trunc_0t(col_info, len - 1, &start, &end);
 
-	par_col_info((col_info + start), (end - start), querytype);
+	
+	int		rtn_stat;
+	
+	rtn_stat = par_col_info((col_info + start), (end - start), querytype);
 
-	return TRUE;
+	return rtn_stat;
 }
 
 
@@ -535,6 +586,12 @@ par_seldel_tab(char *s_str, int querytype)
 	str0n_trunc_0t(tab_name, len - 1, &start, &end);
 	tab_name_len = end - start;
 
+	
+	if (!par_name_check(tab_name, tab_name_len))
+	{
+		return FALSE;
+	}
+
 	tss->tcmd_parser = par_bld_cmd(&(tab_name[start]), 
 					tab_name_len, querytype);
 	
@@ -542,9 +599,18 @@ par_seldel_tab(char *s_str, int querytype)
 	col_info = s_str + start;
 	len =  str1nstr(col_info, ")\0", cmd_len - len);
 
+	if (len != (cmd_len - start))
+	{
+		
+		return FALSE;
+	}
+
 	str0n_trunc_0t(col_info, len - 1, &start, &end);
 
-	par_col_info((col_info + start), (end - start), querytype);
+	
+	int		rtn_stat;
+	
+	rtn_stat = par_col_info((col_info + start), (end - start), querytype);
 
 	return TRUE;
 }
@@ -584,6 +650,12 @@ par_addsstab(char *s_str, int querytype)
 	str0n_trunc_0t(tab_name, len - 1, &start, &end);
 	tab_name_len = end - start;
 
+	
+	if (!par_name_check(tab_name, tab_name_len))
+	{
+		return FALSE;
+	}
+
 	tss->tcmd_parser = par_bld_cmd(&(tab_name[start]), 
 					tab_name_len, querytype);
 	
@@ -591,9 +663,18 @@ par_addsstab(char *s_str, int querytype)
 	col_info = s_str + start;
 	len =  str1nstr(col_info, ")\0", cmd_len - len);
 
+	if (len != (cmd_len - start))
+	{
+		
+		return FALSE;
+	}
+
 	str0n_trunc_0t(col_info, len - 1, &start, &end);
 
-	par_col_info((col_info + start), (end - start), querytype);
+	
+	int		rtn_stat;
+	
+	rtn_stat = par_col_info((col_info + start), (end - start), querytype);
 
 	return TRUE;
 }
@@ -639,8 +720,14 @@ par_col_info(char *cmd, int cmd_len, int querytype)
 			}
 
 			MEMSET(colname, 256);
+
 			MEMCPY(colname, &(col_info[0]), i);
 
+			if (!par_name_check(colname, i))
+			{
+				return FALSE;
+			}
+			
 			str0n_trunc_0t(&(coldata[i]), (end - start - i), &start, &end);
 
 			MEMSET(coltype, 64);
