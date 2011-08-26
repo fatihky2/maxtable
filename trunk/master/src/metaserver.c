@@ -865,7 +865,7 @@ meta_droptab(TREE *command)
 	CLOSE(fd1);
 
 	
-	col_buf_len = STRLEN(RANGE_SERVER_TEST) + sizeof(int);
+	col_buf_len = RANGE_ADDR_MAX_LEN + sizeof(int);
 	col_buf = MEMALLOCHEAP(col_buf_len);
 	MEMSET(col_buf, col_buf_len);
 

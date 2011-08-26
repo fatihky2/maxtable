@@ -103,7 +103,7 @@ rg_droptab(TREE *command)
 	
 	sprintf(cmd_str, "rm -rf %s", tab_dir);
 	
-	if (system(cmd_str))
+	if (!system(cmd_str))
 	{
 		rtn_stat = TRUE;
 	}
