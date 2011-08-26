@@ -119,6 +119,9 @@ int
 par_seldel_tab(char *s_str, int querytype);
 
 int 
+par_dropremov_tab(char *s_str, int querytype);
+
+int 
 par_get_query(char *s_str, int *s_idx);
 
 int

@@ -307,6 +307,7 @@ cli_prt_help(char *cmd)
 		printf("INSERT DATA:  insert into table_name (col1_value, col2_value)\n");
 		printf("SELECT DATA:  select table_name (col1_value)\n");
 		printf("DELETE DATA:  delete table_name (col1_value)\n");
+		printf("DROP TABLE:   drop table_name\n");
 
 		return TRUE;
 	}

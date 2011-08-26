@@ -59,9 +59,13 @@ typedef struct table_hdr
 	int	tab_key_coltype;
 	int	tab_col;	
 	int	tab_varcol;	
+	int	tab_stat;	
 	int 	offset_c1;	
 	int 	offset_c2;	
 } TABLEHDR;
+
+
+#define	TAB_DROPPED	0x0001	
 
 
 typedef struct tablet_hdr

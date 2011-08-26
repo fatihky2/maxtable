@@ -111,6 +111,7 @@ cli_prt_help(char *cmd)
 		printf("INSERT DATA:  insert into table_name (col1_value, col2_value)\n");
 		printf("SELECT DATA:  select table_name (col1_value)\n");
 		printf("DELETE DATA:  delete table_name (col1_value)\n");
+		printf("DROP TABLE:   drop table_name");
 
 		return TRUE;
 	}
@@ -252,7 +253,8 @@ conn_again:
 				MEMCPY(resp->result, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
 
 				send_buf_size = resp->result_length + STRLEN(cli_str);
-				send_rg_bp = MEMALLOCHEAP(send_buf_size);				
+				send_rg_bp = MEMALLOCHEAP(send_buf_size);
+				MEMSET(send_rg_bp, send_buf_size);
 
 				send_rg_bp_idx = 0;
 				PUT_TO_BUFFER(send_rg_bp, send_rg_bp_idx, 
@@ -305,40 +307,6 @@ conn_again:
 			break;
 			
 		    case SELECT:
-			if (CLI_IS_CONN2MASTER(Cli_infor))
-			{
-				resp_ins = (INSMETA *)resp->result;
-
-				MEMCPY(Cli_infor->cli_region_ip, 
-				       resp_ins->i_hdr.rg_info.rg_addr, 
-				       CLI_CONN_REGION_MAX_LEN);
-
-				Cli_infor->cli_region_port = 
-					resp_ins->i_hdr.rg_info.rg_port;
-
-				/* Override the UNION part for this reques. */
-				MEMCPY(resp->result, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
-
-				send_buf_size = resp->result_length + STRLEN(cli_str);
-				send_rg_bp = MEMALLOCHEAP(send_buf_size);				
-
-				send_rg_bp_idx = 0;
-				PUT_TO_BUFFER(send_rg_bp, send_rg_bp_idx, 
-					      resp->result, resp->result_length);
-				PUT_TO_BUFFER(send_rg_bp, send_rg_bp_idx, 
-					      cli_str, STRLEN(cli_str));
-
-				cli_str = send_rg_bp;
-
-				meta_only = FALSE;
-			}
-			else
-			{
-				printf("Result : %s\n",resp->result);
-				meta_only = TRUE;
-			}
-			break;
-			
 		    case DELETE:
 			if (CLI_IS_CONN2MASTER(Cli_infor))
 			{
@@ -374,6 +342,60 @@ conn_again:
 			}
 			break;
 			
+		    case DROP:
+		    	if (CLI_IS_CONN2MASTER(Cli_infor))
+			{
+				/*
+				** Drop table case:
+				**	1st: Set the DELETE flag on the table header in the metadata server.
+				**	2nd:Delete the whole file dir corresponding to the table in the ranger server.
+				**	3th: Delete the whole file dir corresponding to the table in the metadata server.
+				*/
+				resp_ins = (INSMETA *)resp->result;
+
+				MEMCPY(Cli_infor->cli_region_ip, 
+				       resp_ins->i_hdr.rg_info.rg_addr, 
+				       CLI_CONN_REGION_MAX_LEN);
+
+				Cli_infor->cli_region_port = 
+					resp_ins->i_hdr.rg_info.rg_port;
+
+				/* Override the UNION part for this reques. */
+				MEMCPY(resp->result, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
+
+				send_buf_size = resp->result_length + STRLEN(cli_str);
+				send_rg_bp = MEMALLOCHEAP(send_buf_size);				
+
+				send_rg_bp_idx = 0;
+				PUT_TO_BUFFER(send_rg_bp, send_rg_bp_idx, 
+					      resp->result, resp->result_length);
+				PUT_TO_BUFFER(send_rg_bp, send_rg_bp_idx, 
+					      cli_str, STRLEN(cli_str));
+
+				cli_str = send_rg_bp;
+
+				meta_only = FALSE;
+			}
+			else if (!meta_again)
+			{
+				meta_only = TRUE;
+				
+				char *cli_remove_tab = "remove ";				
+
+				send_buf_size = TABLE_NAME_MAX_LEN + STRLEN(cli_remove_tab);
+				send_rg_bp = MEMALLOCHEAP(send_buf_size);				
+
+				MEMSET(send_rg_bp, send_buf_size);
+
+				sprintf(send_rg_bp, "remove %s", tab_name);
+
+				cli_str = send_rg_bp;
+
+				meta_again = TRUE;
+			
+			}
+		    	break;
+		
 		    default:
 			break;
 		}
@@ -547,7 +569,8 @@ conn_again:
 			MEMCPY(resp->result, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
 
 			send_buf_size = resp->result_length + STRLEN(cli_str);
-			send_rg_bp = MEMALLOCHEAP(send_buf_size);				
+			send_rg_bp = MEMALLOCHEAP(send_buf_size);
+			MEMSET(send_rg_bp, send_buf_size);
 
 			send_rg_bp_idx = 0;
 			PUT_TO_BUFFER(send_rg_bp, send_rg_bp_idx, 
@@ -600,6 +623,7 @@ conn_again:
 		break;
 		
 	    case SELECT:
+	    case DELETE:
 		if (CLI_IS_CONN2MASTER(Cli_infor))
 		{
 			resp_ins = (INSMETA *)resp->result;
@@ -634,40 +658,62 @@ conn_again:
 		}
 		break;
 		
-	    case DELETE:
-	    	if (CLI_IS_CONN2MASTER(Cli_infor))
+	    case DROP:
+    		if (CLI_IS_CONN2MASTER(Cli_infor))
 		{
-			resp_ins = (INSMETA *)resp->result;
+			/*
+			** Drop table case:
+			**	1st: Set the DELETE flag on the table header in the metadata server.
+			**	2nd:Delete the whole file dir corresponding to the table in the ranger server.
+			**	3th: Delete the whole file dir corresponding to the table in the metadata server.
+			*/
 
-			MEMCPY(Cli_infor->cli_region_ip, 
-			       resp_ins->i_hdr.rg_info.rg_addr, 
+			RANGE_PROF * ranger_list;
+
+			ranger_list = (RANGE_PROF *)resp->result;
+			
+			MEMCPY(Cli_infor->cli_region_ip, ranger_list->rg_addr, 
 			       CLI_CONN_REGION_MAX_LEN);
 
-			Cli_infor->cli_region_port = 
-				resp_ins->i_hdr.rg_info.rg_port;
+			Cli_infor->cli_region_port = ranger_list->rg_port;
 
-			/* Override the UNION part for this reques. */
-			MEMCPY(resp->result, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
-
-			send_buf_size = resp->result_length + STRLEN(cli_str);
+			/* 
+			** Re-construct the request for the ranger server.  The information include
+			** 1. DROP magic.
+			** 2. drop command
+			*/
+			send_buf_size = RPC_MAGIC_MAX_LEN + STRLEN(cli_str);
 			send_rg_bp = MEMALLOCHEAP(send_buf_size);				
 
 			send_rg_bp_idx = 0;
 			PUT_TO_BUFFER(send_rg_bp, send_rg_bp_idx, 
-				      resp->result, resp->result_length);
-			PUT_TO_BUFFER(send_rg_bp, send_rg_bp_idx, 
-				      cli_str, STRLEN(cli_str));
+				      RPC_DROP_TABLE_MAGIC, RPC_MAGIC_MAX_LEN);
+			
+			PUT_TO_BUFFER(send_rg_bp, send_rg_bp_idx, cli_str, STRLEN(cli_str));
+
+			cli_str = send_rg_bp;
+			
+			meta_only = FALSE;
+		}
+		else if (!meta_again)
+		{
+			meta_only = TRUE;
+			
+			char *cli_remove_tab = "remove ";				
+
+			send_buf_size = TABLE_NAME_MAX_LEN + STRLEN(cli_remove_tab);
+			send_rg_bp = MEMALLOCHEAP(send_buf_size);				
+
+			MEMSET(send_rg_bp, send_buf_size);
+
+			sprintf(send_rg_bp, "remove %s", tab_name);
 
 			cli_str = send_rg_bp;
 
-			meta_only = FALSE;
+			meta_again = TRUE;
+		
 		}
-		else
-		{
-			printf("Result : %s\n",resp->result);
-			meta_only = TRUE;
-		}
-		break;
+	    	break;
 		
 	    default:
 		break;

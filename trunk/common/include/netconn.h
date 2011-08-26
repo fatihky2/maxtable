@@ -32,6 +32,9 @@
 #define RPC_REQUEST_MAGIC "rpcrqst"
 #define RPC_RESPONSE_MAGIC "rpcresp"
 
+/* Following is the special magic number. */
+#define	RPC_DROP_TABLE_MAGIC	"drop"
+
 /** The Buffer Pool for holding RPCRESP Data  **/
 #define CONN_BUF_SIZE (1024 * 1024)
 
@@ -66,6 +69,10 @@ typedef struct rpcresp
 	MEMCPY (buf+idx, ptr, size);                    \
 	idx += size;                                    \
 }
+
+
+#define	RPC_REQ_NORMAL_OP	0x0001
+#define RPC_REQ_DROP_OP		0x0002
 
 
 char *
