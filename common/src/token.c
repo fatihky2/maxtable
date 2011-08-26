@@ -32,6 +32,8 @@ TOKENS  MT_Tokens[] =
 	{DELETE,	"delete"},
 	{ADDSERVER,	"add server"},
 	{ADDSSTAB,	"addsstab into"},
+	{DROP,		"drop"},
+	{REMOVE,	"remove"},
 };
 
 int

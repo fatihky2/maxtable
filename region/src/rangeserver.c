@@ -69,6 +69,58 @@ RANGEINFO *Range_infor = NULL;
 static int
 rg_fill_resd(TREE *command, COLINFO *colinfor, int totcol);
 
+char *
+rg_droptab(TREE *command)
+{
+	char		*tab_name;
+	int		tab_name_len;
+	char		tab_dir[TABLE_NAME_MAX_LEN];
+	int		rtn_stat;
+	char		cmd_str[TABLE_NAME_MAX_LEN];
+	char		*resp;
+
+
+	assert(command);
+
+	rtn_stat = FALSE;
+	
+	tab_name = command->sym.command.tabname;
+	tab_name_len = command->sym.command.tabname_len;
+
+
+	MEMSET(tab_dir, TABLE_NAME_MAX_LEN);
+	MEMCPY(tab_dir, MT_RANGE_TABLE, STRLEN(MT_RANGE_TABLE));
+
+	
+	str1_to_str2(tab_dir, '/', tab_name);
+
+	if (STAT(tab_dir, &st) != 0)
+	{
+		goto exit;		
+	}
+
+	MEMSET(cmd_str, TABLE_NAME_MAX_LEN);
+	
+	sprintf(cmd_str, "rm -rf %s", tab_dir);
+	
+	if (system(cmd_str))
+	{
+		rtn_stat = TRUE;
+	}
+
+exit:
+	if (rtn_stat)
+	{
+		
+		resp = conn_build_resp_byte(RPC_SUCCESS, 0, NULL);
+	}
+	else
+	{
+		resp = conn_build_resp_byte(RPC_FAIL, 0, NULL);
+	}
+
+	return resp;
+}
 
 char *
 rg_instab(TREE *command, TABINFO *tabinfo)
@@ -402,20 +454,26 @@ rg_seldeltab(TREE *command, TABINFO *tabinfo)
 int
 rg_get_meta(char *req_buf, INSMETA **ins_meta, TABLEHDR **tab_hdr, COLINFO **col_info)
 {
-	if (!conn_chk_reqmagic(req_buf))
+	int	rtn_stat;
+
+	
+	if ((rtn_stat = conn_chk_reqmagic(req_buf)) == 0)
 	{
-		return FALSE;
+		return rtn_stat;
 	}
 
-	*ins_meta = (INSMETA *)req_buf;
-	req_buf += sizeof(INSMETA);
+	if (rtn_stat & RPC_REQ_NORMAL_OP)
+	{	
+		*ins_meta = (INSMETA *)req_buf;
+		req_buf += sizeof(INSMETA);
 
-	*tab_hdr = (TABLEHDR *)req_buf;
-	req_buf += sizeof(TABLEHDR);
+		*tab_hdr = (TABLEHDR *)req_buf;
+		req_buf += sizeof(TABLEHDR);
 
-	*col_info = (COLINFO *)req_buf;
+		*col_info = (COLINFO *)req_buf;
+	}
 
-	return TRUE;	
+	return rtn_stat;	
 }
 
 static int
@@ -456,13 +514,31 @@ rg_handler(char *req_buf)
 	COLINFO 	*col_info;
 	TABLEHDR	*tab_hdr;
 	TABINFO		*tabinfo;
+	int		req_op;
 	
 
-	if (!rg_get_meta(req_buf, &ins_meta, &tab_hdr, &col_info))
+	if ((req_op = rg_get_meta(req_buf, &ins_meta, &tab_hdr, &col_info)) == NULL)
 	{
 		return NULL;
 	}
 
+	
+	if (req_op & RPC_REQ_DROP_OP)
+	{
+		if (!parser_open(req_buf))
+		{
+			parser_close();
+			tss->tstat |= TSS_PARSER_ERR;
+			printf("PARSER ERR: Please input the command again by the 'help' signed.\n");
+			return NULL;
+		}
+
+		command = tss->tcmd_parser;
+
+		assert(command->sym.command.querytype == DROP);
+
+		return rg_droptab(command);
+	}
 	
 	volatile struct
 	{
@@ -483,6 +559,10 @@ rg_handler(char *req_buf)
 	req_buf += sizeof(INSMETA) + sizeof(TABLEHDR) + 
 				ins_meta->col_num * sizeof(COLINFO);
 	
+	
+	tss->tcol_info = col_info;
+	tss->tmeta_hdr = ins_meta;
+
 	if (!parser_open(req_buf))
 	{
 		parser_close();
@@ -490,10 +570,6 @@ rg_handler(char *req_buf)
 		printf("PARSER ERR: Please input the command again by the 'help' signed.\n");
 		return NULL;
 	}
-
-	
-	tss->tcol_info = col_info;
-	tss->tmeta_hdr = ins_meta;
 
 	command = tss->tcmd_parser;
 	resp_buf_idx = 0;
@@ -545,6 +621,9 @@ rg_handler(char *req_buf)
 	    	tabinfo->t_stat |= TAB_DEL_DATA;
 		resp = rg_seldeltab(command, tabinfo);
 		printf("I got here - DELETE TABLE\n");
+	    	break;
+	    case DROP:
+	    	assert(0);
 	    	break;
 
 	    default:

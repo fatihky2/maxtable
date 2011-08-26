@@ -44,8 +44,10 @@ typedef struct tokens
 #define DELETE		5
 #define ADDSERVER	6
 #define ADDSSTAB	7	/* Add sstable row into tabletN. */
+#define DROP		8
+#define REMOVE		9	/* Remove the whole table file in the metadata server. */
 
-#define MAXSI_FIXED_TOKENS	7
+#define MAXSI_FIXED_TOKENS	9
 
 int
 token_validate(char *token);

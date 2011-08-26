@@ -221,6 +221,12 @@ parser_open(char *s_str)
 	    case ADDSSTAB:
 	    	rtn_stat = par_addsstab(s_str + s_idx, ADDSSTAB);
 	    	break;
+	    case DROP:
+	    	rtn_stat = par_dropremov_tab(s_str + s_idx, DROP);
+	    	break;
+	    case REMOVE:
+	    	rtn_stat = par_dropremov_tab(s_str + s_idx, REMOVE);
+	    	break;
 
 	    default:
 	    	rtn_stat = FALSE;
@@ -444,7 +450,7 @@ par_add_server(char *s_str, int querytype)
 	str0n_trunc_0t(tab_name, len - 1, &start, &end);
 	tab_name_len = end - start;
 	
-	if (!par_name_check(tab_name, tab_name_len))
+	if (!par_name_check(&(tab_name[start]), tab_name_len))
 	{
 		return FALSE;
 	}
@@ -525,7 +531,7 @@ par_crtins_tab(char *s_str, int querytype)
 	str0n_trunc_0t(tab_name, len - 1, &start, &end);
 	tab_name_len = end - start;
 
-	if (!par_name_check(tab_name, tab_name_len))
+	if (!par_name_check(&(tab_name[start]), tab_name_len))
 	{
 		return FALSE;
 	}
@@ -587,7 +593,7 @@ par_seldel_tab(char *s_str, int querytype)
 	tab_name_len = end - start;
 
 	
-	if (!par_name_check(tab_name, tab_name_len))
+	if (!par_name_check(&(tab_name[start]), tab_name_len))
 	{
 		return FALSE;
 	}
@@ -615,6 +621,44 @@ par_seldel_tab(char *s_str, int querytype)
 	return TRUE;
 }
 
+
+
+int 
+par_dropremov_tab(char *s_str, int querytype)
+{
+	LOCALTSS(tss);
+	char		tab_name[64];
+	int		cmd_len;
+	char		tab_name_len;
+	int		start;
+	int		end;
+	
+
+	if (s_str == NULL || (STRLEN(s_str) == 0))
+	{
+		return FALSE;
+	}
+
+	cmd_len = STRLEN(s_str);
+
+	MEMSET(tab_name, 64);
+		
+	MEMCPY(tab_name, s_str, cmd_len);
+
+	
+	str0n_trunc_0t(tab_name, cmd_len, &start, &end);
+	tab_name_len = end - start;
+
+	
+	if (!par_name_check(&(tab_name[start]), tab_name_len))
+	{
+		return FALSE;
+	}
+
+	tss->tcmd_parser = par_bld_cmd(&(tab_name[start]), 
+					tab_name_len, querytype);
+	return TRUE;
+}
 
 
 
@@ -651,7 +695,7 @@ par_addsstab(char *s_str, int querytype)
 	tab_name_len = end - start;
 
 	
-	if (!par_name_check(tab_name, tab_name_len))
+	if (!par_name_check(&(tab_name[start]), tab_name_len))
 	{
 		return FALSE;
 	}

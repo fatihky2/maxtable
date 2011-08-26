@@ -190,9 +190,10 @@ conn_build_req(char *data, int data_len)
 	data_index = 0;
 	GET_FROM_BUFFER(data, data_index, req->magic, sizeof(req->magic));
 		
-	req->data_size = data_len - RPC_MAGIC_MAX_LEN;
+	req->data_size = data_len - RPC_MAGIC_MAX_LEN + 1;
 
 	req->data = MEMALLOCHEAP(req->data_size);
+	MEMSET(req->data, req->data_size);
 
 	GET_FROM_BUFFER(data, data_index, req->data, req->data_size);
 
@@ -363,15 +364,21 @@ conn_close(int sockfd, RPCREQ* req, RPCRESP* resp)
 	close(sockfd);
 }
 
+
 int
 conn_chk_reqmagic(char *str)
 {
 	if (!strncasecmp(RPC_REQUEST_MAGIC, str, STRLEN(RPC_REQUEST_MAGIC)))
 	{
-		return TRUE;
+		return RPC_REQ_NORMAL_OP;
 	}
+	else if (!strncasecmp(RPC_DROP_TABLE_MAGIC, str, STRLEN(RPC_DROP_TABLE_MAGIC)))
+	{
+		return RPC_REQ_DROP_OP;
+	}
+		
 
-	return FALSE;
+	return 0;
 }
 
 int

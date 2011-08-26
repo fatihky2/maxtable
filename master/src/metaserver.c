@@ -530,6 +530,13 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 
 	assert(status == sizeof(TABLEHDR));
 
+	if (tab_hdr.tab_stat & TAB_DROPPED)
+	{
+		printf("This table has been dropped.\n");
+		CLOSE(fd1);
+		goto exit;
+	}
+
 	keycol = par_get_colval_by_colid(command, tab_hdr.tab_key_colid, &keycolen);
 
 	MEMSET(sstab_name, SSTABLE_NAME_MAX_LEN);
@@ -791,6 +798,189 @@ exit:
 
 
 char *
+meta_droptab(TREE *command)
+{
+	
+	char	*tab_name;
+	int	tab_name_len;
+	char	tab_dir[TABLE_NAME_MAX_LEN];
+	char	tab_meta_dir[TABLE_NAME_MAX_LEN];
+	int	fd1;
+	int	rtn_stat;
+	TABLEHDR	tab_hdr;
+	char	*resp;
+	int	status;
+	char   	*col_buf;
+	int	col_buf_idx;
+	int	col_buf_len;
+
+
+	assert(command);
+
+	rtn_stat = FALSE;
+	tab_name = command->sym.command.tabname;
+	tab_name_len = command->sym.command.tabname_len;
+
+	MEMSET(tab_dir, TABLE_NAME_MAX_LEN);
+	MEMCPY(tab_dir, MT_META_TABLE, STRLEN(MT_META_TABLE));
+
+	
+	str1_to_str2(tab_dir, '/', tab_name);
+
+	
+	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
+	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
+
+	assert(STAT(tab_dir, &st) == 0);
+	
+	str1_to_str2(tab_meta_dir, '/', "sysobjects");
+
+
+	OPEN(fd1, tab_meta_dir, (O_RDWR));
+	
+	if (fd1 < 0)
+	{
+		goto exit;
+	}
+
+	status = READ(fd1, &tab_hdr, sizeof(TABLEHDR));	
+
+	assert(status == sizeof(TABLEHDR));
+
+	if (tab_hdr.tab_stat & TAB_DROPPED)
+	{
+		printf("This table has been dropped.\n");
+		CLOSE(fd1);
+		goto exit;
+	}
+		
+	tab_hdr.tab_stat |= TAB_DROPPED;
+	
+	LSEEK(fd1, 0, SEEK_SET);
+	
+	status = WRITE(fd1, &tab_hdr, sizeof(TABLEHDR));
+
+	assert(status == sizeof(TABLEHDR));
+	
+	CLOSE(fd1);
+
+	
+	col_buf_len = STRLEN(RANGE_SERVER_TEST) + sizeof(int);
+	col_buf = MEMALLOCHEAP(col_buf_len);
+	MEMSET(col_buf, col_buf_len);
+
+	col_buf_idx = 0;
+		
+	MEMCPY((col_buf + col_buf_idx), RANGE_SERVER_TEST, STRLEN(RANGE_SERVER_TEST));
+	col_buf_idx += RANGE_ADDR_MAX_LEN;
+
+	*(int *)(col_buf + col_buf_idx) = RANGE_PORT_TEST;
+	col_buf_idx += sizeof(int);
+
+	
+	rtn_stat = TRUE;
+
+exit:
+
+	
+	if (rtn_stat)
+	{
+		
+		resp = conn_build_resp_byte(RPC_SUCCESS, col_buf_idx, col_buf);
+	}
+	else
+	{
+		resp = conn_build_resp_byte(RPC_FAIL, 0, NULL);
+	}
+
+	if (col_buf != NULL)
+	{
+		MEMFREEHEAP(col_buf);
+	}
+
+	return resp;
+}
+
+
+
+
+char *
+meta_removtab(TREE *command)
+{
+	
+	char	*tab_name;
+	int	tab_name_len;
+	char	tab_dir[TABLE_NAME_MAX_LEN];
+	char	tab_meta_dir[TABLE_NAME_MAX_LEN];
+	char	cmd_str[TABLE_NAME_MAX_LEN];
+	int	fd1;
+	int	rtn_stat;
+	TABLEHDR	tab_hdr;
+	char	*resp;
+	int	status;
+
+
+	assert(command);
+
+	rtn_stat = FALSE;
+	tab_name = command->sym.command.tabname;
+	tab_name_len = command->sym.command.tabname_len;
+
+	MEMSET(tab_dir, TABLE_NAME_MAX_LEN);
+	MEMCPY(tab_dir, MT_META_TABLE, STRLEN(MT_META_TABLE));
+
+	
+	str1_to_str2(tab_dir, '/', tab_name);
+
+	
+	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
+	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
+
+	assert(STAT(tab_dir, &st) == 0);
+	
+	str1_to_str2(tab_meta_dir, '/', "sysobjects");
+
+
+	OPEN(fd1, tab_meta_dir, (O_RDONLY));
+	
+	if (fd1 < 0)
+	{
+		goto exit;
+	}
+
+	status = READ(fd1, &tab_hdr, sizeof(TABLEHDR));	
+
+	assert(status == sizeof(TABLEHDR));
+	
+	assert(tab_hdr.tab_stat & TAB_DROPPED);
+	
+	CLOSE(fd1);
+
+	MEMSET(cmd_str, TABLE_NAME_MAX_LEN);
+	
+	sprintf(cmd_str, "rm -rf %s", tab_dir);
+	
+	if (system(cmd_str))
+	{
+		rtn_stat = TRUE;
+	}
+
+exit:	
+	if (rtn_stat)
+	{
+		
+		resp = conn_build_resp_byte(RPC_SUCCESS, 0, NULL);
+	}
+	else
+	{
+		resp = conn_build_resp_byte(RPC_FAIL, 0, NULL);
+	}
+
+	return resp;
+}
+
+
+char *
 meta_seldeltab(TREE *command, TABINFO *tabinfo)
 {
 	
@@ -855,6 +1045,12 @@ meta_seldeltab(TREE *command, TABINFO *tabinfo)
 	
 	
 	assert(tab_hdr.tab_tablet > 0);
+
+	if (tab_hdr.tab_stat & TAB_DROPPED)
+	{
+		printf("This table has been dropped.\n");
+		goto exit;
+	}
 
 	if (tab_hdr.tab_tablet == 0)
 	{
@@ -1053,6 +1249,13 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 	assert(tab_hdr.tab_tablet > 0);
 
 
+	if (tab_hdr.tab_stat & TAB_DROPPED)
+	{
+		printf("This table has been dropped.\n");
+		CLOSE(fd1);
+		goto exit;
+	}
+		
 	keycol = par_get_colval_by_colid(command, 3, &keycolen);
 	sstab_name= par_get_colval_by_colid(command, 1, &sstab_name_len);
 
@@ -1250,6 +1453,12 @@ parse_again:
 	    	break;
 	    case ADDSSTAB:
 	    	resp = meta_addsstab(command, tabinfo);
+	    	break;
+	    case DROP:
+	    	resp = meta_droptab(command);
+	    	break;
+	    case REMOVE:
+	    	resp = meta_removtab(command);
 	    	break;
 
 	    default:
