@@ -8,7 +8,7 @@
     * *Client library*: The client library is linked with applications. This enables applications to read/write files stored in Maxtable.
   # What components in the system and how they relate to one another.http://m1.img.libdd.com/farm2/28/B07A6F4A5A374F4F0389973F9395C11C_461_258.jpg                                 
   # How to store the table in the disk ?
-http://m2.img.libdd.com/farm2/169/21C7BED5898F70E408FBA4F9A52CFEA9_587_170.jpg
+http://m3.img.libdd.com/farm2/46/BF36B38EE226BA9ACAEB313BCC773D2E_540_143.jpg
     * One SSTable = 1 M data.
     * One Tablet = 4K SSTable.
     * One Table = 4K Tablet.
