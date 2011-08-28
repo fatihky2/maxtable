@@ -1,0 +1,43 @@
+#summary The sample code for the client
+
+#include <stdlib.h><br>
+#include <stdio.h><br>
+#include <string.h><br>
+#include "interface.h"<br>
+
+int main()<br>
+{<br>
+    conn * connection;<br>
+	
+
+    if(cli_connection("127.0.0.1", 1959, &connection))<br>
+    {<br>
+        char resp[256], cmd[256];<br>
+        int i, len;<br>
+        
+        memset(resp, 0, 256);<br>
+        sprintf(cmd, "create table gu(id1 varchar, id2 int, id3 varchar)");<br>
+        cli_commit(connection, cmd, resp, &len);<br>
+        printf("ret: %s\n", resp);<br>
+
+        for(i = 0; i < 20000; i ++)<br>
+        {<br>
+            memset(resp, 0, 256);<br>
+            memset(cmd, 0, 256);<br>
+            sprintf(cmd, "insert into gu(gggg%d, %d, bbbb%d)", i, i, i);<br>
+            cli_commit(connection, cmd, resp, &len);<br>
+            printf("cmd: %s, ret(%d): %s\n", cmd, len, resp);<br>
+        }<br>
+        for(i = 0; i < 200; i ++)<br>
+        {<br>
+            memset(resp, 0, 256);<br>
+            memset(cmd, 0, 256);<br>
+            sprintf(cmd, "select gu(gggg%d)", i*100);<br>
+            cli_commit(connection, cmd, resp, &len);<br>
+            resp[len] = '\0';<br>
+        }<br>
+
+        cli_exit(connection);<br>
+    }<br>
+    return 0;<br>
+}<br>
