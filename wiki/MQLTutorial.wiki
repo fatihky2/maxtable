@@ -1,4 +1,4 @@
-# A brief introduction to Maxtable Query Language (MQL)
+#summary A brief introduction to Maxtable Query Language (MQL)
 
 MQL is based on the style of traditional relational query language.
   * *CREATE TABLE*.....create table table_name (column1 type1, ...,cloumnx type x) 
