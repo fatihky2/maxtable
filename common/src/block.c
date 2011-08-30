@@ -49,8 +49,12 @@ blkget(TABINFO *tabinfo)
 
 	assert(lastbp);
 
-	if (BLOCK_IS_EMPTY(lastbp))
+	if (0 && BLOCK_IS_EMPTY(lastbp))
 	{
+		tabinfo->t_rowinfo->rblknum = lastbp->bblk->bblkno;
+		tabinfo->t_rowinfo->roffset = BLKHEADERSIZE;
+		tabinfo->t_rowinfo->rsstabid = lastbp->bblk->bsstabid;
+		
 		
 		return lastbp->bsstab;
 	}
@@ -103,16 +107,17 @@ blksrch(TABINFO *tabinfo, BUF *bp)
 	
 	if (BLK_GET_NEXT_ROWNO(bp) == 0)
 	{
+		blkidx = bp->bblk->bblkno;
 		last_offset = bp->bblk->bfreeoff;
 		goto finish;
 	}
 
 
 srch_again:	
-	blk = bp->bblk;
-	minrowlen = blk->bminlen;
-	blkidx = -1;
-	match = LE;	
+	blk		= bp->bblk;
+	minrowlen 	= blk->bminlen;
+	blkidx 		= -1;
+	match 		= LE;	
 
 	for(rowno = 0, offset = ROW_OFFSET_PTR(bp->bblk); 
 			rowno < BLK_GET_NEXT_ROWNO(bp);	rowno++, offset--)
@@ -231,6 +236,11 @@ srch_again:
 	
 	
 finish:
+	
+	tabinfo->t_rowinfo->rblknum = blkidx;
+	tabinfo->t_rowinfo->roffset = last_offset;
+	tabinfo->t_rowinfo->rsstabid = bp->bblk->bsstabid;
+	
 	if (tabinfo->t_sinfo->sistate & SI_INDEX_BLK)
 	{
 				
@@ -337,7 +347,11 @@ blkins(TABINFO *tabinfo, char *rp)
 
 	bufpredirty(bp);
 
-	offset = blksrch(tabinfo, bp);
+//	offset = blksrch(tabinfo, bp);
+
+	assert(tabinfo->t_rowinfo->rblknum == bp->bblk->bblkno);
+	assert(tabinfo->t_rowinfo->rsstabid == bp->bblk->bsstabid);
+	offset = tabinfo->t_rowinfo->roffset;
 
 	ign = 0;
 	rlen = ROW_GET_LENGTH(rp, minlen);
@@ -433,7 +447,11 @@ blkdel(TABINFO *tabinfo)
 
 	bufpredirty(bp);
 
-	offset = blksrch(tabinfo, bp);
+//	offset = blksrch(tabinfo, bp);
+
+	assert(tabinfo->t_rowinfo->rblknum == bp->bblk->bblkno);
+	assert(tabinfo->t_rowinfo->rsstabid == bp->bblk->bsstabid);
+	offset = tabinfo->t_rowinfo->roffset;
 
 	if (tabinfo->t_sinfo->sistate & SI_NODATA)
 	{

@@ -396,7 +396,11 @@ rg_seldeltab(TREE *command, TABINFO *tabinfo)
 	{
 		
 		bp = blkget(tabinfo);
-		offset = blksrch(tabinfo, bp);
+//		offset = blksrch(tabinfo, bp);
+
+		assert(tabinfo->t_rowinfo->rblknum == bp->bblk->bblkno);
+		assert(tabinfo->t_rowinfo->rsstabid == bp->bblk->bsstabid);
+		offset = tabinfo->t_rowinfo->roffset;
 	}
 	
 	
@@ -515,6 +519,7 @@ rg_handler(char *req_buf)
 	TABLEHDR	*tab_hdr;
 	TABINFO		*tabinfo;
 	int		req_op;
+	BLK_ROWINFO	blk_rowinfo;
 	
 
 	if ((req_op = rg_get_meta(req_buf, &ins_meta, &tab_hdr, &col_info)) == NULL)
@@ -579,6 +584,9 @@ rg_handler(char *req_buf)
 	MEMSET(tabinfo, sizeof(TABINFO));
 	tabinfo->t_sinfo = MEMALLOCHEAP(sizeof(SINFO));
 	MEMSET(tabinfo->t_sinfo, sizeof(SINFO));
+
+	tabinfo->t_rowinfo = &blk_rowinfo;
+	MEMSET(tabinfo->t_rowinfo, sizeof(BLK_ROWINFO));
 
 	tabinfo->t_dold = tabinfo->t_dnew = (BUF *) tabinfo;
 	tabinfo->t_colinfo = col_info;

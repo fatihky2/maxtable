@@ -428,10 +428,12 @@ exit:
 void
 meta_ins_systab(char *systab, char *row)
 {
-	TABINFO	*tabinfo;
-	int	minrowlen;
-	char	*key;
-	int	ign;
+	TABINFO		*tabinfo;
+	int		minrowlen;
+	char		*key;
+	int		ign;
+	BLK_ROWINFO	blk_rowinfo;
+	
 	
 	tabinfo = MEMALLOCHEAP(sizeof(TABINFO));
 	MEMSET(tabinfo, sizeof(TABINFO));
@@ -439,6 +441,9 @@ meta_ins_systab(char *systab, char *row)
 	tabinfo->t_sinfo = (SINFO *)MEMALLOCHEAP(sizeof(SINFO));
 	MEMSET(tabinfo->t_sinfo, sizeof(SINFO));
 
+	tabinfo->t_rowinfo = &blk_rowinfo;
+	MEMSET(tabinfo->t_rowinfo, sizeof(BLK_ROWINFO));
+	
 	tabinfo_push(tabinfo);
 
 	minrowlen = sizeof(ROWFMT) + 3 * sizeof(int);
@@ -900,8 +905,6 @@ exit:
 
 	return resp;
 }
-
-
 
 
 char *
