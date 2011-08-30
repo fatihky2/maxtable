@@ -1,0 +1,19 @@
+#summary How to deploy MaxTable servers on a cluster.
+
+==Defining Machine Configuration for MaxTable==
+  * Configure for the client
+{{{
+metaserver=192.168.171.152
+metaport=1959
+}}}
+  * Configure for the Master server
+{{{
+port=1959
+}}}
+  * Configure for the Ranger server
+{{{
+metaserver=192.168.171.152
+metaport=1959
+rangerserver=192.168.171.153
+rangerport=1949
+}}}
