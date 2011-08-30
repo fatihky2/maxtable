@@ -25,6 +25,7 @@
 #include "strings.h"
 #include <pthread.h>
 #include "thread.h"
+#include "hkgc.h"
 
 extern	TSS	*Tss;
 
@@ -490,6 +491,7 @@ void startup(int servPort, int opid, char * (*handler_request)(char *req_buf))
 	*/
 
 	pthread_t pthread_id;
+	pthread_t pthread_id1;
 	
 	tss_setup(opid);
 
@@ -497,6 +499,8 @@ void startup(int servPort, int opid, char * (*handler_request)(char *req_buf))
 	args->port = servPort;
 
 	pthread_create(&pthread_id, NULL, msg_recv, (void *)args);
+
+	pthread_create(&pthread_id1, NULL, hkgc_boot, NULL);
 
 	//start_daemon(listenfd, handler_request);
 	msg_process(handler_request);
