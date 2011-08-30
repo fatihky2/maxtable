@@ -1,0 +1,16 @@
+#summary How to install MaxTable servers on a cluster.
+
+*HOW TO BUILD*<br>
+  * Checkout the source code
+  * cd your_source_dir
+  * make all
+
+*HOW TO RUN*<br>
+  * cd your_source_dir
+  * Edit the configure file
+  * ./startMaster
+  * ./startRanger
+
+*RUN REGRESSION TESTS*<br>
+  * Edit Makefile
+  * ./startClient
