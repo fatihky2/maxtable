@@ -31,6 +31,8 @@
 
 struct srch_info;
 struct buf;
+struct block_row_info;
+
 
 #define RANGE_ADDR_MAX_LEN      64
 #define RANGE_SERVER_TEST       "127.0.0.1\0"
@@ -166,7 +168,8 @@ typedef struct tab_info
 	int		t_sstab_id;	
 	char		*t_sstab_name;	
 	int		t_split_tabletid;
-	
+	struct block_row_info 
+			*t_rowinfo;
 	struct srch_info	
 			*t_sinfo;
 	struct buf	*t_keptbuf;

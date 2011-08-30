@@ -45,18 +45,22 @@ extern	TSS	*Tss;
 void
 tablet_crt(TABLEHDR *tablehdr, char *tabledir, char *rp, int minlen)
 {
-	char	tab_meta_dir[TABLE_NAME_MAX_LEN];
-	char	tablet_name[32];
-	int	keycolen;
-	char	*keycol;
-	TABINFO tabinfo;
-	SINFO	sinfo;
+	char		tab_meta_dir[TABLE_NAME_MAX_LEN];
+	char		tablet_name[32];
+	int		keycolen;
+	char		*keycol;
+	TABINFO 	tabinfo;
+	SINFO		sinfo;
+	BLK_ROWINFO	blk_rowinfo;
 
 
 	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
 	MEMSET(tablet_name, 32);
 	MEMSET(&tabinfo, sizeof(TABINFO));
 	MEMSET(&sinfo, sizeof(SINFO));
+	MEMSET(&blk_rowinfo, sizeof(BLK_ROWINFO));
+
+	tabinfo.t_rowinfo = &blk_rowinfo;
 
 	tabinfo.t_dold = tabinfo.t_dnew = (BUF *) (&tabinfo);
 	
@@ -108,14 +112,18 @@ tablet_crt(TABLEHDR *tablehdr, char *tabledir, char *rp, int minlen)
 void
 tablet_ins_row(TABLEHDR *tablehdr, int tabid, int sstabid, char *tablet_name, char *rp, int minlen)
 {
-	int	keycolen;
-	char	*keycol;
-	TABINFO tabinfo;
-	SINFO	sinfo;
+	int		keycolen;
+	char		*keycol;
+	TABINFO 	tabinfo;
+	SINFO		sinfo;
+	BLK_ROWINFO	blk_rowinfo;
 
 
 	MEMSET(&tabinfo, sizeof(TABINFO));
 	MEMSET(&sinfo, sizeof(SINFO));
+	MEMSET(&blk_rowinfo, sizeof(BLK_ROWINFO));
+
+	tabinfo.t_rowinfo = &blk_rowinfo;
 
 	tabinfo.t_dold = tabinfo.t_dnew = (BUF *) (&tabinfo);
 	
@@ -146,14 +154,18 @@ tablet_ins_row(TABLEHDR *tablehdr, int tabid, int sstabid, char *tablet_name, ch
 void
 tablet_del_row(TABLEHDR *tablehdr, int tabid, int sstabid, char *tablet_name, char *rp, int minlen)
 {
-	int	keycolen;
-	char	*keycol;
-	TABINFO tabinfo;
-	SINFO	sinfo;
+	int		keycolen;
+	char		*keycol;
+	TABINFO 	tabinfo;
+	SINFO		sinfo;
+	BLK_ROWINFO	blk_rowinfo;
 
 
 	MEMSET(&tabinfo, sizeof(TABINFO));
 	MEMSET(&sinfo, sizeof(SINFO));
+	MEMSET(&blk_rowinfo, sizeof(BLK_ROWINFO));
+
+	tabinfo.t_rowinfo = &blk_rowinfo;
 
 	tabinfo.t_dold = tabinfo.t_dnew = (BUF *) (&tabinfo);
 	
@@ -304,16 +316,21 @@ tablet_bld_row(char *sstab_rp, int sstab_rlen, char *tab_name, int tab_name_len,
 char *
 tablet_srch_row(TABINFO *usertabinfo, TABLEHDR *tablehdr, int tabid, int sstabid, char *systab, char *key, int keylen)
 {
-	TABINFO	*tabinfo;
-	int	minrowlen;
-	BUF	*bp;
-	int	offset;
+	TABINFO		*tabinfo;
+	int		minrowlen;
+	BUF		*bp;
+	int		offset;
+	BLK_ROWINFO	blk_rowinfo;
+
 	
 	tabinfo = MEMALLOCHEAP(sizeof(TABINFO));
 	MEMSET(tabinfo, sizeof(TABINFO));
 
 	tabinfo->t_sinfo = (SINFO *)MEMALLOCHEAP(sizeof(SINFO));
 	MEMSET(tabinfo->t_sinfo, sizeof(SINFO));
+
+	tabinfo->t_rowinfo = &blk_rowinfo;
+	MEMSET(tabinfo->t_rowinfo, sizeof(BLK_ROWINFO));
 
 	tabinfo->t_dold = tabinfo->t_dnew = (BUF *) tabinfo; 
 	
@@ -325,7 +342,11 @@ tablet_srch_row(TABINFO *usertabinfo, TABLEHDR *tablehdr, int tabid, int sstabid
 	SRCH_INFO_INIT(tabinfo->t_sinfo, key, keylen, TABLET_KEYCOLID, VARCHAR, -1);			
 	
 	bp = blkget(tabinfo);
-	offset = blksrch(tabinfo, bp);
+//	offset = blksrch(tabinfo, bp);
+
+	assert(tabinfo->t_rowinfo->rblknum == bp->bblk->bblkno);
+	assert(tabinfo->t_rowinfo->rsstabid == bp->bblk->bsstabid);
+	offset = tabinfo->t_rowinfo->roffset;
 
 	bufunkeep(bp->bsstab);
 	session_close(tabinfo);
@@ -423,16 +444,20 @@ tablet_schm_upd_col(char *newrp, char *oldrp, int colid, char *newcolval, int ne
 void
 tablet_schm_ins_row(int tabid, int sstabid, char *systab, char *row, int tabletnum)
 {
-	TABINFO	*tabinfo;
-	int	minrowlen;
-	char	*key;
-	int	keylen;
+	TABINFO		*tabinfo;
+	int		minrowlen;
+	char		*key;
+	int		keylen;
+	BLK_ROWINFO	blk_rowinfo;
 	
 	tabinfo = MEMALLOCHEAP(sizeof(TABINFO));
 	MEMSET(tabinfo, sizeof(TABINFO));
 
 	tabinfo->t_sinfo = (SINFO *)MEMALLOCHEAP(sizeof(SINFO));
 	MEMSET(tabinfo->t_sinfo, sizeof(SINFO));
+
+	tabinfo->t_rowinfo = &blk_rowinfo;
+	MEMSET(tabinfo->t_rowinfo, sizeof(BLK_ROWINFO));
 
 	tabinfo->t_dold = tabinfo->t_dnew = (BUF *) tabinfo;
 
@@ -464,10 +489,12 @@ tablet_schm_ins_row(int tabid, int sstabid, char *systab, char *row, int tabletn
 void
 tablet_schm_del_row(int tabid, int sstabid, char *systab, char *row)
 {
-	TABINFO	*tabinfo;
-	int	minrowlen;
-	char	*key;
-	int	keylen;
+	TABINFO		*tabinfo;
+	int		minrowlen;
+	char		*key;
+	int		keylen;
+	BLK_ROWINFO	blk_rowinfo;
+	
 	
 	tabinfo = MEMALLOCHEAP(sizeof(TABINFO));
 	MEMSET(tabinfo, sizeof(TABINFO));
@@ -475,6 +502,9 @@ tablet_schm_del_row(int tabid, int sstabid, char *systab, char *row)
 	tabinfo->t_sinfo = (SINFO *)MEMALLOCHEAP(sizeof(SINFO));
 	MEMSET(tabinfo->t_sinfo, sizeof(SINFO));
 
+	tabinfo->t_rowinfo = &blk_rowinfo;
+	MEMSET(tabinfo->t_rowinfo, sizeof(BLK_ROWINFO));
+	
 	tabinfo->t_dold = tabinfo->t_dnew = (BUF *) tabinfo;
 
 	tabinfo_push(tabinfo);
@@ -502,16 +532,20 @@ tablet_schm_del_row(int tabid, int sstabid, char *systab, char *row)
 char *
 tablet_schm_srch_row(TABLEHDR *tablehdr, int tabid, int sstabid, char *systab, char *key, int keylen)
 {
-	TABINFO	*tabinfo;
-	int	minrowlen;
-	BUF	*bp;
-	int	offset;
+	TABINFO		*tabinfo;
+	int		minrowlen;
+	BUF		*bp;
+	int		offset;
+	BLK_ROWINFO	blk_rowinfo;
 	
 	tabinfo = MEMALLOCHEAP(sizeof(TABINFO));
 	MEMSET(tabinfo, sizeof(TABINFO));
 
 	tabinfo->t_sinfo = (SINFO *)MEMALLOCHEAP(sizeof(SINFO));
 	MEMSET(tabinfo->t_sinfo, sizeof(SINFO));
+
+	tabinfo->t_rowinfo = &blk_rowinfo;
+	MEMSET(tabinfo->t_rowinfo, sizeof(BLK_ROWINFO));
 
 	tabinfo->t_dold = tabinfo->t_dnew = (BUF *) tabinfo;
 
@@ -526,8 +560,11 @@ tablet_schm_srch_row(TABLEHDR *tablehdr, int tabid, int sstabid, char *systab, c
 			
 	
 	bp = blkget(tabinfo);
-	offset = blksrch(tabinfo, bp);
-
+//	offset = blksrch(tabinfo, bp);
+	assert(tabinfo->t_rowinfo->rblknum == bp->bblk->bblkno);
+	assert(tabinfo->t_rowinfo->rsstabid == bp->bblk->bsstabid);
+	offset = tabinfo->t_rowinfo->roffset;
+	
 	bufunkeep(bp->bsstab);
 	session_close(tabinfo);
 	
@@ -602,17 +639,18 @@ tablet_namebyid(TABINFO *tabinfo, char *new_sstab)
 void
 tablet_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 {
-	BUF	*destbuf;
-	TABINFO * tabinfo;
-	BLOCK	*nextblk;
-	BLOCK	*blk;
-	char	*key;
-	int	keylen;
-	int	ins_nxtsstab;
-	char	*tablet_key;
-	int	tablet_keylen;
-	int	table_nameidx;
-	char	tab_meta_dir[TABLE_NAME_MAX_LEN];
+	BUF		*destbuf;
+	TABINFO 	* tabinfo;
+	BLOCK		*nextblk;
+	BLOCK		*blk;
+	char		*key;
+	int		keylen;
+	int		ins_nxtsstab;
+	char		*tablet_key;
+	int		tablet_keylen;
+	int		table_nameidx;
+	char		tab_meta_dir[TABLE_NAME_MAX_LEN];
+	BLK_ROWINFO	blk_rowinfo;
 
 
 	ins_nxtsstab = (srcbp->bblk->bblkno > ((BLK_CNT_IN_SSTABLE / 2) - 1)) ? TRUE : FALSE;
@@ -665,6 +703,9 @@ tablet_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 
 	tabinfo->t_sinfo = (SINFO *)MEMALLOCHEAP(sizeof(SINFO));
 	MEMSET(tabinfo->t_sinfo, sizeof(SINFO));
+
+	tabinfo->t_rowinfo = &blk_rowinfo;
+	MEMSET(tabinfo->t_rowinfo, sizeof(BLK_ROWINFO));
 
 	tabinfo_push(tabinfo);
 

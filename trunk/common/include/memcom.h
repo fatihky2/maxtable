@@ -191,6 +191,7 @@ typedef struct kernel
 	SPINLOCK	ke_buf_spinlock;
 	struct buf	*ke_buflru;		
 	struct buf	**ke_bufhash;		
+	struct buf	*ke_bufwash;		
 } KERNEL;
 
 # define	BUF_SPIN	(Kernel->ke_buf_spinlock)

@@ -107,16 +107,17 @@ sstab_namebyid(TABINFO *tabinfo, char *new_sstab)
 void
 sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 {
-	BUF	*destbuf;
-	TABINFO * tabinfo;
-	BLOCK	*nextblk;
-	BLOCK	*blk;
-	char	*key;
-	int	keylen;
-	int	ins_nxtsstab;
-	char	*sstab_key;
-	int	sstab_keylen;
-	int	i;
+	BUF		*destbuf;
+	TABINFO 	*tabinfo;
+	BLOCK		*nextblk;
+	BLOCK		*blk;
+	char		*key;
+	int		keylen;
+	int		ins_nxtsstab;
+	char		*sstab_key;
+	int		sstab_keylen;
+	int		i;
+	BLK_ROWINFO	blk_rowinfo;
 
 
 	ins_nxtsstab = (srcbp->bblk->bblkno > ((BLK_CNT_IN_SSTABLE / 2) - 1)) ? TRUE : FALSE;
@@ -164,6 +165,9 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 
 	tabinfo->t_sinfo = (SINFO *)MEMALLOCHEAP(sizeof(SINFO));
 	MEMSET(tabinfo->t_sinfo, sizeof(SINFO));
+
+	tabinfo->t_rowinfo = &blk_rowinfo;
+	MEMSET(tabinfo->t_rowinfo, sizeof(BLK_ROWINFO));
 
 //	tabinfo->t_dold = tabinfo->t_dnew = (BUF *) tabinfo;
 
