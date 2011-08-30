@@ -2,15 +2,45 @@
 
 *HOW TO BUILD*<br>
   * Checkout the source code
-  * cd your_source_dir
-  * make all
+{{{
+svn checkout https://maxtable.googlecode.com/svn/trunk/ maxtable
+}}}
+  * Enter into your_source_dir
+{{{
+cd maxtable
+}}}
+  * Build the source code
+{{{
+make clean
+make all
+}}}
 
 *HOW TO RUN*<br>
-  * cd your_source_dir
+  * Enter into your_source_dir
+{{{
+cd maxtable
+}}}
   * Edit the configure file
-  * ./startMaster
-  * ./startRanger
+{{{
+vim cli.conf
+vim master.conf
+vim ranger.conf
+}}}
+  * Boot Master
+{{{
+./starMaster
+}}}
+  * Boot Ranger
+{{{
+./starRanger
+}}}
 
 *RUN REGRESSION TESTS*<br>
   * Edit Makefile
-  * ./startClient
+{{{
+vim Makefile
+}}}
+  * Start the test in the client
+{{{
+./starClient
+}}}
