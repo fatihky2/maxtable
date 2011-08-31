@@ -155,7 +155,7 @@ void * msg_recv(void *args)
 					printf("read %d->[%s]\n", n, buf);
 
 					
-					new_msg = MEMALLOCHEAP(sizeof(msg_data));
+					new_msg = malloc(sizeof(msg_data));
 					MEMSET(new_msg->data, MAXLINE);
 					MEMCPY(new_msg->data, buf, n);
 					new_msg->fd = sockfd;
@@ -196,7 +196,7 @@ void * msg_recv(void *args)
 				ev.events = EPOLLIN;
 				epoll_ctl(epfd, EPOLL_CTL_MOD, sockfd, &ev);
 
-				MEMFREEHEAP(resp_msg);
+				free(resp_msg);
 			}
 		}
 	}
@@ -254,7 +254,7 @@ void msg_process(char * (*handler_request)(char *req_buf))
 
 		resp_size = conn_get_resp_size((RPCRESP *)resp);
 
-		resp_msg = MEMALLOCHEAP(sizeof(msg_data));
+		resp_msg = malloc(sizeof(msg_data));
 		resp_msg->n_size = resp_size;
 		MEMSET(resp_msg->data, MAXLINE);
 		MEMCPY(resp_msg->data, resp, resp_size);
@@ -270,7 +270,7 @@ void msg_process(char * (*handler_request)(char *req_buf))
 		conn_destroy_req(req);
 		conn_destroy_resp_byte(resp);
 		
-		MEMFREEHEAP(req_msg);
+		free(req_msg);
 		
 		tss_init(tss);
 	}

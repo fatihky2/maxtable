@@ -191,7 +191,7 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 	}
 	else
 	{
-		bufpredirty(destbuf);
+		//bufpredirty(destbuf);
 		bufdirty(destbuf);
 	}
 

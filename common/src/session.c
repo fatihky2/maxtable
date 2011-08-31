@@ -29,6 +29,8 @@ extern KERNEL *Kernel;
 int
 session_close(TABINFO *tabinfo)
 {
+	return TRUE;
+	
 	BUF	*bp;
 	BUF	*tmp_bp;
 

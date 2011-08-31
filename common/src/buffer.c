@@ -26,6 +26,7 @@
 #include "dskio.h"
 #include "spinlock.h"
 #include "tss.h"
+#include "hkgc.h"
 
 
 extern KERNEL	*Kernel;
@@ -143,18 +144,19 @@ bufawrite(BUF *bp)
 
 
 	printf(" Enter into the buffer writting.\n");
-	P_SPINLOCK(BUF_SPIN);
+	//P_SPINLOCK(BUF_SPIN);
 
 	if (!(SSTABLE_STATE(bp) & BUF_DIRTY))
 	{
-		V_SPINLOCK(BUF_SPIN);
+		//V_SPINLOCK(BUF_SPIN);
+		printf("error!!!!\n");
 		return;
 	}
 	
 	SSTABLE_STATE(bp) |= BUF_WRITING;
 
 	
-	blkioptr = MEMALLOCHEAP(sizeof(BLKIO));
+	blkioptr = malloc(sizeof(BLKIO));
 
 	
 	blkioptr->bioflags = DBWRITE;
@@ -172,11 +174,11 @@ bufawrite(BUF *bp)
 
 	SSTABLE_STATE(bp) &= ~(BUF_DIRTY|BUF_WRITING);
 
-	V_SPINLOCK(BUF_SPIN);
+	//V_SPINLOCK(BUF_SPIN);
 
 	
 
-	MEMFREEHEAP(blkioptr);
+	free(blkioptr);
 
 	return;
 }
@@ -207,11 +209,8 @@ bufsearch(TABINFO *tabinfo)
 	{
 		if (   (bufptr->bsstabid == sstabno) 
 		    && (bufptr->btabid = tabid))
-		{			
+		{
 			V_SPINLOCK(BUF_SPIN);
-			
-			bufwait(bufptr);
-
 			return (bufptr);
 		}
 	}
@@ -373,40 +372,44 @@ bufdestroy(BUF *bp)
 void
 bufpredirty(BUF *bp)
 {
-retry:	
+/*retry:	
 	bufwait(bp);
 	
 	P_SPINLOCK(BUF_SPIN);
-
+*/
 	if (!(SSTABLE_STATE(bp) & BUF_DIRTY))
 	{
 		SSTABLE_STATE(bp) |= BUF_DIRTY;
 	}
-	else
+/*	else
 	{
 		V_SPINLOCK(BUF_SPIN);
 		goto retry;
 	}
 
 	V_SPINLOCK(BUF_SPIN);
-
+*/
 	return;
 }
-
-
-void
-bufdirty(BUF *bp)
+void bufdirty(BUF *bp)
 {	
-	assert(SSTABLE_STATE(bp) & BUF_DIRTY);
+	//assert(SSTABLE_STATE(bp) & BUF_DIRTY);
+	if (!(SSTABLE_STATE(bp) & BUF_DIRTY))
+	{
+		SSTABLE_STATE(bp) |= BUF_DIRTY;
+		put_io_list(BUF_GET_SSTAB(bp));
+	}
+
 	
-	P_SPINLOCK(BUF_SPIN);
+	
+	/*P_SPINLOCK(BUF_SPIN);
 
 	if (SSTABLE_STATE(bp) & BUF_DIRTY)
 	{
 		bufdlink(BUF_GET_SSTAB(bp));
 	}
 
-	V_SPINLOCK(BUF_SPIN);
+	V_SPINLOCK(BUF_SPIN);*/
 
 	return;
 }
@@ -456,6 +459,7 @@ buffree(BUF *bp)
 
 	
 	SSTABLE_STATE(bp) &= ~(BUF_NOTHASHED | BUF_DESTROY | BUF_DIRTY | BUF_IOERR);
+
 	return;
 }
 
@@ -463,7 +467,7 @@ buffree(BUF *bp)
 void
 bufkeep(BUF *bp)
 {
-	
+	P_SPINLOCK(bufkeep_mutex);
 	
 	LRUUNLINK(bp);
 	
@@ -471,11 +475,15 @@ bufkeep(BUF *bp)
 	MRULINK(bp, Kernel->ke_buflru);
 	
 	bp->bstat |= BUF_KEPT;
+
+	V_SPINLOCK(bufkeep_mutex);
 }
 
 void
 bufunkeep(BUF *bp)
 {
+	P_SPINLOCK(bufkeep_mutex);
+
 	if (bp->bstat & (BUF_NOTHASHED | BUF_DESTROY))
 	{
 		buffree(bp);
@@ -490,6 +498,8 @@ bufunkeep(BUF *bp)
 	}
 
 	bp->bstat &= ~BUF_KEPT;
+
+	V_SPINLOCK(bufkeep_mutex);
 }
 
 

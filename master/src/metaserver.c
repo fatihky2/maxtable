@@ -1281,6 +1281,8 @@ exit:
 		resp = conn_build_resp_byte(RPC_FAIL, 0, NULL);
 	}
 
+	MEMFREEHEAP(col_buf);
+
 	return resp;
 }
 

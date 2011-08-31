@@ -17,6 +17,9 @@
 ** implied. See the License for the specific language governing
 ** permissions and limitations under the License.
 */
+#include <sys/time.h>
+
+
 #include "master/metaserver.h"
 #include "buffer.h"
 #include "block.h"
@@ -27,7 +30,7 @@
 #include "tss.h"
 #include "sstab.h"
 #include "tablet.h"
-
+#include "atomic_status.h"
 
 extern TSS	*Tss;
 
@@ -35,6 +38,7 @@ extern TSS	*Tss;
 #define	BLK_BUF_NEED_CHANGE	0x0001
 #define BLK_ROW_NEXT_SSTAB	0x0002	
 #define BLK_ROW_NEXT_BLK	0x0004
+
 
 
 
@@ -342,10 +346,17 @@ blkins(TABINFO *tabinfo, char *rp)
 	minlen = tabinfo->t_row_minlen;
 	
 	tabinfo->t_sinfo->sistate |= SI_INS_DATA;
+
 	
 	bp = blkget(tabinfo);
 
-	bufpredirty(bp);
+
+	int count;
+
+
+	count = change_status(bp, NONKEPT, KEPT);
+	//printf("wait %d from nonkept to kept on insert side!\n", count);
+	//bufpredirty(bp);
 
 //	offset = blksrch(tabinfo, bp);
 
@@ -415,11 +426,17 @@ blkins(TABINFO *tabinfo, char *rp)
 	
 	BLK_GET_NEXT_ROWNO(bp)++;
 
+
 finish:
 
 	bufdirty(bp);
 		
 	tabinfo->t_sinfo->sistate &= ~SI_INS_DATA;
+
+	count = change_status(bp, KEPT, NONKEPT);
+
+	//printf("wait %d from kept to nonkept on insert side!\n", count);
+
 
 	return TRUE;
 }
@@ -445,7 +462,12 @@ blkdel(TABINFO *tabinfo)
 	
 	bp = blkget(tabinfo);
 
-	bufpredirty(bp);
+	int count;
+
+	count = change_status(bp, NONKEPT, KEPT);
+
+	printf("wait %d from nonkept to kept on delete side!\n", count);
+	//bufpredirty(bp);
 
 //	offset = blksrch(tabinfo, bp);
 
@@ -507,6 +529,10 @@ finish:
 	bufdirty(bp);
 		
 	tabinfo->t_sinfo->sistate &= ~SI_DEL_DATA;
+
+	count = change_status(bp, KEPT, NONKEPT);
+
+	printf("wait %d from kept to nonkept on insert side!\n", count);
 
 	return TRUE;
 }
