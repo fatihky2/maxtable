@@ -34,12 +34,14 @@ struct buf;
 struct block_row_info;
 
 
-#define RANGE_ADDR_MAX_LEN      64
+#define RANGE_ADDR_MAX_LEN      32
+#define RANGE_PORT_MAX_LEN	4
 #define RANGE_SERVER_TEST       "127.0.0.1\0"
 #define RANGE_PORT_TEST         1949
 #define SSTABLE_NAME_MAX_LEN    128
 #define TABLE_NAME_MAX_LEN      256
 #define TABLET_NAME_MAX_LEN	32
+#define RANGER_MAX_NUM		64
 
 struct stat st;
 
@@ -102,7 +104,12 @@ typedef struct rg_prof
 {
 	char	rg_addr[RANGE_ADDR_MAX_LEN];
 	int	rg_port;
+	int	rg_stat;
 } RANGE_PROF;
+
+
+#define RANGER_IS_ONLINE	0x0001
+
 
 typedef union infor_hdr
 {
@@ -199,14 +206,15 @@ typedef struct tab_info
 
 
 #define SVR_IDX_FILE_HDR	16
-#define SVR_IDX_FILE_BLK	(64 * 1024)
+#define SVR_IDX_FILE_BLK	((sizeof(int) + RANGE_PORT_MAX_LEN + RANGE_ADDR_MAX_LEN) * 1024)
+#define SVR_IDX_FILE_SIZE	(SVR_IDX_FILE_HDR + SVR_IDX_FILE_BLK)
 typedef	struct svr_idx_file
 {
 	int		nextrno;	
 	int		freeoff; 	
 	short		stat;
 	char		pad2[6];
-	char		data[SVR_IDX_FILE_BLK - 16]; 
+	char		data[SVR_IDX_FILE_BLK]; 
 }SVR_IDX_FILE;
 
 

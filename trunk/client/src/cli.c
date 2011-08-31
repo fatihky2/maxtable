@@ -33,11 +33,6 @@
 
 extern	TSS	*Tss;
 
-#define CONF_META_IP    "metaserver"
-#define CONF_META_PORT  "metaport"
-
-#define CLI_CONN_MASTER_MAX_LEN	64
-#define CLI_CONN_REGION_MAX_LEN 64
 #define CLI_CONF_PATH_MAX_LEN   64
 
 /** cli related constants **/
@@ -52,9 +47,9 @@ typedef struct cli_infor
 {
 	/* default place is conf/cli.conf */
 	char	cli_conf_path[CLI_CONF_PATH_MAX_LEN]; 
-	char	cli_meta_ip[CLI_CONN_MASTER_MAX_LEN];
+	char	cli_meta_ip[RANGE_ADDR_MAX_LEN];
 	int     cli_meta_port;
-	char    cli_region_ip[CLI_CONN_REGION_MAX_LEN];
+	char    cli_region_ip[RANGE_ADDR_MAX_LEN];
 	int     cli_region_port;
 	int     cli_status;
 	//List *	cli_tab_infor;
@@ -76,16 +71,20 @@ CLI_INFOR * Cli_infor = NULL;
 void
 cli_infor_init(char* conf_path)
 {
+	char	metaport[32];
+
+
+	MEMSET(metaport, 32);
+	
 	Cli_infor = MEMALLOCHEAP(sizeof(CLI_INFOR));
 
 	/* Get thet path of configure. */
-	MEMCPY(Cli_infor->cli_conf_path, conf_path, sizeof(conf_path));
+	MEMCPY(Cli_infor->cli_conf_path, conf_path, STRLEN(conf_path));
 
 	/* Get the IP and Port of metaserver. */
 	conf_get_value_by_key(Cli_infor->cli_meta_ip, conf_path, CONF_META_IP);
-	conf_get_value_by_key((char *)(&(Cli_infor->cli_meta_port)), conf_path, 
-			      CONF_META_PORT);
-	Cli_infor->cli_meta_port = atoi((char *)&(Cli_infor->cli_meta_port));
+	conf_get_value_by_key(metaport, conf_path, CONF_META_PORT);
+	Cli_infor->cli_meta_port = m_atoi(metaport, STRLEN(metaport));
 
 	/* Init the status of client. */
 	Cli_infor->cli_status = CLI_CONN_MASTER;
@@ -244,7 +243,7 @@ conn_again:
 
 				MEMCPY(Cli_infor->cli_region_ip, 
 				       resp_ins->i_hdr.rg_info.rg_addr, 
-				       CLI_CONN_REGION_MAX_LEN);
+				       RANGE_ADDR_MAX_LEN);
 
 				Cli_infor->cli_region_port = 
 					resp_ins->i_hdr.rg_info.rg_port;
@@ -314,7 +313,7 @@ conn_again:
 
 				MEMCPY(Cli_infor->cli_region_ip, 
 				       resp_ins->i_hdr.rg_info.rg_addr, 
-				       CLI_CONN_REGION_MAX_LEN);
+				       RANGE_ADDR_MAX_LEN);
 
 				Cli_infor->cli_region_port = 
 					resp_ins->i_hdr.rg_info.rg_port;
@@ -357,7 +356,7 @@ conn_again:
 				ranger_list = (RANGE_PROF *)resp->result;
 
 				MEMCPY(Cli_infor->cli_region_ip, ranger_list->rg_addr, 
-				   CLI_CONN_REGION_MAX_LEN);
+				   RANGE_ADDR_MAX_LEN);
 
 				Cli_infor->cli_region_port = ranger_list->rg_port;
 
@@ -564,7 +563,7 @@ conn_again:
 
 			MEMCPY(Cli_infor->cli_region_ip, 
 			       resp_ins->i_hdr.rg_info.rg_addr, 
-			       CLI_CONN_REGION_MAX_LEN);
+			       RANGE_ADDR_MAX_LEN);
 
 			Cli_infor->cli_region_port = 
 				resp_ins->i_hdr.rg_info.rg_port;
@@ -634,7 +633,7 @@ conn_again:
 
 			MEMCPY(Cli_infor->cli_region_ip, 
 			       resp_ins->i_hdr.rg_info.rg_addr, 
-			       CLI_CONN_REGION_MAX_LEN);
+			       RANGE_ADDR_MAX_LEN);
 
 			Cli_infor->cli_region_port = 
 				resp_ins->i_hdr.rg_info.rg_port;
@@ -677,7 +676,7 @@ conn_again:
 			ranger_list = (RANGE_PROF *)resp->result;
 			
 			MEMCPY(Cli_infor->cli_region_ip, ranger_list->rg_addr, 
-			       CLI_CONN_REGION_MAX_LEN);
+			       RANGE_ADDR_MAX_LEN);
 
 			Cli_infor->cli_region_port = ranger_list->rg_port;
 

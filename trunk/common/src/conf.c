@@ -79,8 +79,8 @@ conf_build(char *str, char deli)
 
 
 /*
- * since the tokens has a nested array, it needs a method to free
- */
+** since the tokens has a nested array, it needs a method to free
+**/
 int 
 conf_destroy(CONFIG* conf)
 {
@@ -136,7 +136,7 @@ conf_get_value(char *value, char* line)
 	return TRUE;
 }
 
-/** if the target key has not been found, the method will return NULL **/
+/* if the target key has not been found, the method will return NULL */
 int 
 conf_get_value_by_key(char *value, char *file_path, char* target_key)
 {
