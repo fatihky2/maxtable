@@ -345,8 +345,7 @@ blkins(TABINFO *tabinfo, char *rp)
 	
 	bp = blkget(tabinfo);
 
-	change_status(bp, NONKEPT, KEPT);
-	//bufpredirty(bp);
+	bufpredirty(bp);
 
 //	offset = blksrch(tabinfo, bp);
 
@@ -422,8 +421,6 @@ finish:
 		
 	tabinfo->t_sinfo->sistate &= ~SI_INS_DATA;
 
-	change_status(bp, KEPT, NONKEPT);
-
 	return TRUE;
 }
 
@@ -448,8 +445,7 @@ blkdel(TABINFO *tabinfo)
 	
 	bp = blkget(tabinfo);
 
-	change_status(bp, NONKEPT, KEPT);
-	//bufpredirty(bp);
+	bufpredirty(bp);
 
 //	offset = blksrch(tabinfo, bp);
 
@@ -511,8 +507,6 @@ finish:
 	bufdirty(bp);
 		
 	tabinfo->t_sinfo->sistate &= ~SI_DEL_DATA;
-
-	change_status(bp, KEPT, NONKEPT);
 
 	return TRUE;
 }

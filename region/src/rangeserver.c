@@ -59,6 +59,9 @@ extern KERNEL	*Kernel;
 typedef struct rg_info
 {
 	char	conf_path[RANGE_CONF_PATH_MAX_LEN];
+	char	rg_meta_ip[RANGE_ADDR_MAX_LEN];
+	int     rg_meta_port;
+	char	rg_ip[RANGE_ADDR_MAX_LEN];
 	int	port;
 	int	flush_check_interval;
 }RANGEINFO;
@@ -68,6 +71,10 @@ RANGEINFO *Range_infor = NULL;
 
 static int
 rg_fill_resd(TREE *command, COLINFO *colinfor, int totcol);
+
+static void
+rg_regist();
+
 
 char *
 rg_droptab(TREE *command)
@@ -522,7 +529,7 @@ rg_handler(char *req_buf)
 	BLK_ROWINFO	blk_rowinfo;
 	
 
-	if ((req_op = rg_get_meta(req_buf, &ins_meta, &tab_hdr, &col_info)) == NULL)
+	if ((req_op = rg_get_meta(req_buf, &ins_meta, &tab_hdr, &col_info)) == 0)
 	{
 		return NULL;
 	}
@@ -670,16 +677,26 @@ void
 rg_setup(char *conf_path)
 {
 	int	status;
-	int	port;
+	char	port[32];
+	char	metaport[32];
 
 	Range_infor = MEMALLOCHEAP(sizeof(RANGEINFO));
-	MEMCPY(Range_infor->conf_path, conf_path, sizeof(conf_path));
+	MEMCPY(Range_infor->conf_path, conf_path, STRLEN(conf_path));
 
-	conf_get_value_by_key((char *)&port, conf_path, CONF_PORT_KEY);
+	MEMSET(port, 32);
+	MEMSET(metaport, 32);
+
+	conf_get_value_by_key(port, conf_path, CONF_RG_PORT);
+	conf_get_value_by_key(Range_infor->rg_ip, conf_path, CONF_RG_IP);
+
+	
+	conf_get_value_by_key(Range_infor->rg_meta_ip, conf_path, CONF_META_IP);
+	conf_get_value_by_key(metaport, conf_path, CONF_META_PORT);
+	Range_infor->rg_meta_port = m_atoi(metaport, STRLEN(metaport));
 
 	if(port != INDEFINITE)
 	{
-		Range_infor->port = atoi((char *)&port);
+		Range_infor->port = atoi(port);
 	}
 	else
 	{
@@ -691,6 +708,8 @@ rg_setup(char *conf_path)
 		MKDIR(status, MT_RANGE_TABLE, 0755);
 	}	
 
+	rg_regist();
+	
 	ca_setup_pool();
 }
 
@@ -701,6 +720,39 @@ rg_boot()
 	startup(Range_infor->port, TSS_OP_RANGESERVER, rg_handler);
 }
 
+
+static void
+rg_regist()
+{
+	int	sockfd;
+	RPCRESP	*resp;
+	char	send_buf[2 * RPC_MAGIC_MAX_LEN + RANGE_ADDR_MAX_LEN + RANGE_PORT_MAX_LEN];
+	
+	
+	sockfd = conn_open(Range_infor->rg_meta_ip, Range_infor->rg_meta_port);
+
+	
+	MEMSET(send_buf, 2 * RPC_MAGIC_MAX_LEN + RANGE_ADDR_MAX_LEN + RANGE_PORT_MAX_LEN);
+
+	int idx = 0;
+	PUT_TO_BUFFER(send_buf, idx, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
+	PUT_TO_BUFFER(send_buf, idx, RPC_RG2MASTER_REPORT, RPC_MAGIC_MAX_LEN);
+	PUT_TO_BUFFER(send_buf, idx, Range_infor->rg_ip, RANGE_ADDR_MAX_LEN);
+	PUT_TO_BUFFER(send_buf, idx, &(Range_infor->port), RANGE_PORT_MAX_LEN);
+
+	assert(idx == (2 * RPC_MAGIC_MAX_LEN + RANGE_ADDR_MAX_LEN + RANGE_PORT_MAX_LEN));
+	
+	write(sockfd, send_buf, idx);
+
+	resp = conn_recv_resp(sockfd);
+
+	if (resp->status_code != RPC_SUCCESS)
+	{
+		printf("\n ERROR \n");
+	}
+	
+	conn_close(sockfd, NULL, resp);
+}
 
 int 
 main(int argc, char *argv[])

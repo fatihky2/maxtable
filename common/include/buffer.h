@@ -36,8 +36,7 @@ typedef struct buf
 	struct buf	*bsstabnew;		
 	struct buf	*bsstabold;		
 	struct buf	*bsstab;	
-	int		bsstab_size;
-	int		atomic_stat;
+	int		bsstab_size;		
 } BUF;
 
 

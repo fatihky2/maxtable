@@ -34,6 +34,15 @@
 
 /* Following is the special magic number. */
 #define	RPC_DROP_TABLE_MAGIC	"drop"
+#define RPC_RG2MASTER_REPORT	"rg_rpt"
+
+
+
+#define CONF_META_IP    "metaserver"
+#define CONF_META_PORT  "metaport"
+#define	CONF_RG_IP	"rangerserver"
+#define CONF_RG_PORT	"rangerport"
+
 
 /** The Buffer Pool for holding RPCRESP Data  **/
 #define CONN_BUF_SIZE (1024 * 1024)

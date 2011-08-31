@@ -26,7 +26,7 @@
 
 #define CONF_PORT_KEY "port"
 
-#define CONF_REGION_LIST_KEY "regionList"
+#define CONF_REGION_LIST_KEY "rangers"
 
 typedef struct reginfor
 {
