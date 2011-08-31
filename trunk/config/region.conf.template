@@ -1,2 +1,4 @@
-port=1949
-#below are used for flushing purpose,please don't change it
+metaserver=192.168.171.152
+metaport=1959
+rangerserver=192.168.171.153
+rangerport=1949
