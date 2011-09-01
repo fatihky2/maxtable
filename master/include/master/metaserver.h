@@ -105,11 +105,11 @@ typedef struct rg_prof
 	char	rg_addr[RANGE_ADDR_MAX_LEN];
 	int	rg_port;
 	int	rg_stat;
+	int	rg_tablet_num;	
 } RANGE_PROF;
 
 
 #define RANGER_IS_ONLINE	0x0001
-
 
 typedef union infor_hdr
 {
@@ -217,6 +217,18 @@ typedef	struct svr_idx_file
 	char		data[SVR_IDX_FILE_BLK]; 
 }SVR_IDX_FILE;
 
+#define META_CONF_PATH_MAX_LEN   64
+#define DEFAULT_DUPLICATE_NUM 1
+#define MIN_REGION_AVAILABLE_SIZE 100 //Unit is MB
+#define DEFAULT_MASTER_FLUSH_CHECK_INTERVAL 600 //10Min
+
+
+typedef struct master_infor
+{
+	char		conf_path[META_CONF_PATH_MAX_LEN];
+	int		port;
+	SVR_IDX_FILE	rg_list;
+}MASTER_INFOR;
 
 
 #define TABINFO_INIT(tabinfo, sstab_name, srch_info, minlen, status, tabid, sstabid)	\

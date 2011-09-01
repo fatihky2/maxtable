@@ -33,6 +33,8 @@ extern "C" {
 struct col_info;
 struct tab_info;
 struct insert_meta;
+struct rg_prof;
+
 
 
 typedef struct tss
@@ -63,6 +65,7 @@ typedef struct tss
 
 	struct tab_info	*ttabinfo;
 	struct tab_info *toldtabinfo;
+	struct rg_prof	*tcur_rgprof;
 
 } TSS;
 

@@ -678,6 +678,7 @@ rg_setup(char *conf_path)
 {
 	int	status;
 	char	port[32];
+	int	rg_port;
 	char	metaport[32];
 
 	Range_infor = MEMALLOCHEAP(sizeof(RANGEINFO));
@@ -694,9 +695,10 @@ rg_setup(char *conf_path)
 	conf_get_value_by_key(metaport, conf_path, CONF_META_PORT);
 	Range_infor->rg_meta_port = m_atoi(metaport, STRLEN(metaport));
 
-	if(port != INDEFINITE)
+	rg_port = m_atoi(port, STRLEN(port));
+	if(rg_port != INDEFINITE)
 	{
-		Range_infor->port = atoi(port);
+		Range_infor->port = rg_port;
 	}
 	else
 	{
