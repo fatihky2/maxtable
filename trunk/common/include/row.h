@@ -116,14 +116,6 @@ do									\
 #define MT_COMPARE(val1, val2) ((val1) > (val2)) ? GR : (((val1) < (val2)) ? LE : EQ)
 
 
-#define ROW_MINLEN_IN_TABLET		(sizeof(ROWFMT) + sizeof(int) + SSTABLE_NAME_MAX_LEN + RANGE_ADDR_MAX_LEN + sizeof(int) )
-#define ROW_MINLEN_IN_TABLETSCHM	(sizeof(ROWFMT) + sizeof(int) + TABLET_NAME_MAX_LEN)
-#define TABLET_SCHM_KEYCOLID		3
-#define TABLET_KEYCOLID			5
-
-
-
-
 char *
 row_locate_col(char * rowptr, int coloffset, int minrowlen, int * length);
 

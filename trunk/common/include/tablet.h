@@ -23,13 +23,49 @@
 
 struct table_hdr;
 
+#define	INVALID_TABLETID	1
+#define TABLETSCHM_ID		0
+
+
+
+
+#define ROW_MINLEN_IN_TABLET		(sizeof(ROWFMT) + sizeof(int) + SSTABLE_NAME_MAX_LEN + sizeof(int) )
+
+#define TABLET_SSTABID_COLID_INROW	1
+#define TABLET_SSTABNAME_COLID_INROW	2
+#define TABLET_RESSSTABID_COLID_INROW	3
+#define TABLET_KEY_COLID_INROW		4
+
+#define TABLET_SSTABID_COLOFF_INROW	(sizeof(ROWFMT))
+#define TABLET_SSTABNAME_COLOFF_INROW	(sizeof(ROWFMT) + sizeof(int))
+#define	TABLET_RESSSTABID_COLOFF_INROW	(sizeof(ROWFMT) + sizeof(int) + SSTABLE_NAME_MAX_LEN)
+#define TABLET_KEY_COLOFF_INROW		(ROW_MINLEN_IN_TABLET + sizeof(int))
+
+
+
+
+
+
+#define ROW_MINLEN_IN_TABLETSCHM	(sizeof(ROWFMT) + sizeof(int) + TABLET_NAME_MAX_LEN + RANGE_ADDR_MAX_LEN)
+
+#define TABLETSCHM_TABLETID_COLID_INROW		1
+#define TABLETSCHM_TABLETNAME_COLID_INROW	2
+#define TABLETSCHM_RGADDR_COLID_INROW		3
+#define TABLETSCHM_KEY_COLID_INROW		4
+
+#define TABLETSCHM_TABLETID_COLOFF_INROW	(sizeof(ROWFMT))
+#define TABLETSCHM_TABLETNAME_COLOFF_INROW	(sizeof(ROWFMT) + sizeof(int))
+#define TABLETSCHM_RGADDR_COLOFF_INROW		(sizeof(ROWFMT) + sizeof(int) + TABLET_NAME_MAX_LEN)
+#define TABLETSCHM_KEY_COLOFF_INROW		(ROW_MINLEN_IN_TABLETSCHM + sizeof(int))
+
+
 void
-tablet_crt(TABLEHDR *tablehdr, char *tabledir, char *rp, int minlen);
+tablet_crt(TABLEHDR *tablehdr, char *tabledir, char *rg_addr, char *rp, int minlen);
 
 int
 tablet_bld_row(char *sstab_rp, int sstab_rlen, char *tab_name, int tab_name_len,
 			int sstab_id, int res_sstab_id, char *sstab_name, int sstab_name_len, 
-			char *rang_addr, char *keycol, int keycolen, int keycol_type);
+			char *keycol, int keycolen, int keycol_type);
 
 char *
 tablet_srch_row(TABINFO *usertabinfo, TABLEHDR *tablehdr, int tabid, int sstabid, char *systab, char *key, int keylen);
@@ -41,7 +77,8 @@ void
 tablet_del_row(TABLEHDR *tablehdr, int tabid, int sstabid, char *tablet_name, char *rp, int minlen);
 
 void 
-tablet_schm_bld_row(char *rp, int rlen, int tabletid, char *tabletname, char *keycol, int keycolen);
+tablet_schm_bld_row(char *rp, int rlen, int tabletid, char *tabletname, char *rang_addr, 
+			char *keycol, int keycolen);
 
 void
 tablet_schm_ins_row(int tabid, int sstabid, char *systab, char *row, int tabletnum);
