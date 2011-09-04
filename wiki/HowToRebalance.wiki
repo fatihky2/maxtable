@@ -1,13 +1,10 @@
 #summary Rebalance the workload for the ranger servers
 
-= Introduction =
-
-Add your content here.
-
-
-= Details =
-
-Add your content here.  Format your content with:
-  * Text in *bold* or _italic_
-  * Headings, paragraphs, and lists
-  * Automatic links to other wiki pages
+  * Connect to the server using IMQL
+{{{
+./imql 
+}}}
+  * Run the rebalancer on the target table
+{{{
+rebalance table_name
+}}}
