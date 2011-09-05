@@ -131,6 +131,8 @@ typedef struct tab_sstab_map
 }TAB_SSTAB_MAP;
 
 
+#define SSTABMAP_CHG	0x0001
+
 
 typedef struct insert_meta
 {

@@ -798,6 +798,7 @@ rg_rebalan_process_sender(REBALANCE_DATA * rbd, char *rg_addr, int port)
 	
 	sockfd = conn_open(rg_addr, port);
 
+	
 	status = WRITE(sockfd, rbd, sizeof(REBALANCE_DATA));
 
 	assert (status == sizeof(REBALANCE_DATA));
@@ -892,7 +893,8 @@ rg_rebalancer(REBALANCE_DATA * rbd)
 					printf("Table is not exist! \n");
 					goto exit;
 				}
-		
+
+				
 				READ(fd1, rbd_sstab->rbd_data, SSTABLE_SIZE); 
 		
 				MEMCPY(rbd_sstab->rbd_magic, RPC_RBD_MAGIC, RPC_MAGIC_MAX_LEN);
