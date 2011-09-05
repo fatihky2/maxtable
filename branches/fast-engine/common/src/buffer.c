@@ -27,6 +27,8 @@
 #include "spinlock.h"
 #include "tss.h"
 #include "hkgc.h"
+#include "atomic_status.h"
+
 
 
 extern KERNEL	*Kernel;
@@ -42,7 +44,7 @@ bufread(BUF *bp)
 
 
 	
-	bufwait(bp);
+	//bufwait(bp);
 
 	
 	blkioptr = MEMALLOCHEAP(sizeof(BLKIO));
@@ -75,11 +77,14 @@ bufread(BUF *bp)
 void
 bufwait(BUF *bp)
 {
-	while (SSTABLE_STATE(bp) & BUF_WRITING)
+	/*while (SSTABLE_STATE(bp) & BUF_WRITING)
 	{
 		sleep(5);
-	}
+	}*/
 
+	//when grab one buf for sstab, when find this buf is still dirty, this buf has to be written to disk directly
+	//as this buf stands for one new sstab in the cache.
+	//after written, the buf is not dirty, so hk don't need to rewrite this buf to disk.
 	if (SSTABLE_STATE(bp) & BUF_DIRTY)
 	{
 		bufawrite(bp);
@@ -99,6 +104,8 @@ bufgrab(TABINFO *tabinfo)
 	
 
 	bp = Kernel->ke_buflru->bsstabold;
+
+	change_status(bp, NONKEPT, KEPT);
 
 	bufwait(bp);
 
@@ -120,6 +127,8 @@ bufgrab(TABINFO *tabinfo)
 	{
 		bp->bsstabid = tabinfo->t_sstab_id;
 	}
+
+	change_status(bp, KEPT, NONKEPT);
 
 	return (bp);
 }
@@ -149,7 +158,10 @@ bufawrite(BUF *bp)
 	if (!(SSTABLE_STATE(bp) & BUF_DIRTY))
 	{
 		//V_SPINLOCK(BUF_SPIN);
-		printf("error!!!!\n");
+		//when grab one buf for sstab, when find this buf is still dirty, this buf has to be written to disk directly
+		//as this buf stands for one new sstab in the cache.
+		//after written, the buf is not dirty, so hk don't need to rewrite this buf to disk.
+		printf("written already, just return.\n");
 		return;
 	}
 	

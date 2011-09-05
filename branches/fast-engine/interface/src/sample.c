@@ -23,7 +23,9 @@ int main()
         cli_commit(connection, cmd, resp, &len);
         printf("ret: %s\n", resp);
 
-        for(i = 0; i < 30000; i ++)
+        FILE * fp = fopen("timecost.txt", "wb");
+
+        for(i = 0; i < 50000; i ++)
         {
             memset(resp, 0, 256);
             memset(cmd, 0, 256);
@@ -35,10 +37,18 @@ int main()
             timecost = tpEnd.tv_sec - tpStart.tv_sec + (float)(tpEnd.tv_usec-tpStart.tv_usec)/1000000;
             printf("time cost: %f\n", timecost);
             printf("cmd: %s, ret(%d): %s\n", cmd, len, resp);
+
+            if(timecost>(float)0.1)
+            {
+                fprintf(fp, "time cost: %f\n", timecost);
+                fprintf(fp, "cmd: %s, ret(%d): %s\n", cmd, len, resp);
+            }
         }
 
+        fclose(fp);
+
 	exit(1);*/
-        for(i = 20000; i < 30000; i ++)
+        for(i = 30000; i < 50000; i ++)
         {
             memset(resp, 0, 256);
             memset(cmd, 0, 256);
