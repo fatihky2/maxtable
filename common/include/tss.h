@@ -34,6 +34,7 @@ struct col_info;
 struct tab_info;
 struct insert_meta;
 struct rg_prof;
+struct master_infor;
 
 
 
@@ -66,6 +67,8 @@ typedef struct tss
 	struct tab_info	*ttabinfo;
 	struct tab_info *toldtabinfo;
 	struct rg_prof	*tcur_rgprof;
+	struct master_infor
+			*tmaster_infor;
 
 } TSS;
 

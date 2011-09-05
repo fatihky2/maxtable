@@ -217,6 +217,10 @@ typedef	struct svr_idx_file
 	char		data[SVR_IDX_FILE_BLK]; 
 }SVR_IDX_FILE;
 
+
+#define	SVR_IS_BAD	0x0001
+
+
 #define META_CONF_PATH_MAX_LEN   64
 #define DEFAULT_DUPLICATE_NUM 1
 #define MIN_REGION_AVAILABLE_SIZE 100 //Unit is MB
@@ -241,5 +245,6 @@ do {											\
 		(tabinfo)->t_tabid = tabid;						\
 		(tabinfo)->t_sstab_id = sstabid;					\
 }while (0)
+
 
 #endif 

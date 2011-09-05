@@ -9,6 +9,7 @@
 
 #define MAX_MSG_LIST 4096
 
+#define MSG_MAX_SIZE	(2 * SSTABLE_SIZE)
 
 typedef struct _msg_recv_args
 {
@@ -21,6 +22,7 @@ typedef struct _msg_data
 	char data[MAXLINE];
 	int n_size;
 	struct _msg_data * next;
+	char * block_buffer;
 }msg_data;
 
 

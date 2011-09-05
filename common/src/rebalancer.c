@@ -1,7 +1,7 @@
 /*
-** token.c 2010-12-17 xueyingfei
+** rebalancer.c 2011-09-01 xueyingfei
 **
-** Copyright flying/xueyingfei.
+** Copyright Transoft Corp.
 **
 ** This file is part of MaxTable.
 **
@@ -17,44 +17,37 @@
 ** implied. See the License for the specific language governing
 ** permissions and limitations under the License.
 */
+#include "master/metaserver.h"
+#include "memcom.h"
+#include "buffer.h"
+#include "block.h"
+#include "cache.h"
+#include "tss.h"
 
+extern TSS		*Tss;
 
-#include "global.h"
-#include "utils.h"
-#include "token.h"
-
-TOKENS  MT_Tokens[] =
+RANGE_PROF *
+rebalan_get_rg_prof_by_addr(char *rg_addr)
 {
-	{TABCREAT,	"create table"},
-	{INSERT,	"insert into"},
-	{CRTINDEX,	"create index"},
-	{SELECT,	"select"},
-	{DELETE,	"delete"},
-	{ADDSERVER,	"add server"},
-	{ADDSSTAB,	"addsstab into"},
-	{DROP,		"drop"},
-	{REMOVE,	"remove"},
-	{REBALANCE,	"rebalance"},
-};
+	LOCALTSS(tss);
+	RANGE_PROF	*rg_prof;
+	SVR_IDX_FILE	*rglist;
+	int		found;
+	int		i;
 
-int
-token_validate(char *token)
-{
-	int i;
-	int tok_num;
+	rglist = &(tss->tmaster_infor->rg_list);
+	found = FALSE;
+	rg_prof = (RANGE_PROF *)(rglist->data);
 
-	tok_num = 0;
-
-	for (i = 0;  i < MAXSI_FIXED_TOKENS; i++)
+	for(i = 0; i < rglist->nextrno; i++)
 	{
-		if (!strcmp(token, MT_Tokens[i].tokstring))
+		if (!strncasecmp(rg_addr, rg_prof[i].rg_addr, RANGE_ADDR_MAX_LEN))
 		{
-			tok_num = MT_Tokens[i].toknum;
+			found = TRUE;
 			break;
 		}
 	}
 
-	return tok_num;
+	return (found ? &(rg_prof[i]) : NULL);
 }
-
 

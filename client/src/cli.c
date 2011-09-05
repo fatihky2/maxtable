@@ -40,7 +40,7 @@ extern	TSS	*Tss;
 #define CLI_CMD_QUIT "quit"
 
 /* MaxTable */
-#define CLI_DEFAULT_PREFIX "MTCli:"
+#define CLI_DEFAULT_PREFIX "IMQL:"
 
 
 typedef struct cli_infor
@@ -398,6 +398,9 @@ conn_again:
 			}
 
 		    	break;
+
+		    case REBALANCE:
+		    	break;
 		
 		    default:
 			break;
@@ -717,6 +720,10 @@ conn_again:
 		
 		}
 	    	break;
+
+	    case REBALANCE:
+	    	meta_only = TRUE;
+	    	break;
 		
 	    default:
 		break;
@@ -787,6 +794,7 @@ int main(int argc, char **argv)
 	seltab = (char *)MEMALLOCHEAP(128);	
 	
 	/* 1st step: create table. */
+	
 	crtab = "create table yxue (filename varchar, servername varchar)";
 
 	printf("CRATING TABLE yxue\n");
