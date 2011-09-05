@@ -222,10 +222,13 @@ parser_open(char *s_str)
 	    	rtn_stat = par_addsstab(s_str + s_idx, ADDSSTAB);
 	    	break;
 	    case DROP:
-	    	rtn_stat = par_dropremov_tab(s_str + s_idx, DROP);
+	    	rtn_stat = par_dropremovrebalan_tab(s_str + s_idx, DROP);
 	    	break;
 	    case REMOVE:
-	    	rtn_stat = par_dropremov_tab(s_str + s_idx, REMOVE);
+	    	rtn_stat = par_dropremovrebalan_tab(s_str + s_idx, REMOVE);
+	    	break;
+	    case REBALANCE:
+	    	rtn_stat = par_dropremovrebalan_tab(s_str + s_idx, REBALANCE);
 	    	break;
 
 	    default:
@@ -624,7 +627,7 @@ par_seldel_tab(char *s_str, int querytype)
 
 
 int 
-par_dropremov_tab(char *s_str, int querytype)
+par_dropremovrebalan_tab(char *s_str, int querytype)
 {
 	LOCALTSS(tss);
 	char		tab_name[64];

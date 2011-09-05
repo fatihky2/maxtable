@@ -17,6 +17,7 @@
 ** implied. See the License for the specific language governing
 ** permissions and limitations under the License.
 */
+#include "master/metaserver.h"
 #include "utils.h"
 #include "netconn.h"
 #include "tss.h"
@@ -24,6 +25,8 @@
 #include "memcom.h"
 #include "strings.h"
 #include <pthread.h>
+#include "buffer.h"
+#include "block.h"
 #include "thread.h"
 
 extern	TSS	*Tss;
@@ -375,6 +378,10 @@ conn_chk_reqmagic(char *str)
 	else if (!strncasecmp(RPC_DROP_TABLE_MAGIC, str, STRLEN(RPC_DROP_TABLE_MAGIC)))
 	{
 		return RPC_REQ_DROP_OP;
+	}
+	else if (!strncasecmp(RPC_RBD_MAGIC, str, STRLEN(RPC_RBD_MAGIC)))
+	{
+		return RPC_REQ_REBALANCE_OP;
 	}
 		
 

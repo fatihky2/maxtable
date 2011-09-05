@@ -35,6 +35,7 @@
 /* Following is the special magic number. */
 #define	RPC_DROP_TABLE_MAGIC	"drop"
 #define RPC_RG2MASTER_REPORT	"rg_rpt"
+#define RPC_RBD_MAGIC		"rebalan"
 
 
 
@@ -82,6 +83,7 @@ typedef struct rpcresp
 
 #define	RPC_REQ_NORMAL_OP	0x0001
 #define RPC_REQ_DROP_OP		0x0002
+#define RPC_REQ_REBALANCE_OP	0x0004
 
 
 char *

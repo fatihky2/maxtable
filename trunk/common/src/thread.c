@@ -22,9 +22,11 @@
 #include "memcom.h"
 #include "strings.h"
 #include "trace.h"
-
-
+#include "buffer.h"
+#include "block.h"
+#include "rebalancer.h"
 #include "thread.h"
+#include "m_socket.h"
 
 extern	TSS	*Tss;
 
@@ -41,6 +43,8 @@ pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
 int msg_list_len = 0;
 
 int epfd;
+
+#define BLOCK_MOVE_ID "rebalan"
 
 int set_nonblock(int fd)
 {
@@ -137,8 +141,8 @@ void * msg_recv(void *args)
 			{
 				if((sockfd = events[i].data.fd)<0)	
 				  continue;
-				MEMSET(buf, sizeof(buf));
-				if((n = read(sockfd, buf, sizeof(buf)))==-1)
+				MEMSET(buf, MAXLINE);
+				if((n = read(sockfd, buf, MAXLINE))==-1)
 				{
 					if(errno==ECONNRESET)
 					  close(sockfd);
@@ -154,13 +158,49 @@ void * msg_recv(void *args)
 				{
 					printf("read %d->[%s]\n", n, buf);
 
-					
-					new_msg = MEMALLOCHEAP(sizeof(msg_data));
-					MEMSET(new_msg->data, MAXLINE);
-					MEMCPY(new_msg->data, buf, n);
-					new_msg->fd = sockfd;
-					new_msg->n_size = n;
-					new_msg->next = NULL;
+					if (!strncasecmp(RPC_RBD_MAGIC, buf, STRLEN(RPC_RBD_MAGIC)))//case for block move
+					{
+						int	block_left = sizeof(REBALANCE_DATA);
+						char * buffer = malloc(block_left);
+						MEMCPY(buffer, buf, n);
+						char * block_buffer = buffer + n;
+						block_left -= n;
+						int read_cnt = 0;
+						while(block_left)
+						{
+							n = m_recvdata(sockfd, block_buffer, MAXLINE);
+
+							if (   (n == MT_READERROR) || (n == MT_READDISCONNECT)
+							    || (n == MT_READQUIT))
+							{
+								printf("errno = %d\n", errno);
+								break;
+								
+							}
+															
+							block_buffer += n;
+							block_left -= n;
+							read_cnt++;
+						}
+
+						new_msg = malloc(sizeof(msg_data));
+						MEMSET(new_msg, sizeof(msg_data));
+						MEMCPY(new_msg->data, buf, STRLEN(RPC_RBD_MAGIC));
+						new_msg->fd = sockfd;
+						new_msg->n_size = sizeof(REBALANCE_DATA);
+						new_msg->block_buffer = buffer;
+						new_msg->next = NULL;
+					}
+
+					else
+					{
+						new_msg = malloc(sizeof(msg_data));
+						MEMSET(new_msg, sizeof(msg_data));
+						MEMCPY(new_msg->data, buf, n);
+						new_msg->fd = sockfd;
+						new_msg->n_size = n;
+						new_msg->next = NULL;
+					}
 			
 					pthread_mutex_lock(&mutex);
 					if (msg_list_head == NULL)
@@ -173,7 +213,7 @@ void * msg_recv(void *args)
 						msg_list_tail->next = new_msg;
 						msg_list_tail = new_msg;
 					}
-					msg_list_len ++;
+					msg_list_len++;
 			
 					pthread_cond_signal(&cond);
 					pthread_mutex_unlock(&mutex);
@@ -196,7 +236,12 @@ void * msg_recv(void *args)
 				ev.events = EPOLLIN;
 				epoll_ctl(epfd, EPOLL_CTL_MOD, sockfd, &ev);
 
-				MEMFREEHEAP(resp_msg);
+				if(resp_msg->block_buffer)
+				{
+					free(resp_msg->block_buffer);
+				}
+				
+				free(resp_msg);
 			}
 		}
 	}
@@ -226,10 +271,18 @@ void msg_process(char * (*handler_request)(char *req_buf))
 	
 		req_msg = msg_list_head;
 		msg_list_head = msg_list_head->next;
-		msg_list_len --;
+		msg_list_len--;
 		pthread_mutex_unlock(&mutex);
 
-		req = conn_build_req(req_msg->data, req_msg->n_size);
+		if(!strncasecmp(RPC_RBD_MAGIC, req_msg->data, STRLEN(RPC_RBD_MAGIC)))
+		{
+			req = conn_build_req(req_msg->block_buffer, req_msg->n_size);
+		}
+		else
+		{
+			req = conn_build_req(req_msg->data, req_msg->n_size);
+		}
+		
 		fd = req_msg->fd;
 		  
 		if(req_msg->n_size)
@@ -254,9 +307,9 @@ void msg_process(char * (*handler_request)(char *req_buf))
 
 		resp_size = conn_get_resp_size((RPCRESP *)resp);
 
-		resp_msg = MEMALLOCHEAP(sizeof(msg_data));
+		resp_msg = malloc(sizeof(msg_data));
+		MEMSET(resp_msg, sizeof(msg_data));
 		resp_msg->n_size = resp_size;
-		MEMSET(resp_msg->data, MAXLINE);
 		MEMCPY(resp_msg->data, resp, resp_size);
 		resp_msg->fd = fd;
 
@@ -269,8 +322,13 @@ void msg_process(char * (*handler_request)(char *req_buf))
   
 		conn_destroy_req(req);
 		conn_destroy_resp_byte(resp);
+
+		if (req_msg->block_buffer != NULL)
+		{
+			free(req_msg->block_buffer);
+		}
 		
-		MEMFREEHEAP(req_msg);
+		free(req_msg);
 		
 		tss_init(tss);
 	}

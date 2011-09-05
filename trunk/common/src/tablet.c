@@ -31,6 +31,7 @@
 #include "type.h"
 #include "session.h"
 #include "tabinfo.h"
+#include "rebalancer.h"
 
 
 extern	TSS	*Tss;
@@ -108,6 +109,7 @@ tablet_crt(TABLEHDR *tablehdr, char *tabledir, char *rg_addr, char *rp, int minl
 void
 tablet_ins_row(TABLEHDR *tablehdr, int tabid, int sstabid, char *tablet_name, char *rp, int minlen)
 {
+	LOCALTSS(tss);
 	int		keycolen;
 	char		*keycol;
 	TABINFO 	tabinfo;
@@ -140,6 +142,10 @@ tablet_ins_row(TABLEHDR *tablehdr, int tabid, int sstabid, char *tablet_name, ch
 
 	if (tabinfo.t_stat & TAB_TABLET_CRT_NEW)
 	{
+		RANGE_PROF *rg_prof;
+		rg_prof = rebalan_get_rg_prof_by_addr(tss->tcur_rgprof->rg_addr);
+		(rg_prof->rg_tablet_num)++;
+		
 		(tablehdr->tab_tablet)++;
 	}
 

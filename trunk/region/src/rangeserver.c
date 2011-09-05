@@ -43,6 +43,8 @@
 #include "trace.h"
 #include "session.h"
 #include "tabinfo.h"
+#include "tablet.h"
+#include "rebalancer.h"
 
 
 
@@ -72,8 +74,11 @@ RANGEINFO *Range_infor = NULL;
 static int
 rg_fill_resd(TREE *command, COLINFO *colinfor, int totcol);
 
-static void
-rg_regist();
+static void rg_regist();
+
+static char *
+rg_rebalancer(REBALANCE_DATA * rbd);
+
 
 
 char *
@@ -318,6 +323,11 @@ exit:
 		resp = conn_build_resp_byte(RPC_FAIL, 0, NULL);
 	}
 
+	if (resp_buf)
+	{
+		MEMFREEHEAP(resp_buf);
+	}
+	
 	return resp;
 
 }
@@ -551,6 +561,13 @@ rg_handler(char *req_buf)
 
 		return rg_droptab(command);
 	}
+
+	
+	if (req_op & RPC_REQ_REBALANCE_OP)
+	{
+		return rg_rebalancer((REBALANCE_DATA *)(req_buf - RPC_MAGIC_MAX_LEN));
+	}
+
 	
 	volatile struct
 	{
@@ -640,6 +657,8 @@ rg_handler(char *req_buf)
 	    case DROP:
 	    	assert(0);
 	    	break;
+	    case REBALANCE:
+	    	break;
 
 	    default:
 	    	break;
@@ -659,6 +678,16 @@ close:
 		if (tabinfo->t_insrg)
 		{
 			assert(tabinfo->t_stat & TAB_SSTAB_SPLIT);
+
+			if (tabinfo->t_insrg->new_sstab_key)
+			{
+				MEMFREEHEAP(tabinfo->t_insrg->new_sstab_key);
+			}
+
+			if (tabinfo->t_insrg->old_sstab_key)
+			{
+				MEMFREEHEAP(tabinfo->t_insrg->old_sstab_key);
+			}
 
 			MEMFREEHEAP(tabinfo->t_insrg);
 		}
@@ -756,6 +785,203 @@ rg_regist()
 	conn_close(sockfd, NULL, resp);
 }
 
+int
+rg_rebalan_process_sender(REBALANCE_DATA * rbd, char *rg_addr, int port)
+{
+	int		sockfd;
+	RPCRESP		*resp;
+	int		rtn_stat;
+	int		status;
+
+
+	rtn_stat = TRUE;
+	
+	sockfd = conn_open(rg_addr, port);
+
+	status = WRITE(sockfd, rbd, sizeof(REBALANCE_DATA));
+
+	assert (status == sizeof(REBALANCE_DATA));
+
+	resp = conn_recv_resp(sockfd);
+
+	if (resp->status_code != RPC_SUCCESS)
+	{
+		rtn_stat = FALSE;
+		printf("\n ERROR \n");
+	}
+	
+	conn_close(sockfd, NULL, resp);
+
+	return rtn_stat;
+
+}
+
+
+static char *
+rg_rebalancer(REBALANCE_DATA * rbd)
+{
+	int		rtn_stat;
+	char		*resp;	
+	char		tab_dir[TABLE_NAME_MAX_LEN];
+	int		status;
+	int		namelen;
+	char		tab_sstab_dir[TABLE_NAME_MAX_LEN];
+	int		fd1;
+	
+
+	rtn_stat = FALSE;
+	
+	MEMSET(tab_dir, TABLE_NAME_MAX_LEN);
+	MEMCPY(tab_dir, MT_RANGE_TABLE, STRLEN(MT_RANGE_TABLE));
+
+	
+	str1_to_str2(tab_dir, '/', rbd->rbd_tabname);
+
+	if (STAT(tab_dir, &st) != 0)
+	{
+		MKDIR(status, tab_dir, 0755);
+
+		if (status < 0)
+		{
+			goto exit;
+		}
+	}
+	
+
+	if (rbd->rbd_opid == RBD_FILE_SENDER)
+	{
+		REBALANCE_DATA	*rbd_sstab;
+		
+		rbd_sstab = (REBALANCE_DATA *)MEMALLOCHEAP(sizeof(REBALANCE_DATA));
+		MEMSET(rbd_sstab, sizeof(REBALANCE_DATA));
+
+		MEMCPY(rbd_sstab->rbd_tabname, rbd->rbd_tabname, STRLEN(rbd->rbd_tabname));
+		
+		BLOCK *blk;
+
+		int i = 0, rowno;
+		int	*offset;
+		char 	*rp;
+		char	*sstabname;
+		char	cmd_str[TABLE_NAME_MAX_LEN];
+		
+		while (TRUE)
+		{
+			blk = (BLOCK *)(rbd->rbd_data + i * BLOCKSIZE);
+
+			
+			for(rowno = 0, offset = ROW_OFFSET_PTR(blk); 
+					rowno < blk->bnextrno; rowno++, offset--)
+			{
+				rp = (char *)blk + *offset;
+			
+				assert(*offset < blk->bfreeoff);
+			
+				sstabname = row_locate_col(rp, TABLET_SSTABNAME_COLOFF_INROW, 
+							ROW_MINLEN_IN_TABLET, &namelen);
+
+				
+				MEMSET(tab_sstab_dir, TABLE_NAME_MAX_LEN);
+				MEMCPY(tab_sstab_dir, tab_dir, STRLEN(tab_dir));
+				str1_to_str2(tab_sstab_dir, '/', sstabname);	
+		
+				OPEN(fd1, tab_sstab_dir, (O_RDONLY));
+		
+				if (fd1 < 0)
+				{
+					printf("Table is not exist! \n");
+					goto exit;
+				}
+		
+				READ(fd1, rbd_sstab->rbd_data, SSTABLE_SIZE); 
+		
+				MEMCPY(rbd_sstab->rbd_magic, RPC_RBD_MAGIC, RPC_MAGIC_MAX_LEN);
+				MEMCPY(rbd_sstab->rbd_magic_back, RPC_RBD_MAGIC, RPC_MAGIC_MAX_LEN);
+				
+				rbd_sstab->rbd_opid = RBD_FILE_RECVER;
+
+				MEMSET(rbd_sstab->rbd_sstabname,TABLE_NAME_MAX_LEN);
+				MEMCPY(rbd_sstab->rbd_sstabname, sstabname, STRLEN(sstabname));
+		
+				rtn_stat = rg_rebalan_process_sender(rbd_sstab, rbd->rbd_min_tablet_rg,
+								rbd->rbd_min_tablet_rgport);
+				assert(rtn_stat == TRUE);
+
+
+				if (rtn_stat == TRUE)
+				{
+					MEMSET(cmd_str, TABLE_NAME_MAX_LEN);
+	
+					sprintf(cmd_str, "rm -rf %s", tab_sstab_dir);
+	
+					if (system(cmd_str))
+					{
+						rtn_stat = TRUE;
+					}
+				}
+				
+				CLOSE(fd1);
+					
+				
+			}
+
+			i++;
+
+			if (i > (BLK_CNT_IN_SSTABLE - 1))
+			{
+				break;
+			}
+			
+		
+		}
+
+		MEMFREEHEAP(rbd_sstab);
+
+		rtn_stat = TRUE;
+
+	}
+	else if (rbd->rbd_opid == RBD_FILE_RECVER)
+	{
+		MEMSET(tab_sstab_dir, TABLE_NAME_MAX_LEN);
+		MEMCPY(tab_sstab_dir, tab_dir, STRLEN(tab_dir));
+		str1_to_str2(tab_sstab_dir, '/', rbd->rbd_sstabname);	
+
+		assert(STAT(tab_sstab_dir, &st) != 0);
+		
+		OPEN(fd1, tab_sstab_dir, (O_CREAT|O_WRONLY|O_TRUNC));
+		
+		if (fd1 < 0)
+		{
+			printf("Table is not exist! \n");
+			goto exit;
+		}
+
+		WRITE(fd1, rbd->rbd_data, SSTABLE_SIZE); 
+
+		CLOSE(fd1);
+
+		rtn_stat = TRUE;
+	}
+	else
+	{
+		rtn_stat = FALSE;
+	}
+
+exit:
+	if (rtn_stat)
+	{
+		
+		resp = conn_build_resp_byte(RPC_SUCCESS, 0, NULL);
+	}
+	else
+	{
+		resp = conn_build_resp_byte(RPC_FAIL, 0, NULL);
+	}
+
+	return resp;
+
+}
+
 int 
 main(int argc, char *argv[])
 {
@@ -765,13 +991,15 @@ main(int argc, char *argv[])
 
 	mem_init_alloc_regions();
 
-	Trace = 0;
+	
 
 	conf_path = RANGE_DEFAULT_CONF_PATH;
 	conf_get_path(argc, argv, &conf_path);
 
 	rg_setup(conf_path);
 
+	//Trace = MEM_USAGE;
+	Trace = 0;
 	rg_boot();
 	return TRUE;
 }

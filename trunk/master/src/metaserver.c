@@ -43,6 +43,7 @@
 #include "session.h"
 #include "tabinfo.h"
 #include "sstab.h"
+#include "rebalancer.h"
 
 
 extern	TSS	*Tss;
@@ -85,9 +86,6 @@ meta_prt_sstabmap(int begin, int end);
 
 static int
 meta_collect_rg(char * req_buf);
-
-static RANGE_PROF *
-meta_get_rg_prof_by_addr(char *rg_addr);
 
 void
 meta_bld_rglist(char *filepath)
@@ -256,8 +254,9 @@ meta_crtab(TREE *command)
 	int		tab_key_coloff;
 	int		tab_key_colid;
 	int		tab_key_coltype;
-	COLINFO	col_info;
-	char *resp;
+	COLINFO		col_info;
+	char 		*resp;
+	SVR_IDX_FILE	*tablet_store;
 
 
 	assert(command);
@@ -433,6 +432,33 @@ meta_crtab(TREE *command)
 	CLOSE(fd);
 
 	free(sstab_map_tmp);
+
+	
+	tablet_store = (SVR_IDX_FILE *)MEMALLOCHEAP(sizeof(SVR_IDX_FILE));
+
+	
+	MEMSET(tab_dir1, 256);
+
+	
+	MEMCPY(tab_dir1, tab_dir, STRLEN(tab_dir));
+
+	str1_to_str2(tab_dir1, '/', "tabletinranger");
+	
+	OPEN(fd, tab_dir1, (O_CREAT|O_WRONLY|O_TRUNC));
+
+	if (fd < 0)
+	{
+		goto exit;
+	}
+
+	
+	
+	WRITE(fd, tablet_store, sizeof(SVR_IDX_FILE));
+
+	CLOSE(fd);
+	
+
+	MEMFREEHEAP(tablet_store);
 	
 	rtn_stat = TRUE;
 	
@@ -601,7 +627,7 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 		rg_addr = row_locate_col(tabletschm_rp, TABLETSCHM_RGADDR_COLOFF_INROW, 
 					ROW_MINLEN_IN_TABLETSCHM, &ign);
 		
-		tss->tcur_rgprof = meta_get_rg_prof_by_addr(rg_addr);
+		tss->tcur_rgprof = rebalan_get_rg_prof_by_addr(rg_addr);
 
 		assert(tss->tcur_rgprof);
 
@@ -746,6 +772,8 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 		
 		(tab_hdr.tab_tablet)++;
 		(tab_hdr.tab_sstab)++;
+
+		(rg_prof->rg_tablet_num)++;
 
 		MEMFREEHEAP(sstab_rp);
 	}
@@ -1146,7 +1174,7 @@ meta_seldeltab(TREE *command, TABINFO *tabinfo)
 	int ign;
 	rg_addr = row_locate_col(rp, TABLETSCHM_RGADDR_COLOFF_INROW, ROW_MINLEN_IN_TABLETSCHM, &ign);
 	
-	tss->tcur_rgprof = meta_get_rg_prof_by_addr(rg_addr);
+	tss->tcur_rgprof = rebalan_get_rg_prof_by_addr(rg_addr);
 
 	assert(tss->tcur_rgprof);
 
@@ -1391,8 +1419,9 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 	int ign;
 	rg_addr = row_locate_col(rp, TABLETSCHM_RGADDR_COLOFF_INROW, ROW_MINLEN_IN_TABLETSCHM, &ign);
 
-	tss->tcur_rgprof = meta_get_rg_prof_by_addr(rg_addr);
-	
+	tss->tcur_rgprof = rebalan_get_rg_prof_by_addr(rg_addr);
+
+
 	
 	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
@@ -1406,6 +1435,7 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 
 	MEMFREEHEAP(sstab_rp);
 
+	
 	(tab_hdr.tab_sstab)++;
 	
 	LSEEK(fd1, 0, SEEK_SET);
@@ -1516,6 +1546,322 @@ meta_collect_rg(char * req_buf)
 	return TRUE;
 }
 
+int
+meta_rebalan_svr_idx_file(char *tab_dir, REBALANCE_DATA *rbd)
+{
+	SVR_IDX_FILE	*tablet_store;
+	char		tab_dir1[256];
+	int		fd;
+	int		status;
+	RANGE_PROF	*rg_prof;
+	int 		i;
+	int		max_tablet;
+	int		min_tablet;
+	int		max_rg;
+	int		min_rg;
+	int		total_tablet;
+	int		transfer_tablet;
+	SVR_IDX_FILE	*temp_store;
+
+
+	tablet_store = (SVR_IDX_FILE *)MEMALLOCHEAP(sizeof(SVR_IDX_FILE));
+	total_tablet = 0;
+	
+	MEMSET(tab_dir1, 256);
+
+	MEMCPY(tab_dir1, tab_dir, STRLEN(tab_dir));
+
+	str1_to_str2(tab_dir1, '/', "tabletinranger");
+	
+	OPEN(fd, tab_dir1, (O_RDWR));
+
+	if (fd < 0)
+	{
+		goto exit;
+	}
+
+	
+	
+	status = READ(fd, tablet_store, sizeof(SVR_IDX_FILE));
+
+	assert(status == sizeof(SVR_IDX_FILE));
+
+	
+
+	//rg_prof = (RANGE_PROF *)tablet_store->data;
+	temp_store = &(Master_infor->rg_list);
+	rg_prof = (RANGE_PROF *)(temp_store->data);
+	
+	for(i = 0; i < temp_store->nextrno; i++)
+	{
+		if (i == 0)
+		{
+			max_tablet = min_tablet = rg_prof[i].rg_tablet_num;
+			max_rg = min_rg = 0;
+		}
+		else
+		{
+			if (rg_prof[i].rg_tablet_num > max_tablet)
+			{
+				max_tablet = rg_prof[i].rg_tablet_num;
+				max_rg = i;
+			}
+			else if (rg_prof[i].rg_tablet_num < min_tablet)
+			{
+				min_tablet = rg_prof[i].rg_tablet_num;
+				min_rg = i;
+			}
+		}
+
+		total_tablet += rg_prof[i].rg_tablet_num;
+	}
+
+	if (max_tablet != min_tablet)
+	{
+		if (((max_tablet - min_tablet) / i) < 1)
+		{
+			transfer_tablet = 0;
+		}
+		else 
+		{
+			transfer_tablet = (total_tablet / i) - min_tablet;
+		}
+	}
+
+	if (transfer_tablet > 0)
+	{
+		rg_prof[max_rg].rg_tablet_num = max_tablet - transfer_tablet;
+		rg_prof[min_rg].rg_tablet_num = min_tablet + transfer_tablet;
+
+		
+		//WRITE(fd, tablet_store, sizeof(SVR_IDX_FILE));
+
+		MEMCPY(rbd->rbd_max_tablet_rg, rg_prof[max_rg].rg_addr, STRLEN(rg_prof[max_rg].rg_addr));
+		MEMCPY(rbd->rbd_min_tablet_rg, rg_prof[min_rg].rg_addr, STRLEN(rg_prof[min_rg].rg_addr));
+	}
+
+	
+exit:
+	CLOSE(fd);
+	MEMFREEHEAP(tablet_store);
+
+	return transfer_tablet;
+}
+
+
+int
+meta_rebalan_process(REBALANCE_DATA *rbd)
+{
+	int		sockfd;
+	RPCRESP		*resp;
+	RANGE_PROF	*rg_prof;
+	int		rtn_stat;
+
+
+	rtn_stat = TRUE;
+	rg_prof = rebalan_get_rg_prof_by_addr(rbd->rbd_max_tablet_rg);
+	
+	sockfd = conn_open(rbd->rbd_max_tablet_rg, rg_prof->rg_port);
+
+	rg_prof = rebalan_get_rg_prof_by_addr(rbd->rbd_min_tablet_rg);
+
+	rbd->rbd_min_tablet_rgport = rg_prof->rg_port;
+
+	WRITE(sockfd, rbd, sizeof(REBALANCE_DATA));
+
+	resp = conn_recv_resp(sockfd);
+
+	if (resp->status_code != RPC_SUCCESS)
+	{
+		rtn_stat = FALSE;
+		printf("\n ERROR \n");
+	}
+	
+	conn_close(sockfd, NULL, resp);
+
+	return rtn_stat;
+
+}
+
+char *
+meta_rebalancer(TREE *command)
+{
+	char		*tab_name;
+	int		tab_name_len;
+	char		tab_dir[256];
+	char		tab_dir1[256];	
+	int		fd;
+	char 		*resp;
+	REBALANCE_DATA	*rbd;
+	int		transfer_tablet;
+	char		tab_tabletschm_dir[TABLE_NAME_MAX_LEN];
+	int		rtn_stat;
+
+
+	assert(command);
+	
+	rtn_stat = FALSE;
+	resp = NULL;
+	tab_name = command->sym.command.tabname;
+	tab_name_len = command->sym.command.tabname_len;
+
+	
+	MEMSET(tab_dir, 256);
+	MEMSET(tab_dir1, 256);
+	MEMCPY(tab_dir, MT_META_TABLE, STRLEN(MT_META_TABLE));
+	str1_to_str2(tab_dir, '/', tab_name);
+
+	if (STAT(tab_dir, &st) != 0)
+	{		
+		goto exit;
+	}
+
+	rbd = (REBALANCE_DATA *)MEMALLOCHEAP(sizeof(REBALANCE_DATA));
+	MEMSET(rbd, sizeof(REBALANCE_DATA));
+	MEMCPY(rbd->rbd_tabname, tab_name, STRLEN(tab_name));
+	
+	transfer_tablet = meta_rebalan_svr_idx_file(tab_dir, rbd);
+
+
+	if (transfer_tablet > 0)
+	{		
+		char	*tablet_schm_bp;
+
+		
+		MEMSET(tab_tabletschm_dir, TABLE_NAME_MAX_LEN);
+		MEMCPY(tab_tabletschm_dir, tab_dir, STRLEN(tab_dir));
+		str1_to_str2(tab_tabletschm_dir, '/', "tabletscheme");	
+
+		OPEN(fd, tab_tabletschm_dir, (O_RDWR));
+	
+		if (fd < 0)
+		{
+			printf("Table is not exist! \n");
+			goto exit;
+		}
+
+		tablet_schm_bp = (char *)MEMALLOCHEAP(SSTABLE_SIZE);
+		MEMSET(tablet_schm_bp, SSTABLE_SIZE);
+		
+		READ(fd, tablet_schm_bp, SSTABLE_SIZE);	
+
+		
+		BLOCK *blk;
+
+		int i = 0, rowno;
+		int	*offset;
+		char 	*rp;
+		char	*key_in_blk;
+		int	keylen_in_blk;
+		int	result;
+		char	*tabletname;
+		int	namelen;
+		char	tab_tablet_dir[TABLE_NAME_MAX_LEN];
+		int	fd1;
+		
+		while (TRUE)
+		{
+			blk = (BLOCK *)(tablet_schm_bp + i * BLOCKSIZE);
+
+			
+			for(rowno = 0, offset = ROW_OFFSET_PTR(blk); 
+					rowno < blk->bnextrno; rowno++, offset--)
+			{
+				rp = (char *)blk + *offset;
+			
+				assert(*offset < blk->bfreeoff);
+			
+				key_in_blk = row_locate_col(rp, TABLETSCHM_RGADDR_COLOFF_INROW, 
+							ROW_MINLEN_IN_TABLETSCHM, &keylen_in_blk);
+			
+				result = row_col_compare(VARCHAR, rbd->rbd_max_tablet_rg, STRLEN(rbd->rbd_max_tablet_rg), 
+							key_in_blk, STRLEN(key_in_blk));
+
+				if (result == EQ)
+				{
+					tabletname = row_locate_col(rp, TABLETSCHM_TABLETNAME_COLOFF_INROW,
+						ROW_MINLEN_IN_TABLETSCHM, &namelen);
+
+
+					MEMSET(tab_tablet_dir, TABLE_NAME_MAX_LEN);
+					MEMCPY(tab_tablet_dir, tab_dir, STRLEN(tab_dir));
+					str1_to_str2(tab_tablet_dir, '/', tabletname);	
+
+					OPEN(fd1, tab_tablet_dir, (O_RDONLY));
+	
+					if (fd1 < 0)
+					{
+						printf("Table is not exist! \n");
+						goto exit;
+					}
+
+					READ(fd1, rbd->rbd_data, SSTABLE_SIZE);	
+
+					MEMCPY(rbd->rbd_magic, RPC_RBD_MAGIC, RPC_MAGIC_MAX_LEN);
+					MEMCPY(rbd->rbd_magic_back, RPC_RBD_MAGIC, RPC_MAGIC_MAX_LEN);
+					
+					rbd->rbd_opid = RBD_FILE_SENDER;
+
+					rtn_stat = meta_rebalan_process(rbd);
+
+					assert(rtn_stat == TRUE);
+					
+					CLOSE(fd1);
+
+					if (rtn_stat == TRUE)
+					{
+						key_in_blk = row_locate_col(rp, TABLETSCHM_RGADDR_COLOFF_INROW, 
+							ROW_MINLEN_IN_TABLETSCHM, &keylen_in_blk);
+
+						MEMCPY(key_in_blk, rbd->rbd_min_tablet_rg, STRLEN(rbd->rbd_min_tablet_rg));
+					}
+
+					transfer_tablet--;
+
+					if (transfer_tablet == 0)
+					{
+						break;
+					}
+				}
+				
+				
+			}
+
+			i++;
+
+			if (i > (BLK_CNT_IN_SSTABLE - 1))
+			{
+				break;
+			}			
+		
+		}
+
+		WRITE(fd, tablet_schm_bp, SSTABLE_SIZE);
+		CLOSE(fd);
+		
+
+		MEMFREEHEAP(tablet_schm_bp);
+		
+	}
+
+	MEMFREEHEAP(rbd);
+	rtn_stat = TRUE;
+	
+exit:
+	if (rtn_stat)
+	{
+		resp = conn_build_resp_byte(RPC_SUCCESS, 0, NULL);
+	}
+	else
+	{
+		resp = conn_build_resp_byte(RPC_FAIL, 0, NULL);
+	}
+	
+	return resp;
+
+}
+
+
 char *
 meta_handler(char *req_buf)
 {
@@ -1528,9 +1874,10 @@ meta_handler(char *req_buf)
 	char		crt_tab_cmd[256];
 	TABINFO		*tabinfo;
 
-
+	
 	tmp_req_buf = req_buf;
-
+	tss->tmaster_infor = Master_infor;
+	
 	if (meta_collect_rg(req_buf))
 	{		
 		
@@ -1611,6 +1958,9 @@ parse_again:
 	    case REMOVE:
 	    	resp = meta_removtab(command);
 	    	break;
+	    case REBALANCE:
+	    	resp = meta_rebalancer(command);
+	    	break;
 
 	    default:
 	    	break;
@@ -1632,29 +1982,7 @@ parse_again:
 	return resp;
 }
 
-static RANGE_PROF *
-meta_get_rg_prof_by_addr(char *rg_addr)
-{
-	RANGE_PROF	*rg_prof;
-	SVR_IDX_FILE	*rglist;
-	int		found;
-	int		i;
 
-	rglist = &(Master_infor->rg_list);
-	found = FALSE;
-	rg_prof = (RANGE_PROF *)(rglist->data);
-
-	for(i = 0; i < rglist->nextrno; i++)
-	{
-		if (!strncasecmp(rg_addr, rg_prof[i].rg_addr, RANGE_ADDR_MAX_LEN))
-		{
-			found = TRUE;
-			break;
-		}
-	}
-
-	return (found ? &(rg_prof[i]) : NULL);
-}
 
 static void 
 meta_bld_sysrow(char *rp, int rlen, int tabletid, int sstabnum)
