@@ -87,10 +87,6 @@ meta_prt_sstabmap(int begin, int end);
 static int
 meta_collect_rg(char * req_buf);
 
-static void
-meta_save_rginfo();
-
-
 void
 meta_bld_rglist(char *filepath)
 {
@@ -204,23 +200,6 @@ meta_server_setup(char *conf_path)
 	return;
 }
 
-static void
-meta_save_rginfo()
-{
-	char	rang_server[256];
-	int	fd;
-
-	
-	MEMSET(rang_server, 256);
-	MEMCPY(rang_server, MT_META_REGION, STRLEN(MT_META_REGION));
-	str1_to_str2(rang_server, '/', "rangeserverlist");
-
-	OPEN(fd, rang_server, (O_RDWR));
-
-	WRITE(fd, &(Master_infor->rg_list), SVR_IDX_FILE_BLK);
-
-	CLOSE(fd);		
-}
 
 void
 meta_add_server(TREE *command)
@@ -569,7 +548,6 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 	int		sstab_id;
 	int		res_sstab_id;
 	RANGE_PROF	*rg_prof;
-	int		sstabmap_chg;
 
 
 	assert(command);
@@ -577,7 +555,6 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 	rtn_stat = FALSE;
 	sstab_idx = 0;
 	col_buf = NULL;
-	sstabmap_chg = FALSE;
 	tab_name = command->sym.command.tabname;
 	tab_name_len = command->sym.command.tabname_len;
 
@@ -688,7 +665,6 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 				SSTAB_MAP_SET(res_sstab_id, SSTAB_RESERVED);
 
 				sstab_res= TRUE;
-				sstabmap_chg = TRUE;
 			}
 
 			if (tabinfo->t_stat & TAB_TABLET_KEYROW_CHG)
@@ -772,7 +748,6 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 		res_sstab_id = meta_get_free_sstab();
 		SSTAB_MAP_SET(res_sstab_id, SSTAB_RESERVED);
 
-		sstabmap_chg = TRUE;
 		if(Master_infor->rg_list.nextrno > 0)
 		{
 			
@@ -882,12 +857,6 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 	CLOSE(fd1);
 
 	col_buf_idx += tab_hdr.tab_col * sizeof(COLINFO);
-
-	if (sstabmap_chg)
-	{
-		sstab_map_put(-1, tss->ttab_sstabmap);
-	}
-	
 	rtn_stat = TRUE;
 
 exit:
@@ -1478,7 +1447,6 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 	
 	CLOSE(fd1);
 
-	sstab_map_put(-1, tss->ttab_sstabmap);
 	
 	
 
@@ -1568,8 +1536,6 @@ meta_collect_rg(char * req_buf)
 			rg_addr[i].rg_tablet_num = 0;
 
 			(rglist->nextrno)++;
-
-			meta_save_rginfo();
 		}
 	}
 	else
@@ -1808,8 +1774,7 @@ meta_rebalancer(TREE *command)
 				key_in_blk = row_locate_col(rp, TABLETSCHM_RGADDR_COLOFF_INROW, 
 							ROW_MINLEN_IN_TABLETSCHM, &keylen_in_blk);
 			
-				result = row_col_compare(VARCHAR, rbd->rbd_max_tablet_rg, 
-							STRLEN(rbd->rbd_max_tablet_rg), 
+				result = row_col_compare(VARCHAR, rbd->rbd_max_tablet_rg, STRLEN(rbd->rbd_max_tablet_rg), 
 							key_in_blk, STRLEN(key_in_blk));
 
 				if (result == EQ)
@@ -1830,7 +1795,6 @@ meta_rebalancer(TREE *command)
 						goto exit;
 					}
 
-					
 					READ(fd1, rbd->rbd_data, SSTABLE_SIZE);	
 
 					MEMCPY(rbd->rbd_magic, RPC_RBD_MAGIC, RPC_MAGIC_MAX_LEN);
@@ -1865,7 +1829,7 @@ meta_rebalancer(TREE *command)
 
 			i++;
 
-			if ((i > (BLK_CNT_IN_SSTABLE - 1)) || (transfer_tablet == 0))
+			if (i > (BLK_CNT_IN_SSTABLE - 1))
 			{
 				break;
 			}			

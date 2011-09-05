@@ -41,7 +41,6 @@ extern "C" {
 #define	ALIGNDATATYPE	long
 
 struct buf;
-struct hkgc_info;
 
 
 
@@ -193,7 +192,6 @@ typedef struct kernel
 	struct buf	*ke_buflru;		
 	struct buf	**ke_bufhash;		
 	struct buf	*ke_bufwash;		
-//	struct hkgc_info hkgc_info;
 } KERNEL;
 
 # define	BUF_SPIN	(Kernel->ke_buf_spinlock)

@@ -20,7 +20,37 @@
 #ifndef	HKGC_H_
 #define HKGC_H_
 
-void
-hkgc_boot(void *opid);
+#include "buffer.h"
+
+typedef struct _io_data
+{
+	//int	buf_num;
+	BUF	*hk_dirty_buf;
+	struct _io_data *next;
+} io_data;
+
+
+extern io_data * io_list_head;
+extern io_data * io_list_tail;
+
+extern pthread_mutex_t io_mutex;
+extern pthread_mutex_t bufkeep_mutex;
+extern pthread_mutex_t io_list_mutex;
+
+extern pthread_cond_t io_list_cond;
+
+
+typedef struct hkgc_info
+{
+	int	stat;
+}HKGC_INFO;
+
+#define	HKGC_SSTAB_MAP_DIRTY	0x0001	/* Trigger for the sstab map writing. */
+#define HKGC_SSTAB_BUF_DIRTY	0x0002	/* This feature if it need to */
+
+void * hkgc_boot(void *args);
+
+void put_io_list(BUF * buffer);
+
 
 #endif

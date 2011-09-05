@@ -24,8 +24,6 @@
 
 
 typedef	pthread_mutex_t	SPINLOCK;
-
-typedef pthread_cond_t	SIGNAL;
 //#define	SPINLOCK	pthread_mutex_t
 
 #define	SPINLOCK_INIT(lock)	pthread_mutex_init(&lock, NULL)

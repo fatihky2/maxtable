@@ -35,7 +35,6 @@ struct tab_info;
 struct insert_meta;
 struct rg_prof;
 struct master_infor;
-struct tab_sstab_map;
 
 
 
@@ -70,8 +69,6 @@ typedef struct tss
 	struct rg_prof	*tcur_rgprof;
 	struct master_infor
 			*tmaster_infor;
-	struct tab_sstab_map
-			*ttab_sstabmap;
 
 } TSS;
 

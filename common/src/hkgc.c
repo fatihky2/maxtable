@@ -17,156 +17,113 @@
 ** implied. See the License for the specific language governing
 ** permissions and limitations under the License.
 */
-#include "global.h"
+
 #include <pthread.h>
-#include "master/metaserver.h"
+#include <sys/time.h>
+
+#include "global.h"
 #include "buffer.h"
 #include "hkgc.h"
-#include "spinlock.h"
-#include "tss.h"
-#include "file_op.h"
+#include "atomic_status.h"
+#include "memcom.h"
+
+io_data * io_list_head = NULL;
+io_data * io_list_tail = NULL;
+
+pthread_mutex_t io_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t bufkeep_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t io_list_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+pthread_cond_t io_list_cond = PTHREAD_COND_INITIALIZER;
 
 
-#define	HKGC_WORK_INTERVAL	10
+int io_list_len = 0;
 
+#define	HKGC_WORK_INTERVAL	1
+#define MAX_IO_LIST 100000
 
-typedef struct hkgc_info
+struct timeval io_tpStart;
+struct timeval io_tpEnd;
+float io_timecost;
+
+void put_io_list(BUF * buffer)
 {
-	int		hk_stat;
-	int		buf_num;
-	BUF		*hk_dirty_buf;
-	SPINLOCK	hk_sstabmap_mutex;	/* mutex for the sstabmap */
-	SIGNAL		hk_sstabmap_cond;
-	TAB_SSTAB_MAP	*hk_sstabmap;		/* sstabmap: just one item. */
-	
-} HKGC_INFO;
-
-
-#define	HKGC_SSTAB_MAP_DIRTY	0x0001	/* Trigger for the sstab map writing. */
-#define HKGC_SSTAB_BUF_DIRTY	0x0002	/* This feature if it need to */
-
-
-void
-hkgc_write_block()
-{
-	return;
-}
-
-void
-hkgc_grab_dirty_resource()
-{
-	;
-}
-
-void
-hkgc_get_sstabmap(TAB_SSTAB_MAP *sstabmap)
-{
-	HKGC_INFO	*hkgc = NULL;
-
-
-//	hkgc = &(Kernel->hkgc_info);
-
-	
-	P_SPINLOCK(hkgc->hk_sstabmap_mutex);
-
-	if (!(hkgc->hk_stat & HKGC_SSTAB_MAP_DIRTY))
+	io_data * new_io;
+	new_io = (io_data *)malloc(sizeof(io_data));
+	new_io->hk_dirty_buf = buffer;
+	new_io->next = NULL;
+				
+	pthread_mutex_lock(&io_list_mutex);
+	if (io_list_head == NULL)
 	{
-		
-		hkgc->hk_sstabmap= sstabmap;
-		hkgc->hk_stat |= HKGC_SSTAB_MAP_DIRTY;
-	}
+		io_list_head = new_io;
+		io_list_tail = new_io;
+	} 
 	else
 	{
-		assert(hkgc->hk_sstabmap == sstabmap);
+		io_list_tail->next = new_io;
+		io_list_tail = new_io;
 	}
-	
-	V_SPINLOCK(hkgc->hk_sstabmap_mutex);
-}
+	//change_value_add(&io_list_len, 1);
+	io_list_len ++;
 
-int
-hkgc_flush_sstabmap(TAB_SSTAB_MAP *sstabmap)
-{	
-	int		fd;
-	HKGC_INFO	*hkgc = NULL;
+	pthread_cond_signal(&io_list_cond);
+				
+	pthread_mutex_unlock(&io_list_mutex);
 
+	if(io_list_len > MAX_IO_LIST)
+		fprintf(stderr, "big error, io list length exceeds the max len!\n");
 
-//	hkgc = &(Kernel->hkgc_info);
-
-
-	if (sstabmap->stat & SSTABMAP_CHG)
-	{
-		P_SPINLOCK(hkgc->hk_sstabmap_mutex);
-
-		hkgc->hk_stat &= ~HKGC_SSTAB_MAP_DIRTY;
-
-		V_SPINLOCK(hkgc->hk_sstabmap_mutex);
-
-		OPEN(fd, sstabmap->sstabmap_path, (O_RDWR));
-
-		if (fd < 0)
-		{
-			return FALSE;
-		}
-		
-		WRITE(fd, sstabmap->sstab_map, SSTAB_MAP_SIZE);
-
-		CLOSE(fd);
-	}
-
-	return TRUE;
 }
 
 
-void
-hkgc_init(int opid)
+void write_io_data(BUF * buffer)
 {
-	HKGC_INFO	*hkgc = NULL;
-
-
-//	hkgc = &(Kernel->hkgc_info);
+	change_status(buffer, NONKEPT, KEPT);
 	
-	switch (opid)
-	{
-	    case TSS_OP_METASERVER:
+	bufawrite(buffer);
+	
+	bufunkeep(buffer);
 
-//		hkgc->hk_sstabmap_mutex = PTHREAD_MUTEX_INITIALIZER;
-//		hkgc->hk_sstabmap_cond = PTHREAD_COND_INITIALIZER;
-
-		hkgc->hk_sstabmap = NULL;
-		
-
-		break;
-
-	    case TSS_OP_RANGESERVER:
-		
-		break;
-
-	    default:
-		break;		
-	}
-
+	SSTABLE_STATE(buffer) &= ~BUF_ON_LIST;
+	
+	change_status(buffer, KEPT, NONKEPT);
+	
 }
 
-void
-hkgc_boot(void *opid)
+void get_io_list()
+{
+	io_data *iodata;
+	
+	pthread_mutex_lock(&io_list_mutex);
+	
+	while (io_list_head == NULL)
+		pthread_cond_wait(&io_list_cond, &io_list_mutex);
+	
+	iodata = io_list_head;
+	io_list_head = io_list_head->next;
+	io_list_len --;
+		
+	pthread_mutex_unlock(&io_list_mutex);
+
+	//gettimeofday(&io_tpStart, NULL);
+		
+	write_io_data(iodata->hk_dirty_buf);
+
+	/*gettimeofday(&io_tpEnd, NULL);
+	io_timecost = 0.0f;
+      	io_timecost = io_tpEnd.tv_sec - io_tpStart.tv_sec + (float)(io_tpEnd.tv_usec-io_tpStart.tv_usec)/1000000;
+      	printf("@@@@@@write io time cost: %f\n", io_timecost);*/
+    
+	free(iodata);
+}
+
+void * hkgc_boot(void *args)
 {
 	while(TRUE)
 	{
-		switch (*(int *)opid)
-		{
-		    case TSS_OP_METASERVER:
-		    	
-		    	sleep(HKGC_WORK_INTERVAL);
-		    	break;
-			
-		    case TSS_OP_RANGESERVER:
-		    	sleep(HKGC_WORK_INTERVAL);
-			hkgc_write_block();
-		    	break;
-			
-		    default:
-		    	break;	
-		}
+		//sleep(HKGC_WORK_INTERVAL);
+		get_io_list();
 	}
 
 	return;

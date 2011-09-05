@@ -26,6 +26,9 @@
 #include "dskio.h"
 #include "spinlock.h"
 #include "tss.h"
+#include "hkgc.h"
+#include "atomic_status.h"
+
 
 
 extern KERNEL	*Kernel;
@@ -41,7 +44,7 @@ bufread(BUF *bp)
 
 
 	
-	bufwait(bp);
+	//bufwait(bp);
 
 	
 	blkioptr = MEMALLOCHEAP(sizeof(BLKIO));
@@ -74,10 +77,12 @@ bufread(BUF *bp)
 void
 bufwait(BUF *bp)
 {
-	while (SSTABLE_STATE(bp) & BUF_WRITING)
+	/*while (SSTABLE_STATE(bp) & BUF_WRITING)
 	{
 		sleep(5);
-	}
+	}*/
+
+	change_status(bp, NONKEPT, KEPT);
 
 	if (SSTABLE_STATE(bp) & BUF_DIRTY)
 	{
@@ -88,6 +93,8 @@ bufwait(BUF *bp)
 	{
 		printf("IO error\n");
 	}
+
+	change_status(bp, KEPT, NONKEPT);
 }
 
 
@@ -143,18 +150,23 @@ bufawrite(BUF *bp)
 
 
 	printf(" Enter into the buffer writting.\n");
-	P_SPINLOCK(BUF_SPIN);
+	//P_SPINLOCK(BUF_SPIN);
 
 	if (!(SSTABLE_STATE(bp) & BUF_DIRTY))
 	{
-		V_SPINLOCK(BUF_SPIN);
+		//V_SPINLOCK(BUF_SPIN);
+		//V_SPINLOCK(BUF_SPIN);
+		//when grab one buf for sstab, when find this buf is still dirty, this buf has to be written to disk directly
+		//as this buf stands for one new sstab in the cache.
+		//after written, the buf is not dirty, so hk don't need to rewrite this buf to disk.
+		printf("written already, just return.\n");
 		return;
 	}
 	
 	SSTABLE_STATE(bp) |= BUF_WRITING;
 
 	
-	blkioptr = MEMALLOCHEAP(sizeof(BLKIO));
+	blkioptr = malloc(sizeof(BLKIO));
 
 	
 	blkioptr->bioflags = DBWRITE;
@@ -172,11 +184,11 @@ bufawrite(BUF *bp)
 
 	SSTABLE_STATE(bp) &= ~(BUF_DIRTY|BUF_WRITING);
 
-	V_SPINLOCK(BUF_SPIN);
+	//V_SPINLOCK(BUF_SPIN);
 
 	
 
-	MEMFREEHEAP(blkioptr);
+	free(blkioptr);
 
 	return;
 }
@@ -374,22 +386,13 @@ void
 bufpredirty(BUF *bp)
 {
 retry:	
-	bufwait(bp);
+	//bufwait(bp);
+	assert(!(SSTABLE_STATE(bp) & BUF_DIRTY));
 	
-	P_SPINLOCK(BUF_SPIN);
-
-	if (!(SSTABLE_STATE(bp) & BUF_DIRTY))
-	{
-		SSTABLE_STATE(bp) |= BUF_DIRTY;
-	}
-	else
-	{
-		V_SPINLOCK(BUF_SPIN);
-		goto retry;
-	}
-
-	V_SPINLOCK(BUF_SPIN);
-
+	change_status(bp, NONKEPT, KEPT);
+	
+	SSTABLE_STATE(bp) |= BUF_DIRTY;
+	
 	return;
 }
 
@@ -398,15 +401,14 @@ void
 bufdirty(BUF *bp)
 {	
 	assert(SSTABLE_STATE(bp) & BUF_DIRTY);
-	
-	P_SPINLOCK(BUF_SPIN);
 
-	if (SSTABLE_STATE(bp) & BUF_DIRTY)
+	if(!(SSTABLE_STATE(bp) & BUF_ON_LIST))
 	{
-		bufdlink(BUF_GET_SSTAB(bp));
+		SSTABLE_STATE(bp) |= BUF_ON_LIST;
+		put_io_list(BUF_GET_SSTAB(bp));
 	}
 
-	V_SPINLOCK(BUF_SPIN);
+	change_status(bp, KEPT, NONKEPT);
 
 	return;
 }
@@ -463,7 +465,7 @@ buffree(BUF *bp)
 void
 bufkeep(BUF *bp)
 {
-	
+	P_SPINLOCK(bufkeep_mutex);
 	
 	LRUUNLINK(bp);
 	
@@ -471,11 +473,15 @@ bufkeep(BUF *bp)
 	MRULINK(bp, Kernel->ke_buflru);
 	
 	bp->bstat |= BUF_KEPT;
+
+	V_SPINLOCK(bufkeep_mutex);
 }
 
 void
 bufunkeep(BUF *bp)
 {
+	P_SPINLOCK(bufkeep_mutex);
+	
 	if (bp->bstat & (BUF_NOTHASHED | BUF_DESTROY))
 	{
 		buffree(bp);
@@ -490,6 +496,8 @@ bufunkeep(BUF *bp)
 	}
 
 	bp->bstat &= ~BUF_KEPT;
+
+	V_SPINLOCK(bufkeep_mutex);
 }
 
 

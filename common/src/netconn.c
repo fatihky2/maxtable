@@ -30,6 +30,7 @@
 #include "thread.h"
 #include "hkgc.h"
 
+
 extern	TSS	*Tss;
 
 char *
@@ -497,16 +498,16 @@ void startup(int servPort, int opid, char * (*handler_request)(char *req_buf))
 	listen(listenfd, 20);
 	*/
 
+	pthread_t pthread_id;
 	pthread_t pthread_id1;
-//	pthread_t pthread_id2;
 	
 	tss_setup(opid);
 
 	msg_recv_args * args = MEMALLOCHEAP(sizeof(msg_recv_args));
 	args->port = servPort;
 
-	pthread_create(&pthread_id1, NULL, msg_recv, (void *)args);
-//	pthread_create(&pthread_id2, NULL, hkgc_boot, (void *)(&opid));
+	pthread_create(&pthread_id, NULL, msg_recv, (void *)args);
+	pthread_create(&pthread_id1, NULL, hkgc_boot, NULL);
 
 	//start_daemon(listenfd, handler_request);
 	msg_process(handler_request);

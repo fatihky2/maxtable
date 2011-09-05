@@ -36,7 +36,8 @@ typedef struct buf
 	struct buf	*bsstabnew;		
 	struct buf	*bsstabold;		
 	struct buf	*bsstab;	
-	int		bsstab_size;		
+	int		bsstab_size;
+	int		atomic_stat;
 } BUF;
 
 
@@ -49,6 +50,7 @@ typedef struct buf
 #define	BUF_DIRTY	0x20
 #define	BUF_DESTROY	0x40
 #define BUF_READ_EMPTY	0x80	
+#define BUF_ON_LIST 0x100
 
 
 #define SSTABLE_STATE(bp)	(bp->bsstab->bstat)
