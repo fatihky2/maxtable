@@ -34,6 +34,7 @@
 
 extern	TSS	*Tss;
 
+
 #define	SSTAB_NAMEIDX_MASK	(2^32 - 1)
 
 #define SSTAB_NAMEIDX(sstab, tabid)	(((tabid ^ (tabid << 8))^ (sstab ^ (sstab<<4))) & SSTAB_NAMEIDX_MASK)
@@ -235,6 +236,7 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 int *
 sstab_map_get(int tabid, char *tab_dir, TAB_SSTAB_MAP **tab_sstab_map)
 {
+	LOCALTSS(tss);
 	char	tab_dir1[TABLE_NAME_MAX_LEN];
 	int	fd;
 	int	*sstab_map = NULL;
@@ -297,6 +299,8 @@ sstab_map_get(int tabid, char *tab_dir, TAB_SSTAB_MAP **tab_sstab_map)
 	sstab_map = sstab_map_tmp->sstab_map;
 	
 	CLOSE(fd);
+	
+	tss->ttab_sstabmap = sstab_map_tmp;
 
 exit:
 
@@ -350,14 +354,17 @@ sstab_map_put(int tabid, TAB_SSTAB_MAP *tab_sstab_map)
 
 	sstab_map_tmp = tab_sstab_map;
 
-	while(sstab_map_tmp != NULL)
+	if (tabid != -1)
 	{
-		if (sstab_map_tmp->tabid == tabid)
+		while(sstab_map_tmp != NULL)
 		{
-			break;
-		}
+			if (sstab_map_tmp->tabid == tabid)
+			{
+				break;
+			}
 
-		sstab_map_tmp = sstab_map_tmp->nexttabmap;
+			sstab_map_tmp = sstab_map_tmp->nexttabmap;
+		}
 	}
 	
 	if (sstab_map_tmp == NULL)

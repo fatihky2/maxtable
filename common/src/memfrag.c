@@ -97,6 +97,7 @@ mem_init_alloc_regions()
 	kmem_ptr = mem_os_malloc(size);
 
 	Kernel = (KERNEL *)kmem_ptr;
+	MEMSET(Kernel,sizeof(KERNEL));
 	kmem_ptr += sizeof(KERNEL);
 	size -= sizeof(KERNEL);
 
