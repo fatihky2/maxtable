@@ -18,6 +18,7 @@
 ** permissions and limitations under the License.
 */
 #include <pthread.h>
+#include <sys/time.h>
 
 #include "global.h"
 #include "buffer.h"
@@ -35,6 +36,10 @@ pthread_mutex_t io_list_mutex = PTHREAD_MUTEX_INITIALIZER;
 int io_list_len = 0;
 
 #define	HKGC_WORK_INTERVAL	600
+
+struct timeval io_tpStart;
+struct timeval io_tpEnd;
+float io_timecost;
 
 void put_io_list(BUF * buffer)
 {
@@ -54,7 +59,7 @@ void put_io_list(BUF * buffer)
 		io_list_tail->next = new_io;
 		io_list_tail = new_io;
 	}
-	change_value_add(&io_list_len, 1);
+	//change_value_add(&io_list_len, 1);
 				
 	pthread_mutex_unlock(&io_list_mutex);
 
@@ -67,8 +72,6 @@ void write_io_data(BUF * buffer)
 	
 	bufawrite(buffer);
 	
-	buffer->bstat &= ~BUF_DIRTY;
-
 	bufunkeep(buffer);
 	
 	change_status(buffer, KEPT, NONKEPT);
@@ -77,33 +80,43 @@ void write_io_data(BUF * buffer)
 
 void get_io_list()
 {
-	int length = io_list_len;
 	int i;
 	io_data *iodata;
+	io_data *head;
+	io_data *tail;
 
-	while(!length)
+	if(io_list_head == NULL)
 	{
-		usleep(500);
-		length = io_list_len;
+		return;
 	}
+
+	pthread_mutex_lock(&io_list_mutex);
+
+	head = io_list_head;
+	tail = io_list_tail;
+	io_list_head = io_list_tail->next;
 	
-	for(i=0; i<length; i++)
+	pthread_mutex_unlock(&io_list_mutex);
+
+	iodata = head;
+	while(head != tail)
 	{
-		pthread_mutex_lock(&io_list_mutex);
-		
-		iodata = io_list_head;
-		io_list_head = io_list_head->next;
-
-		change_value_sub(&io_list_len, 1);
-
-		pthread_mutex_unlock(&io_list_mutex);
+		//gettimeofday(&io_tpStart, NULL);
 		
 		write_io_data(iodata->hk_dirty_buf);
 
+		/*gettimeofday(&io_tpEnd, NULL);
+            	io_timecost = 0.0f;
+            	io_timecost = io_tpEnd.tv_sec - io_tpStart.tv_sec + (float)(io_tpEnd.tv_usec-io_tpStart.tv_usec)/1000000;
+            	printf("@@@@@@write io time cost: %f\n", io_timecost);*/
+		
+		head = head->next;
 		free(iodata);
+		iodata = head;
 	}
 
-	//change_value_sub(&io_list_len, length-1);
+	write_io_data(tail->hk_dirty_buf);
+	free(tail);
 }
 
 
