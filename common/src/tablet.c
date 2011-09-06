@@ -154,7 +154,8 @@ tablet_ins_row(TABLEHDR *tablehdr, int tabid, int sstabid, char *tablet_name, ch
 
 
 void
-tablet_del_row(TABLEHDR *tablehdr, int tabid, int sstabid, char *tablet_name, char *rp, int minlen)
+tablet_del_row(TABLEHDR *tablehdr, int tabid, int sstabid, char *tablet_name,
+			char *rp, int minlen)
 {
 	int		keycolen;
 	char		*keycol;
@@ -177,8 +178,10 @@ tablet_del_row(TABLEHDR *tablehdr, int tabid, int sstabid, char *tablet_name, ch
 	keycol = row_locate_col(rp, -1, minlen, &keycolen);
 	
 	
-	TABINFO_INIT(&tabinfo, tablet_name, &sinfo, minlen, TAB_SRCH_DATA, tabid, sstabid);
-	SRCH_INFO_INIT(&sinfo, keycol, keycolen, TABLET_KEY_COLID_INROW, VARCHAR, -1);
+	TABINFO_INIT(&tabinfo, tablet_name, &sinfo, minlen, TAB_SRCH_DATA,
+		     tabid, sstabid);
+	SRCH_INFO_INIT(&sinfo, keycol, keycolen, TABLET_KEY_COLID_INROW, 
+		       VARCHAR, -1);
 	
 	blkdel(&tabinfo);
 
@@ -315,7 +318,8 @@ tablet_bld_row(char *sstab_rp, int sstab_rlen, char *tab_name, int tab_name_len,
 
 
 char *
-tablet_srch_row(TABINFO *usertabinfo, TABLEHDR *tablehdr, int tabid, int sstabid, char *systab, char *key, int keylen)
+tablet_srch_row(TABINFO *usertabinfo, TABLEHDR *tablehdr, int tabid, int sstabid, 
+			char *systab, char *key, int keylen)
 {
 	TABINFO		*tabinfo;
 	int		minrowlen;
@@ -339,8 +343,10 @@ tablet_srch_row(TABINFO *usertabinfo, TABLEHDR *tablehdr, int tabid, int sstabid
 
 	minrowlen = ROW_MINLEN_IN_TABLET;
 
-	TABINFO_INIT(tabinfo, systab, tabinfo->t_sinfo, minrowlen, TAB_SCHM_SRCH, tabid, sstabid);
-	SRCH_INFO_INIT(tabinfo->t_sinfo, key, keylen, TABLET_KEY_COLID_INROW, VARCHAR, -1);			
+	TABINFO_INIT(tabinfo, systab, tabinfo->t_sinfo, minrowlen, TAB_SCHM_SRCH, 
+		     tabid, sstabid);
+	SRCH_INFO_INIT(tabinfo->t_sinfo, key, keylen, TABLET_KEY_COLID_INROW, 
+		       VARCHAR, -1);			
 	
 	bp = blkget(tabinfo);
 //	offset = blksrch(tabinfo, bp);
@@ -367,8 +373,8 @@ tablet_srch_row(TABINFO *usertabinfo, TABLEHDR *tablehdr, int tabid, int sstabid
 
 
 void 
-tablet_schm_bld_row(char *rp, int rlen, int tabletid, char *tabletname, char *rang_addr, 
-			char *keycol, int keycolen)
+tablet_schm_bld_row(char *rp, int rlen, int tabletid, char *tabletname, 
+			char *rang_addr, char *keycol, int keycolen)
 {
 	int		rowidx;
 
@@ -472,9 +478,10 @@ tablet_schm_ins_row(int tabid, int sstabid, char *systab, char *row, int tabletn
 	
 	key = row_locate_col(row, -1, minrowlen, &keylen);
 	
-	TABINFO_INIT(tabinfo, systab, tabinfo->t_sinfo, minrowlen, tabletnum ? TAB_SCHM_INS : TAB_CRT_NEW_FILE,
-			tabid, sstabid);
-	SRCH_INFO_INIT(tabinfo->t_sinfo, key, keylen, TABLETSCHM_KEY_COLID_INROW, VARCHAR, -1);
+	TABINFO_INIT(tabinfo, systab, tabinfo->t_sinfo, minrowlen, tabletnum ? 
+		     TAB_SCHM_INS : TAB_CRT_NEW_FILE, tabid, sstabid);
+	SRCH_INFO_INIT(tabinfo->t_sinfo, key, keylen, TABLETSCHM_KEY_COLID_INROW, 
+		       VARCHAR, -1);
 			
 	blkins(tabinfo, row);
 
@@ -519,8 +526,9 @@ tablet_schm_del_row(int tabid, int sstabid, char *systab, char *row)
 	key = row_locate_col(row, -1, minrowlen, &keylen);
 	
 	TABINFO_INIT(tabinfo, systab, tabinfo->t_sinfo, minrowlen, TAB_SRCH_DATA,
-			tabid, sstabid);
-	SRCH_INFO_INIT(tabinfo->t_sinfo, key, keylen, TABLETSCHM_KEY_COLID_INROW, VARCHAR, -1);
+		     tabid, sstabid);
+	SRCH_INFO_INIT(tabinfo->t_sinfo, key, keylen, TABLETSCHM_KEY_COLID_INROW,
+		       VARCHAR, -1);
 			
 	blkdel(tabinfo);
 	
@@ -534,7 +542,8 @@ tablet_schm_del_row(int tabid, int sstabid, char *systab, char *row)
 
 
 char *
-tablet_schm_srch_row(TABLEHDR *tablehdr, int tabid, int sstabid, char *systab, char *key, int keylen)
+tablet_schm_srch_row(TABLEHDR *tablehdr, int tabid, int sstabid, 
+			  char *systab, char *key, int keylen)
 {
 	TABINFO		*tabinfo;
 	int		minrowlen;
@@ -557,10 +566,12 @@ tablet_schm_srch_row(TABLEHDR *tablehdr, int tabid, int sstabid, char *systab, c
 
 	minrowlen = ROW_MINLEN_IN_TABLETSCHM;
 
-	TABINFO_INIT(tabinfo, systab, tabinfo->t_sinfo, minrowlen, TAB_SCHM_SRCH, tabid, sstabid);
+	TABINFO_INIT(tabinfo, systab, tabinfo->t_sinfo, minrowlen, 
+		     TAB_SCHM_SRCH, tabid, sstabid);
 
 	
-	SRCH_INFO_INIT(tabinfo->t_sinfo, key, keylen, TABLETSCHM_KEY_COLID_INROW, VARCHAR, -1);
+	SRCH_INFO_INIT(tabinfo->t_sinfo, key, keylen, 
+		       TABLETSCHM_KEY_COLID_INROW, VARCHAR, -1);
 			
 	
 	bp = blkget(tabinfo);
@@ -702,7 +713,8 @@ tablet_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 
 	srctabinfo->t_stat &= ~TAB_TABLET_SPLIT;
 
-	table_nameidx = str01str(srctabinfo->t_sstab_name, "tablet", STRLEN(srctabinfo->t_sstab_name));
+	table_nameidx = str01str(srctabinfo->t_sstab_name, "tablet", 
+				 STRLEN(srctabinfo->t_sstab_name));
 	tabinfo = MEMALLOCHEAP(sizeof(TABINFO));
 	MEMSET(tabinfo, sizeof(TABINFO));
 
@@ -715,8 +727,9 @@ tablet_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 	tabinfo_push(tabinfo);
 
 	
-	TABINFO_INIT(tabinfo, destbuf->bsstab_name, tabinfo->t_sinfo, ROW_MINLEN_IN_TABLET, TAB_KEPT_BUF_VALID,
-			srctabinfo->t_tabid, srctabinfo->t_split_tabletid);
+	TABINFO_INIT(tabinfo, destbuf->bsstab_name, tabinfo->t_sinfo, 
+		     ROW_MINLEN_IN_TABLET, TAB_KEPT_BUF_VALID,
+		     srctabinfo->t_tabid, srctabinfo->t_split_tabletid);
 
 	if (ins_nxtsstab)
 	{
@@ -724,7 +737,8 @@ tablet_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 
 		key = row_locate_col(rp, -1, ROW_MINLEN_IN_TABLET, &keylen);
 		
-		SRCH_INFO_INIT(tabinfo->t_sinfo, key, keylen, TABLET_KEY_COLID_INROW, VARCHAR, -1);
+		SRCH_INFO_INIT(tabinfo->t_sinfo, key, keylen, TABLET_KEY_COLID_INROW, 
+			       VARCHAR, -1);
 		
 		blkins(tabinfo, rp);
 	}
@@ -734,8 +748,8 @@ tablet_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 		bufdirty(destbuf);
 	}
 
-
-	tablet_key = row_locate_col(destbuf->bblk->bdata, -1, destbuf->bblk->bminlen, &tablet_keylen);
+	tablet_key = row_locate_col(destbuf->bblk->bdata, -1, destbuf->bblk->bminlen,
+				    &tablet_keylen);
 	
 	
 	int rlen = ROW_MINLEN_IN_TABLETSCHM + tablet_keylen + sizeof(int) + sizeof(int);
@@ -746,11 +760,13 @@ tablet_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 	str1_to_str2(tab_meta_dir, '/', "tabletscheme");
 
 	table_nameidx = str01str(destbuf->bsstab_name, "tablet", STRLEN(destbuf->bsstab_name));
-	tablet_schm_bld_row(temprp, rlen, srctabinfo->t_split_tabletid, destbuf->bsstab_name + table_nameidx + 1, 
-			tss->tcur_rgprof->rg_addr, tablet_key, tablet_keylen);
+	tablet_schm_bld_row(temprp, rlen, srctabinfo->t_split_tabletid,
+			    destbuf->bsstab_name + table_nameidx + 1, 
+			    tss->tcur_rgprof->rg_addr, tablet_key, tablet_keylen);
 
 	
-	tablet_schm_ins_row(srctabinfo->t_tabid, TABLETSCHM_ID, tab_meta_dir, temprp, INVALID_TABLETID);
+	tablet_schm_ins_row(srctabinfo->t_tabid, TABLETSCHM_ID, tab_meta_dir, temprp, 
+			    INVALID_TABLETID);
 
 	session_close(tabinfo);
 

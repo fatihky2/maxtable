@@ -173,15 +173,16 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 
 	tabinfo_push(tabinfo);
 
-	TABINFO_INIT(tabinfo, destbuf->bsstab_name, tabinfo->t_sinfo, srcbp->bsstab->bblk->bminlen, 
-			TAB_KEPT_BUF_VALID, srctabinfo->t_tabid, srctabinfo->t_insmeta->res_sstab_id);
-
+	TABINFO_INIT(tabinfo, destbuf->bsstab_name, tabinfo->t_sinfo, 
+		     srcbp->bsstab->bblk->bminlen, TAB_KEPT_BUF_VALID,
+		     srctabinfo->t_tabid, srctabinfo->t_insmeta->res_sstab_id);
 
 	if (ins_nxtsstab)
 	{
 		tabinfo->t_keptbuf = destbuf;
 		
-		key = row_locate_col(rp, srctabinfo->t_key_coloff, srcbp->bsstab->bblk->bminlen, &keylen);
+		key = row_locate_col(rp, srctabinfo->t_key_coloff, 
+				     srcbp->bsstab->bblk->bminlen, &keylen);
 		
 		
 		SRCH_INFO_INIT(tabinfo->t_sinfo, key, keylen, srctabinfo->t_key_colid, 
@@ -201,7 +202,8 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 	srctabinfo->t_insrg = (INSRG *)MEMALLOCHEAP(sizeof(INSRG));
 	MEMSET(srctabinfo->t_insrg, sizeof(INSRG));
 
-	sstab_key = row_locate_col(destbuf->bblk->bdata, -1, destbuf->bblk->bminlen, &sstab_keylen);
+	sstab_key = row_locate_col(destbuf->bblk->bdata, -1, destbuf->bblk->bminlen,
+				   &sstab_keylen);
 
 	srctabinfo->t_insrg->new_keylen = sstab_keylen;
 	srctabinfo->t_insrg->new_sstab_key = (char *)MEMALLOCHEAP(sstab_keylen);
@@ -210,7 +212,8 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 
 	i = strmnstr(destbuf->bsstab_name, "/", STRLEN(destbuf->bsstab_name));
 	
-	MEMCPY(srctabinfo->t_insrg->new_sstab_name, destbuf->bsstab_name + i, STRLEN(destbuf->bsstab_name + i));
+	MEMCPY(srctabinfo->t_insrg->new_sstab_name, destbuf->bsstab_name + i, 
+		STRLEN(destbuf->bsstab_name + i));
 	MEMCPY(srctabinfo->t_insrg->new_sstab_key, sstab_key, sstab_keylen);
 	
 

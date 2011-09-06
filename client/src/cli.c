@@ -346,9 +346,9 @@ conn_again:
 			{
 				/*
 				** Drop table case:
-				**	    1st: Set the DELETE flag on the table header in the metadata server.
-				**	    2nd:Delete the whole file dir corresponding to the table in the ranger server.
-				**	    3th: Delete the whole file dir corresponding to the table in the metadata server.
+				**	1st: Set the DELETE flag on the table header in the metadata server.
+				**	2nd:Delete the whole file dir corresponding to the table in the ranger server.
+				**	3th: Delete the whole file dir corresponding to the table in the metadata server.
 				*/
 
 				RANGE_PROF * ranger_list;
@@ -361,9 +361,9 @@ conn_again:
 				Cli_infor->cli_region_port = ranger_list->rg_port;
 
 				/* 
-				** Re-construct the request for the ranger server.	The information include
-				** 1. DROP magic.
-				** 2. drop command
+				** Re-construct the request for the ranger server. The information include
+				** 	1. DROP magic.
+				** 	2. drop command
 				*/
 				send_buf_size = RPC_MAGIC_MAX_LEN + STRLEN(cli_str);
 				send_rg_bp = MEMALLOCHEAP(send_buf_size);				    

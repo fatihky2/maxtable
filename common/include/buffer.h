@@ -33,8 +33,8 @@ typedef struct buf
 	int		btabid;
 	struct block	*bblk;		
 	struct buf	*bhash;		
-	struct buf	*bsstabnew;		
-	struct buf	*bsstabold;		
+	struct buf	*bsstabnew;	
+	struct buf	*bsstabold;	
 	struct buf	*bsstab;	
 	int		bsstab_size;		
 } BUF;
