@@ -1,16 +1,26 @@
 #summary How to deploy MaxTable servers on a cluster.
 
 ==Defining Machine Configuration for MaxTable==
-  * Configure for the client
+  * Mount the DFS to your local file system
+{{{
+mount /dev/rbd0 /mnt/metaserver
+mount /dev/rbd1 /mnt/ranger
+}}}
+  * Or mount the local FS to the directory /mnt
+{{{
+mount /dev/sda /mnt/metaserver
+mount /dev/sdb /mnt/ranger
+}}}
+  * Configure for the client in the file config/cli.conf
 {{{
 metaserver=192.168.171.152
 metaport=1959
 }}}
-  * Configure for the Master server
+  * Configure for the Master server in the file config/master.conf
 {{{
 port=1959
 }}}
-  * Configure for the Ranger server
+  * Configure for the Ranger server in the file config/region.conf
 {{{
 metaserver=192.168.171.152
 metaport=1959
