@@ -33,6 +33,8 @@ extern TSS	*Tss;
 
 
 #define	BLK_BUF_NEED_CHANGE	0x0001
+
+
 #define BLK_ROW_NEXT_SSTAB	0x0002	
 #define BLK_ROW_NEXT_BLK	0x0004
 
@@ -158,7 +160,8 @@ srch_again:
 			last_offset = *offset;
 		}
 		
-	        if ((result == EQ) || ((tabinfo->t_sinfo->sistate & SI_INS_DATA) && (result == LE)))
+	        if ((result == EQ) || (    (tabinfo->t_sinfo->sistate & SI_INS_DATA) 
+					&& (result == LE)))
 	        {
 	        	if (   (result == EQ) && (tabinfo->t_stat & TAB_SRCH_DATA) 
 			    && (tss->topid & TSS_OP_RANGESERVER))
@@ -306,8 +309,10 @@ blk_getsstable(TABINFO *tabinfo)
 	
 		bp->bstat &= ~BUF_READ_EMPTY;
 		
-		if (   ((tss->topid & TSS_OP_RANGESERVER) && (tabinfo->t_insmeta->status & INS_META_1ST))
-		    || ((tss->topid & TSS_OP_METASERVER) && (tabinfo->t_stat & TAB_CRT_NEW_FILE)))
+		if (   (   (tss->topid & TSS_OP_RANGESERVER) 
+			&& (tabinfo->t_insmeta->status & INS_META_1ST))
+		    || (   (tss->topid & TSS_OP_METASERVER) 
+		        && (tabinfo->t_stat & TAB_CRT_NEW_FILE)))
 		{
 			bp->bstat |= BUF_READ_EMPTY;
 		}
@@ -583,7 +588,8 @@ blk_check_sstab_space(TABINFO *tabinfo, BUF *bp, char *rp, int rlen, int ins_off
 	blkno = blk->bblkno;
 	row_cnt = blk->bnextrno;
 
-	if ((blk->bfreeoff + rlen) < (BLOCKSIZE - BLK_TAILSIZE - (ROW_OFFSET_ENTRYSIZE * (row_cnt + 1))))
+	if ((blk->bfreeoff + rlen) < (BLOCKSIZE - BLK_TAILSIZE 
+					- (ROW_OFFSET_ENTRYSIZE * (row_cnt + 1))))
 	{
 		rtn_stat &= ~BLK_BUF_NEED_CHANGE;
 
@@ -593,7 +599,8 @@ blk_check_sstab_space(TABINFO *tabinfo, BUF *bp, char *rp, int rlen, int ins_off
 	while(1)
 	{
 		
-		if ((blk->bfreeoff + rlen) < (BLOCKSIZE - BLK_TAILSIZE - (ROW_OFFSET_ENTRYSIZE * (row_cnt + 1))))
+		if ((blk->bfreeoff + rlen) < (BLOCKSIZE - BLK_TAILSIZE 
+						- (ROW_OFFSET_ENTRYSIZE * (row_cnt + 1))))
 		{
 			break;
 		}

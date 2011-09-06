@@ -789,8 +789,9 @@ par_col_info(char *cmd, int cmd_len, int querytype)
 
 		        command->left = par_bld_resdom(colname, coltype, ++colid);
 		}
-		else if (   (querytype == INSERT) || (querytype == ADDSERVER) || (querytype == SELECT)
-			 || (querytype == ADDSSTAB) || (querytype == DELETE))
+		else if (   (querytype == INSERT) || (querytype == ADDSERVER) 
+			 || (querytype == SELECT) || (querytype == ADDSSTAB) 
+			 || (querytype == DELETE))
 		{
 			command = tss->tcmd_parser;
 

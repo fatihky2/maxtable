@@ -44,7 +44,6 @@ int msg_list_len = 0;
 
 int epfd;
 
-#define BLOCK_MOVE_ID "rebalan"
 
 int set_nonblock(int fd)
 {
@@ -158,7 +157,7 @@ void * msg_recv(void *args)
 				{
 					printf("read %d->[%s]\n", n, buf);
 
-					if (!strncasecmp(RPC_RBD_MAGIC, buf, STRLEN(RPC_RBD_MAGIC)))//case for block move
+					if (!strncasecmp(RPC_RBD_MAGIC, buf, STRLEN(RPC_RBD_MAGIC)))
 					{
 						int	block_left = sizeof(REBALANCE_DATA);
 						char * buffer = malloc(block_left);
