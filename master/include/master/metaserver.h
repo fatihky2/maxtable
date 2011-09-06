@@ -43,6 +43,7 @@ struct block_row_info;
 #define TABLET_NAME_MAX_LEN	32
 #define RANGER_MAX_NUM		64
 
+
 struct stat st;
 
 typedef struct key_col
@@ -129,7 +130,6 @@ typedef struct tab_sstab_map
 	int	sstab_map[SSTAB_MAP_SIZE];
 	
 }TAB_SSTAB_MAP;
-
 
 #define SSTABMAP_CHG	0x0001
 
