@@ -34,7 +34,6 @@
 
 extern	TSS	*Tss;
 
-
 #define	SSTAB_NAMEIDX_MASK	(2^32 - 1)
 
 #define SSTAB_NAMEIDX(sstab, tabid)	(((tabid ^ (tabid << 8))^ (sstab ^ (sstab<<4))) & SSTAB_NAMEIDX_MASK)
@@ -297,10 +296,9 @@ sstab_map_get(int tabid, char *tab_dir, TAB_SSTAB_MAP **tab_sstab_map)
 	}
 
 	sstab_map = sstab_map_tmp->sstab_map;
-	
-	CLOSE(fd);
-	
+
 	tss->ttab_sstabmap = sstab_map_tmp;
+	CLOSE(fd);
 
 exit:
 

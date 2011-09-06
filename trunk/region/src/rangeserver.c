@@ -53,7 +53,7 @@ extern KERNEL	*Kernel;
 
 #define DEFAULT_REGION_FLUSH_CHECK_INTERVAL 600 //10min
 
-#define MT_RANGE_TABLE   "./rg_table"
+#define MT_RANGE_TABLE   "/mnt/ranger/rg_table"
 
 #define	RANGE_CONF_PATH_MAX_LEN	64
 
@@ -798,7 +798,6 @@ rg_rebalan_process_sender(REBALANCE_DATA * rbd, char *rg_addr, int port)
 	
 	sockfd = conn_open(rg_addr, port);
 
-	
 	status = WRITE(sockfd, rbd, sizeof(REBALANCE_DATA));
 
 	assert (status == sizeof(REBALANCE_DATA));
@@ -893,8 +892,7 @@ rg_rebalancer(REBALANCE_DATA * rbd)
 					printf("Table is not exist! \n");
 					goto exit;
 				}
-
-				
+		
 				READ(fd1, rbd_sstab->rbd_data, SSTABLE_SIZE); 
 		
 				MEMCPY(rbd_sstab->rbd_magic, RPC_RBD_MAGIC, RPC_MAGIC_MAX_LEN);
