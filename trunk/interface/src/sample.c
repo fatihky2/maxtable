@@ -12,7 +12,8 @@ int main()
     {
         char resp[256], cmd[256];
         int i, len;
-        
+
+	
         memset(resp, 0, 256);
         sprintf(cmd, "create table gu(id1 varchar, id2 int, id3 varchar)");
         cli_commit(connection, cmd, resp, &len);

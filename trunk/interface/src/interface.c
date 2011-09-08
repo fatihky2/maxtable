@@ -43,6 +43,7 @@ int cli_connection(char * meta_ip, int meta_port, conn ** connection)
     if((new_conn->connection_fd = conn_open(meta_ip, meta_port)) < 0)
     {
         perror("error in create connection: ");
+	MEMFREEHEAP(new_conn);
         return FALSE;
     }
     new_conn->status = ESTABLISHED;
@@ -83,7 +84,10 @@ int cli_commit(conn * connection, char * cmd, char * response, int * resp_len)
 
     RPCRESP	*resp;
     RPCRESP *rg_resp;
+    RPCRESP *sstab_split_resp;
     int querytype;
+    int rtn_stat;
+    int	sstab_split;
 
     if(!validation_request(cmd))
         return FALSE;
@@ -93,6 +97,9 @@ int cli_commit(conn * connection, char * cmd, char * response, int * resp_len)
     	return TRUE;
     }
 
+    rtn_stat = TRUE;
+    sstab_split = FALSE;
+    
     //querytype = par_get_query(cmd, &querytype_index);
     if(!parser_open(cmd))
     {
@@ -118,7 +125,9 @@ int cli_commit(conn * connection, char * cmd, char * response, int * resp_len)
     if (resp->status_code != RPC_SUCCESS)
     {
         printf("\n ERROR in response \n");
+	rtn_stat = FALSE;
         goto finish;
+	
     }
 
     if((querytype == INSERT) || (querytype == SELECT))
@@ -146,7 +155,11 @@ int cli_commit(conn * connection, char * cmd, char * response, int * resp_len)
             if((rg_connection->connection_fd = conn_open(rg_connection->rg_server_ip, rg_connection->rg_server_port)) < 0)
             {
                 perror("error in create connection with rg server: ");
-                return FALSE;
+
+		MEMFREEHEAP(rg_connection);
+		rtn_stat = FALSE;
+                goto finish;
+		
             }
             rg_connection->status = ESTABLISHED;
 
@@ -169,8 +182,9 @@ int cli_commit(conn * connection, char * cmd, char * response, int * resp_len)
         if (rg_resp->status_code != RPC_SUCCESS)
         {
             printf("\n ERROR in rg_server response \n");
+	    rtn_stat = FALSE;
 	    goto finish;
-            return FALSE;
+            
         }
 
 		if((querytype == INSERT) && (rg_resp->result_length))
@@ -192,18 +206,23 @@ int cli_commit(conn * connection, char * cmd, char * response, int * resp_len)
             sprintf(new_buf, "addsstab into %s (%s, %d, %s)", tab_name, newsstabname, sstab_id, 
                 rg_resp->result + SSTABLE_NAME_MAX_LEN + sizeof(int));
 
-			MEMSET(send_buf, LINE_BUF_SIZE);
+		MEMSET(send_buf, LINE_BUF_SIZE);
             MEMCPY(send_buf, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
             MEMCPY(send_buf + RPC_MAGIC_MAX_LEN, new_buf, new_size);
 
             write(connection->connection_fd, send_buf, 
                   (new_size + RPC_MAGIC_MAX_LEN));
 
-            resp = conn_recv_resp(connection->connection_fd);
-            if (resp->status_code != RPC_SUCCESS)
+	    
+            sstab_split_resp = conn_recv_resp(connection->connection_fd);
+	    sstab_split = TRUE;
+            if (sstab_split_resp->status_code != RPC_SUCCESS)
             {
                 printf("\n ERROR in meta_server response \n");
-                return FALSE;
+		rtn_stat = FALSE;
+		MEMFREEHEAP(new_buf);
+		goto finish;
+                
             }
 
             MEMFREEHEAP(new_buf);
@@ -224,13 +243,22 @@ int cli_commit(conn * connection, char * cmd, char * response, int * resp_len)
     }
 
 finish:
+
     conn_destroy_resp(resp);
     if((querytype == INSERT) || (querytype == SELECT))
         conn_destroy_resp(rg_resp);
 
+    if (sstab_split)
+    {
+    	assert(querytype == INSERT);
+    	conn_destroy_resp(sstab_split_resp);
+    }
+
     parser_close();
 
-    return TRUE;
+    
+
+    return rtn_stat;
 }
 
 int sel_resp_rejoin(char * src_buf, char * dest_buf, int src_len, int * dest_len, char *index_buf)
