@@ -22,13 +22,13 @@
 
 typedef struct b_srchinfo
 {
-	char	        *brow;		
-	int	        brownum;	
-	int 	        blow;		
-	int	        bhigh;		
-	int   	        bcomp;		
-	int		btotrows;	
-	int		boffset;	
+	char	        *brow;		/* working rowptr */
+	int	        brownum;	/* working row number */
+	int 	        blow;		/* last lo row number */
+	int	        bhigh;		/* last high row number */
+	int   	        bcomp;		/* result of last arith comp */
+	int		btotrows;	/* total # rows on page */
+	int		boffset;	/* the offset of current row */
 	int		bcoltype;
 	int		bcoloffset;
 

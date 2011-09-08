@@ -124,7 +124,7 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 
 	nextblk = srcbp->bsstab->bblk;
 	
-	while (nextblk->bnextblkno < (BLK_CNT_IN_SSTABLE / 2))
+	while (nextblk->bnextblkno < (BLK_CNT_IN_SSTABLE / 2 + 1))
 	{		
 		nextblk = (BLOCK *) ((char *)nextblk + BLOCKSIZE);
 	}
