@@ -164,4 +164,8 @@ blk_backmov(BLOCK *blk);
 void
 blk_init(BLOCK *blk);
 
+int
+blk_get_location_sstab(struct tab_info *tabinfo, BUF *bp);
+
+
 #endif
