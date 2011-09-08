@@ -27,6 +27,7 @@
 #include "tss.h"
 #include "sstab.h"
 #include "tablet.h"
+#include "b_search.h"
 
 
 extern TSS	*Tss;
@@ -81,29 +82,20 @@ blkget(TABINFO *tabinfo)
 int
 blksrch(TABINFO *tabinfo, BUF *bp)
 {
-	LOCALTSS(tss);
-	int	*offset;
-	BLOCK	*blk;
-	char	*rp;
-	int	last_offset;
-	int	rowno;
-	int	keylen_in_blk;
-	int	coloffset;
-	int	minrowlen;
-	char    *key_in_blk;
-	char    *key;
-	int     keylen;
-	int     coltype;
-	int     blkidx;
-	int     result;
-	int	match;
-	int	end_row_offset;
+	BLOCK		*blk;
+	char		*rp;
+	int		last_offset;
+	int		rowno;
+	int		minrowlen;
+	int     	blkidx;
+	int     	result;
+	B_SRCHINFO	*srchinfo;
+	B_SRCHINFO	m_srchinfo;
+	int		low;
+	int		high;
+	int		total;
 
 
-	coloffset = tabinfo->t_sinfo->sicoloff;
-	key = tabinfo->t_sinfo->sicolval;
-	coltype = tabinfo->t_sinfo->sicoltype;
-	keylen = tabinfo->t_sinfo->sicollen;	
 	blkidx = -1;
 	
 	
@@ -114,85 +106,39 @@ blksrch(TABINFO *tabinfo, BUF *bp)
 		goto finish;
 	}
 
+	MEMSET(&m_srchinfo, sizeof(B_SRCHINFO));
+	srchinfo = &m_srchinfo;
 
-srch_again:	
+	bp = bp->bsstab;
+
+	blkidx = blk_get_location_sstab(tabinfo, bp);
+
+	assert(blkidx != -1);
+
+	bp += blkidx;
+
 	blk		= bp->bblk;
 	minrowlen 	= blk->bminlen;
-	blkidx 		= -1;
-	match 		= LE;	
 
-	for(rowno = 0, offset = ROW_OFFSET_PTR(bp->bblk); 
-			rowno < BLK_GET_NEXT_ROWNO(bp);	rowno++, offset--)
-	{
-		rp = (char *)(bp->bblk) + *offset;
 
-		assert(*offset < bp->bblk->bfreeoff);
+	low = 0;
+	high = BLK_GET_NEXT_ROWNO(bp) - 1;
+	total = BLK_GET_NEXT_ROWNO(bp);
+	result = LE;	
 
-		key_in_blk = row_locate_col(rp, coloffset, minrowlen, 
-						&keylen_in_blk);
+	SRCHINFO_INIT(srchinfo, 0, high, total, result);
 
-        	result = row_col_compare(coltype, key, keylen, key_in_blk, 
-				keylen_in_blk);
+	b_srch_block(tabinfo, bp, srchinfo);
 
-		
-		if (tabinfo->t_stat & TAB_SCHM_SRCH)
-		{
-			if ((result == GR) || (result == EQ) || (rowno == 0))
-			{
-				last_offset = *offset;
-			}
-
-			if (result == LE)
-			{
-				if (   (tabinfo->t_sstab_id == 1) && (rowno == 0) 
-				    && (bp->bblk->bblkno == 0))
-				{
-					assert(last_offset == *offset);
-					
-					tabinfo->t_stat |= TAB_TABLET_KEYROW_CHG;
-				}
-				
-				break;
-			}				
-		}
-		else
-		{
-			last_offset = *offset;
-		}
-		
-	        if ((result == EQ) || (    (tabinfo->t_sinfo->sistate & SI_INS_DATA) 
-					&& (result == LE)))
-	        {
-	        	if (   (result == EQ) && (tabinfo->t_stat & TAB_SRCH_DATA) 
-			    && (tss->topid & TSS_OP_RANGESERVER))
-	        	{
-	        		
-	        		if (ROW_IS_DELETED(rp))
-	        		{
-	        			assert((bp->bblk->bblkno == 0) && (*offset == BLKHEADERSIZE));
-
-					
-					result = LE;
-	        			continue;
-	        		}
-	        		
-	        	}
-			
-	                break;
-	        }
-
-	//	blkidx = ROW_GET_ROWNO(rp); 
-	}
-
+	result = srchinfo->bcomp;
+	rowno = srchinfo->brownum;
+	rp = srchinfo->brow;
+	last_offset = srchinfo->boffset;
 	
 	if ((result != EQ) && !(tabinfo->t_stat & TAB_SCHM_SRCH))
 	{
 		tabinfo->t_sinfo->sistate |= SI_NODATA;
 	}
-
-	blkidx = bp->bblk->bblkno;
-	
-	
 
 	if (rowno == BLK_GET_NEXT_ROWNO(bp))
 	{
@@ -201,42 +147,9 @@ srch_again:
 			
 			last_offset += ROW_GET_LENGTH(rp, minrowlen);
 		}
-		
-		if ((bp->bblk->bnextblkno != -1) && ((tabinfo->t_stat & TAB_SRCH_DATA)
-			|| (tabinfo->t_sinfo->sistate & SI_INDEX_BLK)
-			|| (tabinfo->t_stat & TAB_INS_DATA)
-			|| (tabinfo->t_stat & TAB_SCHM_INS)
-			|| (tabinfo->t_stat & TAB_SCHM_SRCH)))
-		{
-			bp++;
 
-			assert(bp->bblk->bblkno != -1);
-
-			
-			if (bp->bblk->bfreeoff != BLKHEADERSIZE)
-			{
-				tabinfo->t_sinfo->sistate &= ~SI_NODATA;
-				end_row_offset = last_offset;
-				goto srch_again;
-			}
-		}
 	}
-	else if ((rowno == 0) && (result == LE))
-	{
-		assert(last_offset == BLKHEADERSIZE);
 
-		
-		if ((bp->bblk->bblkno != 0) && (bp->bblk->bfreeoff > BLKHEADERSIZE))
-		{
-			bp--;
-			
-			
-			last_offset = end_row_offset;
-
-			blkidx = bp->bblk->bblkno;
-		}
-	}
-	
 	
 finish:
 	
@@ -774,5 +687,62 @@ int
 blk_putrow()
 {
 	return 1;
+}
+
+int
+blk_get_location_sstab(TABINFO *tabinfo, BUF *bp)
+{
+	char	*rp;
+	int	coloffset;
+	char	*key;
+	int	coltype;
+	int	keylen;
+	int	offset;
+	char	*key_in_blk;
+	int	keylen_in_blk;
+	int	result;
+	int	blkidx;
+
+	
+	blkidx		= -1;
+	
+	coloffset	= tabinfo->t_sinfo->sicoloff;
+	key 		= tabinfo->t_sinfo->sicolval;
+	coltype 	= tabinfo->t_sinfo->sicoltype;
+	keylen 		= tabinfo->t_sinfo->sicollen;		
+
+	while(bp->bblk->bblkno != -1)
+	{
+		if (BLK_GET_NEXT_ROWNO(bp) == 0)
+		{
+			break;
+		}
+		
+		rp = ROW_GETPTR_FROM_OFFTAB(bp->bblk, 0);
+		offset = ROW_OFFSET_PTR(bp->bblk)[-(0)];
+
+		key_in_blk = row_locate_col(rp, coloffset, bp->bblk->bminlen, 
+					    &keylen_in_blk);
+
+		result = row_col_compare(coltype, key, keylen, key_in_blk, keylen_in_blk);
+
+		
+		if (result == LE)
+		{
+			
+			if (bp->bblk->bblkno == 0)
+			{
+				blkidx = 0;
+			}
+			
+			break;
+		}
+
+		blkidx = bp->bblk->bblkno;
+		
+		bp++;
+	}
+
+	return blkidx;
 }
 

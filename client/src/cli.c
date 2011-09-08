@@ -837,7 +837,7 @@ int main(int argc, char **argv)
 		cli_test_main(instab);
 	}
 	Trace = 0;
-
+/*
 	printf("Begain to DELETE data from the table yxue\n");
         for(i = 1550; i < 1555; i++)
         {
@@ -849,7 +849,7 @@ int main(int argc, char **argv)
                 cli_test_main(seltab);
         }
 
-
+*/
 	printf("Begain to SELECT data from the table yxue\n");
 	/* 3rd step: select data from table. */
 
