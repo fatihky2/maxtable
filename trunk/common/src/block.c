@@ -729,7 +729,7 @@ blk_get_location_sstab(TABINFO *tabinfo, BUF *bp)
 		
 		if (result == LE)
 		{
-			
+			/* case for the 1st row in a sstable. (tablet/tabletschm/sstab/)*/
 			if (bp->bblk->bblkno == 0)
 			{
 				blkidx = 0;
@@ -739,8 +739,15 @@ blk_get_location_sstab(TABINFO *tabinfo, BUF *bp)
 		}
 
 		blkidx = bp->bblk->bblkno;
-		
-		bp++;
+
+		if (bp->bblk->bnextblkno != -1)
+		{
+			bp++;
+		}
+		else
+		{
+			break;
+		}
 	}
 
 	return blkidx;

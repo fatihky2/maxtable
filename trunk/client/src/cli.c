@@ -823,7 +823,7 @@ int main(int argc, char **argv)
 
 	
 	/* 2nd step: insert into table. */
-	for(i = 0; i < 10000; i++)
+	for(i = 0; i < 1000; i++)
 	{
 		MEMSET(c1, 32);
 		sprintf(c1, "%s%d", "gggg", i);
@@ -853,7 +853,7 @@ int main(int argc, char **argv)
 	printf("Begain to SELECT data from the table yxue\n");
 	/* 3rd step: select data from table. */
 
-	for(i = 1535; i < 1560; i++)
+	for(i = 1; i < 1000; i++)
 	{
 		MEMSET(c1, 32);
 		sprintf(c1, "%s%d", "gggg", i);
@@ -863,7 +863,7 @@ int main(int argc, char **argv)
 		cli_test_main(seltab);
 	}
 
-	
+/*	
 	for(i = 5535; i < 5560; i++)
 	{
 		MEMSET(c1, 32);
@@ -873,7 +873,7 @@ int main(int argc, char **argv)
 
 		cli_test_main(seltab);
 	}
-
+*/
 	return -1;
 }
 
