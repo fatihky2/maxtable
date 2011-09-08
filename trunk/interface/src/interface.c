@@ -29,7 +29,7 @@ int validation_request(char * request)
 
 
 /*
-create one connection between cli and svr, return the connection
+** create one connection between cli and svr, return the connection
 */
 int cli_connection(char * meta_ip, int meta_port, conn ** connection)
 {
@@ -54,7 +54,7 @@ int cli_connection(char * meta_ip, int meta_port, conn ** connection)
 }
 
 /*
-close one connection between cli and svr
+** close one connection between cli and svr
 */
 void cli_exit(conn * connection)
 {
@@ -70,7 +70,7 @@ void cli_exit(conn * connection)
 }
 
 /*
-commit one request
+** commit one request
 */
 int cli_commit(conn * connection, char * cmd, char * response, int * resp_len)
 {
@@ -118,7 +118,7 @@ int cli_commit(conn * connection, char * cmd, char * response, int * resp_len)
     if (resp->status_code != RPC_SUCCESS)
     {
         printf("\n ERROR in response \n");
-        return FALSE;
+        goto finish;
     }
 
     if((querytype == INSERT) || (querytype == SELECT))
@@ -169,6 +169,7 @@ int cli_commit(conn * connection, char * cmd, char * response, int * resp_len)
         if (rg_resp->status_code != RPC_SUCCESS)
         {
             printf("\n ERROR in rg_server response \n");
+	    goto finish;
             return FALSE;
         }
 
@@ -222,6 +223,7 @@ int cli_commit(conn * connection, char * cmd, char * response, int * resp_len)
         strcpy(response, SUC_RET);
     }
 
+finish:
     conn_destroy_resp(resp);
     if((querytype == INSERT) || (querytype == SELECT))
         conn_destroy_resp(rg_resp);
