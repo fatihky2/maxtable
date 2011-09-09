@@ -70,19 +70,22 @@ MASTER_INFOR *Master_infor = NULL;
 
 struct stat st;
 
+#ifdef MAXTABLE_BENCH_TEST
+
+#define MT_META_TABLE   "./meta_table"
+#define MT_META_REGION  "./rg_server"
+#define MT_META_INDEX   "./index"	
+
+#else
+
 #define MT_META_TABLE   "/mnt/metaserver/meta_table"
 #define MT_META_REGION  "/mnt/metaserver/rg_server"
 #define MT_META_INDEX   "/mnt/metaserver/index"	
 
-
-static void 
-meta_bld_sysrow(char *rp, int rlen, int tabletid, int sstabnum);
+#endif
 
 static int
 meta_get_free_sstab();
-
-static void
-meta_prt_sstabmap(int begin, int end);
 
 static int
 meta_collect_rg(char * req_buf);

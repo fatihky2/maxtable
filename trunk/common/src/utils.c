@@ -98,11 +98,9 @@ backmove(register long *from, register long *to, register int length)
 
 
 	/*
-	** If there are more than 8 bytes and both
-	** addesses are even, then
-	** move 4 bytes at a time until you
-	** get to the last 1,2,3 or 4 bytes. They
-	** are moved one byte at a time
+	** If there are more than 8 bytes and both addesses are even, then
+	** move 4 bytes at a time until you get to the last 1,2,3 or 4 bytes. 
+	** They are moved one byte at a time.
 	*/
 	if (length >= 8 && !(((long) from | (long) to) & ( sizeof (long) - 1 )))
 	{

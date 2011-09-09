@@ -39,7 +39,7 @@ conn_insert_resp_parser(char *result, char *rg_ip, int rg_port)
 	int	addr_idx;
 	char	port_addr[16];
 
-	/* Parse the range IP. */
+	
 	addr_idx = 0;
 	result = trim(result, ' ');
 	
@@ -47,7 +47,7 @@ conn_insert_resp_parser(char *result, char *rg_ip, int rg_port)
 
 	MEMCPY(rg_ip, result, (addr_idx - 1));
 
-	/* Parse the range port. */
+	
 	result = &(result[addr_idx]);
 	
 	result = trim(result, ' ');
@@ -62,7 +62,7 @@ conn_insert_resp_parser(char *result, char *rg_ip, int rg_port)
 	port_addr[addr_idx] = '\0';
 	rg_port = atoi(port_addr);
 
-	/* Parse the sstable file name. */
+	
 	result = &(result[addr_idx++]);
 	result = trim(result, ' ');
 
@@ -95,7 +95,7 @@ conn_build_resp(char *resp_bp)
 		return NULL;
 	}
 	
-	/* Parse the buffer. */
+	
 	GET_FROM_BUFFER(resp_bp, data_index, resp->magic, sizeof(resp->magic));
 
 	resp->status_code = ((RPCRESP *)resp_bp)->status_code;
@@ -105,9 +105,13 @@ conn_build_resp(char *resp_bp)
 
 	if (resp->result_length)
 	{
+		
+	//	(resp->result_length)++;
+		
 		resp->result = MEMALLOCHEAP(resp->result_length);
+		MEMSET(resp->result, resp->result_length);
 		GET_FROM_BUFFER(resp_bp, data_index, resp->result, 
-				resp->result_length);
+				(resp->result_length));
 	}
 	
 	return resp;
@@ -136,7 +140,7 @@ conn_build_resp_byte(int status, int result_len, char *result)
 	
 	resp_buf_idx = 0;	
 
-	/* Need to discount the size of pointer of result. */
+	
 	resp_size = sizeof(RPCRESP) - sizeof(char *) + result_len;
 
 	des_buf = MEMALLOCHEAP(resp_size);	
@@ -200,7 +204,8 @@ conn_build_req(char *data, int data_len)
 	req->data = MEMALLOCHEAP(req->data_size);
 	MEMSET(req->data, req->data_size);
 
-	GET_FROM_BUFFER(data, data_index, req->data, req->data_size);
+	
+	GET_FROM_BUFFER(data, data_index, req->data, (req->data_size));
 
 	return req;
 }
@@ -246,20 +251,10 @@ conn_destroy_req(RPCREQ *req)
 	}
 }
 
-/** client part **/
 
-/** Currently, mainly used in the server(Callee) side for dispatching the data faster **/
-static void 
-setTcpNoDelay(int sockfd)
-{
-	int yes = 1;
-	if (setsockopt(sockfd, IPPROTO_TCP, TCP_NODELAY, &yes, sizeof(yes)) == -1)
-	{
-		;
-	}
-}
 
-/** Currently, mainly used in the client(Caller) side for ending the call if the target is not online **/
+
+
 static void 
 setTcpKeepAlive(int sockfd)
 {
@@ -270,18 +265,8 @@ setTcpKeepAlive(int sockfd)
 	}
 }
 
-static void 
-setTcpReuse(int sockfd)
-{
-	int yes = 1;
-	if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) == -1) 
-	{
-		;
-	}
-}
 
 
-/* need to free the result */
 int 
 conn_open(char* ip_address, int port)
 {
@@ -343,6 +328,8 @@ conn_recv_resp(int sockfd)
 
 	buf = MEMALLOCHEAP(CONN_BUF_SIZE);
 
+//	MEMSET(buf, CONN_BUF_SIZE);
+
 	n = read(sockfd, buf, CONN_BUF_SIZE);
 
 	//If n == 0, measn the remote node have encounter some bad problems
@@ -402,7 +389,7 @@ conn_chk_respmagic(char *str)
 }
 
 
-/** server part **/
+
 void 
 start_daemon(int listenfd, char * (*handler_request)(char *req_buf))
 {
@@ -434,7 +421,7 @@ _read_again:
 		n = read(connfd, buf, CONN_BUF_SIZE - 1);
 		if (n > 0) 
 		{
-			buf[n] = '\0'; /* terminate the string */
+			buf[n] = '\0'; 
 		} 
 		else if (n == 0) 
 		{
@@ -479,24 +466,7 @@ _read_again:
 
 void startup(int servPort, int opid, char * (*handler_request)(char *req_buf))
 {
-	/*struct sockaddr_in servaddr;
-	int listenfd = socket(AF_INET, SOCK_STREAM, 0);
-
-	bzero(&servaddr, sizeof(servaddr));
-	servaddr.sin_family = AF_INET;
-	servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
-	servaddr.sin_port = htons(servPort);
-
-	setTcpReuse(listenfd);
-	setTcpNoDelay(listenfd);
-
-	if(bind(listenfd, (struct sockaddr *)&servaddr, sizeof(servaddr)) != 0)
-	{
-		exit(-1);
-	}
-
-	listen(listenfd, 20);
-	*/
+	
 
 	pthread_t pthread_id;
 //	pthread_t pthread_id2;

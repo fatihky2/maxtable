@@ -22,17 +22,17 @@
 
 #include "global.h"
 
-/** RPC status **/
-#define RPC_SUCCESS	0	/* RPC has been processed successfully. */
-#define RPC_CONN_FAIL	1	/* Connection is failed. */
-#define RPC_FAIL	2 	/* Fail to process the RPC. */
-#define RPC_PARSER_ERR	3	/* Fail to parse the request. */
+
+#define RPC_SUCCESS	0	
+#define RPC_CONN_FAIL	1	
+#define RPC_FAIL	2 	
+#define RPC_PARSER_ERR	3	
 
 #define RPC_MAGIC_MAX_LEN	8
 #define RPC_REQUEST_MAGIC "rpcrqst"
 #define RPC_RESPONSE_MAGIC "rpcresp"
 
-/* Following is the special magic number. */
+
 #define	RPC_DROP_TABLE_MAGIC	"drop"
 #define RPC_RG2MASTER_REPORT	"rg_rpt"
 #define RPC_RBD_MAGIC		"rebalan"
@@ -45,7 +45,7 @@
 #define CONF_RG_PORT	"rangerport"
 
 
-/** The Buffer Pool for holding RPCRESP Data  **/
+
 #define CONN_BUF_SIZE (1024 * 1024)
 
 typedef struct rpcreq
@@ -58,16 +58,13 @@ typedef struct rpcreq
 typedef struct rpcresp
 {
 	char	magic[RPC_MAGIC_MAX_LEN];
-	int	status_code; /*  */
-	int	result_length; /** used in serializing and deserializing**/
+	int	status_code; 
+	int	result_length; 
 	char	*result;
 }RPCRESP;
 
 
-/*
-** Copy data from the transmission buffer to the location
-** specified by the pointer.
-*/ 
+ 
 #define GET_FROM_BUFFER( buf, idx, ptr, size )		\
 {							\
 	MEMCPY ( ptr, buf+idx, size );                  \

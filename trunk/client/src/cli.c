@@ -441,6 +441,7 @@ finish:
 }
 
 
+#ifdef MAXTABLE_UNIT_TEST
 
 
 static int
@@ -764,7 +765,7 @@ finish:
 }
 
 
-#ifdef MAXTABLE_UNIT_TEST
+
 int main(int argc, char **argv)
 {
 	char		*crtab;

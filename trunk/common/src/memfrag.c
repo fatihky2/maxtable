@@ -36,10 +36,6 @@ static int
 mp_frag_grow(MEMPOOL * mp, size_t grow_size);
 static int
 mp_list_insert(void * pool_hdl, int type);
-static void
-prLINK(LINK *link);
-static void
-mem_prt_fragmp(MEMPOOL *mp);
 
 
 
@@ -711,12 +707,18 @@ memfreeheap(void *addr, char *file, int line)
 	return mp_frag_free(Kernel->ke_mp_frag, addr,file,line);
 }
 
+
+
+
+#ifdef MEMMGR_UNIT_TEST
+
 static void
 prLINK(LINK *link)
 {
 	printf("\n LinkAddr = 0x%p \n", link);
 	printf("\t prev=0x%p \t next=0x%p \n", link->prev, link->next);
 }
+
 
 
 static void
@@ -745,7 +747,7 @@ mem_prt_fragmp(MEMPOOL *mp)
 
 }
 
-#ifdef MEMMGR_UNIT_TEST
+
 int main()
 {
 	char *test_char1;
@@ -757,16 +759,16 @@ int main()
 	mem_prt_fragmp(Globle_mp);
 
 	printf(" \n-------------MemPool After Allocting\n");
-	test_char1 = memallocheap(1600);
+	test_char1 = MEMALLOCHEAP(1600);
 
-	test_char2 = memallocheap(1600);
+	test_char2 = MEMALLOCHEAP(1600);
 	
-	test_char3 = memallocheap(1600);
+	test_char3 = MEMALLOCHEAP(1600);
 
 	mem_prt_fragmp(Globle_mp);
 
 	printf(" \n-------------MemPool After Free\n");
-	memfreeheap(test_char2);		
+	MEMFREEHEAP(test_char2);		
 	mem_prt_fragmp(Globle_mp);
 	return 1;
 }
