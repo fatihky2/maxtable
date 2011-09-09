@@ -1,0 +1,19 @@
+#summary Benchmark working
+
+* CPU information *
+{{{
+model name	: Intel(R) Core(TM)2 Quad CPU    Q8400  @ 2.66GHz
+cpu MHz		: 2659.970
+cache size	: 2048 KB
+}}}
+* Data scheme * 
+{{{
+Two varchar type of columns and one int type of column
+}}}
+
+* Performance *
+{{{
+1. One testing machine and single thread
+2. Insert 100000 rows: time cost 220s (sync IO, strong consistence)
+3. Select 50000 rows : time cost 30s  ( cache size = 16M)
+}}}
