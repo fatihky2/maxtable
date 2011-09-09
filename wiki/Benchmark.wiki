@@ -16,6 +16,7 @@ Two varchar type of columns and one int type of column
 1. One testing machine and single thread (sync IO, strong consistence, cache size = 16M)
 2. Insert 100000 rows: time cost 220s 
 3. Select 50000 rows : time cost 30s 
+4. select 5000 rows: time cost 2.3s
 }}}
 
 
