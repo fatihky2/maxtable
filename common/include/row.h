@@ -74,6 +74,9 @@ typedef struct rowfmt
 	(GETINT((rp) + (minlen))				\
 	      - ROW_GET_VARCNT((rp)) * COLOFFSETENTRYSIZE)
 
+#define	ROW_GETPTR_FROM_OFFTAB(blkptr, offset_idx)		\
+	(((char *) (blkptr)) +					\
+		(ROW_OFFSET_PTR((blkptr)))[-((int)(offset_idx))])
 
 
 #define ROW_GET_VARCOL_LEN(rp, minlen, varcolid, collen)		\
