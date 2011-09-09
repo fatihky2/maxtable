@@ -1,4 +1,4 @@
-metaserver=127.0.0.1
+metaserver=172.16.10.11
 metaport=1959
-rangerserver=127.0.0.1
+rangerserver=172.16.10.11
 rangerport=1949

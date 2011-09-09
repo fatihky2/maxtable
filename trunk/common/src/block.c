@@ -65,6 +65,7 @@ blkget(TABINFO *tabinfo)
 	
 
 	
+	
 	tabinfo->t_sinfo->sistate |= SI_INDEX_BLK;
 	blkidx = blksrch(tabinfo, lastbp);
 
@@ -134,12 +135,14 @@ blksrch(TABINFO *tabinfo, BUF *bp)
 	rowno = srchinfo->brownum;
 	rp = srchinfo->brow;
 	last_offset = srchinfo->boffset;
+
 	
 	if ((result != EQ) && !(tabinfo->t_stat & TAB_SCHM_SRCH))
 	{
 		tabinfo->t_sinfo->sistate |= SI_NODATA;
 	}
 
+	
 	if (rowno == BLK_GET_NEXT_ROWNO(bp))
 	{
 		if (!(tabinfo->t_stat & TAB_SCHM_SRCH))
@@ -152,6 +155,7 @@ blksrch(TABINFO *tabinfo, BUF *bp)
 
 	
 finish:
+
 	
 	tabinfo->t_rowinfo->rblknum = blkidx;
 	tabinfo->t_rowinfo->roffset = last_offset;
@@ -188,6 +192,7 @@ blk_init(BLOCK *blk)
 }
 
 
+
 BUF *
 blk_getsstable(TABINFO *tabinfo)
 {
@@ -209,7 +214,6 @@ blk_getsstable(TABINFO *tabinfo)
 	{
 		bp = bufgrab(tabinfo);
 
-		
 		bufhash(bp);
 
 		
@@ -233,6 +237,7 @@ blk_getsstable(TABINFO *tabinfo)
 		bufread(bp);
 
 	}
+
 
 	if (SSTABLE_STATE(bp) != BUF_IOERR)
 	{
@@ -276,6 +281,7 @@ blkins(TABINFO *tabinfo, char *rp)
 
 	blk_stat = blk_check_sstab_space(tabinfo, bp, rp, rlen, offset);
 
+	
 	if (blk_stat & BLK_ROW_NEXT_SSTAB)
 	{
 		goto finish;
@@ -316,7 +322,7 @@ blkins(TABINFO *tabinfo, char *rp)
 	}
 	
 		
-
+	
 	PUT_TO_BUFFER((char *)bp->bblk + offset, ign, rp, rlen);
 
 	if (bp->bblk->bfreeoff == offset)
@@ -388,7 +394,6 @@ blkdel(TABINFO *tabinfo)
 
 		
 		
-
 		goto finish;
 	}
 	
@@ -402,7 +407,7 @@ blkdel(TABINFO *tabinfo)
 	
 	for (i = bp->bblk->bnextrno; i > 0; i--)
 	{
-		
+				
 		if (offtab[-(i-1)] < offset)
 		{
 			break;
@@ -478,9 +483,6 @@ blk_file_back_move(BLOCK *blk)
 
 	
 }
-
-
-
 
 
 
@@ -729,7 +731,7 @@ blk_get_location_sstab(TABINFO *tabinfo, BUF *bp)
 		
 		if (result == LE)
 		{
-			/* case for the 1st row in a sstable. (tablet/tabletschm/sstab/)*/
+			
 			if (bp->bblk->bblkno == 0)
 			{
 				blkidx = 0;

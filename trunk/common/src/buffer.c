@@ -34,6 +34,8 @@ extern TSS	*Tss;
 
 
 
+
+
 void
 bufread(BUF *bp)
 {
@@ -175,12 +177,12 @@ bufawrite(BUF *bp)
 	V_SPINLOCK(BUF_SPIN);
 
 	
+	
 
 	MEMFREEHEAP(blkioptr);
 
 	return;
 }
-
 
 
 
@@ -200,8 +202,7 @@ bufsearch(TABINFO *tabinfo)
 	hashptr = BUFHASH(sstabno, tabid);
 
 	
-
-	P_SPINLOCK(BUF_SPIN);
+//	P_SPINLOCK(BUF_SPIN);
 
 	for (bufptr = *hashptr; bufptr; bufptr = bufptr->bhash)
 	{
@@ -217,7 +218,7 @@ bufsearch(TABINFO *tabinfo)
 	}
 
 	
-	V_SPINLOCK(BUF_SPIN);
+//	V_SPINLOCK(BUF_SPIN);
 	return (NULL);
 }
 
@@ -226,7 +227,6 @@ bufhashsize()
 {
 	return (BUFHASHSIZE * sizeof (BUF *));
 }
-
 
 
 BUF *
@@ -239,7 +239,7 @@ bufhash(BUF *bp)
 	
 	assert(!(SSTABLE_STATE(bp) & BUF_HASHED));	
 
-	P_SPINLOCK(BUF_SPIN);
+//	P_SPINLOCK(BUF_SPIN);
 
 	
 	hashptr = BUFHASH(bp->bsstabid, bp->btabid);
@@ -270,7 +270,7 @@ bufhash(BUF *bp)
 	SSTABLE_STATE(bp) &= ~BUF_NOTHASHED;
 	SSTABLE_STATE(bp) |= BUF_HASHED;
 
-	V_SPINLOCK(BUF_SPIN);
+//	V_SPINLOCK(BUF_SPIN);
 
 	
 	return ((BUF *) NULL);
@@ -286,8 +286,9 @@ bufunhash(BUF *bp)
 	BUF		**lastptr;	
 
 
-	P_SPINLOCK(BUF_SPIN);
+//	P_SPINLOCK(BUF_SPIN);
 
+ 	
  	
  	if ((SSTABLE_STATE(bp) & BUF_HASHED) && (bp->bblkno != bp->bblk->bblkno))
 	{
@@ -313,8 +314,7 @@ bufunhash(BUF *bp)
 			bufptr->bstat &= ~BUF_HASHED;
 			V_SPINLOCK(BUF_SPIN);
 			return;
-		}
-		
+		}		
 		
 		else
 		{
@@ -328,9 +328,13 @@ bufunhash(BUF *bp)
 	{
 		goto fail;				
 	}
+	else
+	{
+		return;
+	}
 
 fail:
-	V_SPINLOCK(BUF_SPIN);
+//	V_SPINLOCK(BUF_SPIN);
 
 	printf(" Block header error \n");
 

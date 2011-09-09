@@ -112,6 +112,7 @@ typedef struct srch_info
 #define	SI_NODATA	0x00000008	
 #define SI_DEL_DATA	0x00000010
 
+
 #define SRCH_INFO_INIT(srch_info, key, keylen, colid, coltype, coloff)	\
 do {																	\
 		(srch_info)->sicolval = key;									\
