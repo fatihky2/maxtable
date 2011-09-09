@@ -17,3 +17,6 @@ Two varchar type of columns and one int type of column
 2. Insert 100000 rows: time cost 220s (sync IO, strong consistence)
 3. Select 50000 rows : time cost 30s  ( cache size = 16M)
 }}}
+
+
+_Work Continued..._
