@@ -13,9 +13,9 @@ Two varchar type of columns and one int type of column
 
 * Performance *
 {{{
-1. One testing machine and single thread
-2. Insert 100000 rows: time cost 220s (sync IO, strong consistence)
-3. Select 50000 rows : time cost 30s  ( cache size = 16M)
+1. One testing machine and single thread (sync IO, strong consistence, cache size = 16M)
+2. Insert 100000 rows: time cost 220s 
+3. Select 50000 rows : time cost 30s 
 }}}
 
 
