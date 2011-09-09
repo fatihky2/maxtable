@@ -91,7 +91,7 @@ nextrow:
 
 			if (tabinfo->t_stat & TAB_SCHM_SRCH)
 			{
-				/* Check if we need to change the key row. */
+				
 				if (   (tabinfo->t_sstab_id == 1) 
 				    && (srchinfo->brownum == 0) 
 			    	    && (bp->bblk->bblkno == 0))
@@ -103,7 +103,7 @@ nextrow:
 					tabinfo->t_stat |= TAB_TABLET_KEYROW_CHG;
 				}
 
-				/* Adjust to the previous offset for the right location. */
+				
 				if (srchinfo->brownum > 0)
 				{
 					(srchinfo->brownum)--;
@@ -132,16 +132,13 @@ nextrow:
 
 				(srchinfo->brownum)++;
 				
-				/* 
-				** This case (last row) will be processed in the blksearch(), 
-				** so we need to fill something here. 
-				*/
+				
 				if (srchinfo->brownum == srchinfo->btotrows)
     				{
     					break;
     				}
 
-				/* Middle row case. */
+				
 				srchinfo->boffset += ROW_GET_LENGTH(srchinfo->brow, bp->bblk->bminlen);
 
 				assert(srchinfo->boffset == ROW_OFFSET_PTR(bp->bblk)[-(srchinfo->brownum)]);			
