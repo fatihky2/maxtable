@@ -53,7 +53,15 @@ extern KERNEL	*Kernel;
 
 #define DEFAULT_REGION_FLUSH_CHECK_INTERVAL 600 //10min
 
+#ifdef MAXTABLE_BENCH_TEST
+
+#define MT_RANGE_TABLE   "./rg_table"
+
+#else
+
 #define MT_RANGE_TABLE   "/mnt/ranger/rg_table"
+
+#endif
 
 #define	RANGE_CONF_PATH_MAX_LEN	64
 

@@ -18,7 +18,7 @@ LIB_OBJS_C = $(patsubst %.c,%.o,$(LIB_SRCS_C))
 LIB_SRCS_CPP = $(wildcard ${SERVICE_SRC})
 LIB_OBJS_CPP = $(patsubst %.cpp,%.o,$(LIB_SRCS_CPP))
 
-all: client master region sample
+all: client master region memTest benchTest sample
 
 %.o : %.c
 	$(CC) -o $@ -c $< $(CFLAGS)
@@ -30,16 +30,19 @@ client: ${COMMON_SRC} ${CLI_SRC}
 	$(CC) $(CFLAGS) ${COMMON_SRC} ${CLI_SRC} -D MEMMGR_TEST -o imql
 
 master: ${COMMON_SRC} ${MASTER_SRC}
-	$(CC) $(CFLAGS) ${COMMON_SRC} ${MASTER_SRC} -D MEMMGR_TEST -o startMaster
+	$(CC) $(CFLAGS) ${COMMON_SRC} ${MASTER_SRC} -D MEMMGR_TEST -D MAXTABLE_BENCH_TEST -o startMaster
 
 region: ${COMMON_SRC} ${REGION_SRC}
-	$(CC) $(CFLAGS) ${COMMON_SRC} ${REGION_SRC} -D MEMMGR_TEST -o startRegion
+	$(CC) $(CFLAGS) ${COMMON_SRC} ${REGION_SRC} -D MEMMGR_TEST -D MAXTABLE_BENCH_TEST -o startRegion
 	
 memTest: ${COMMON_SRC}
 	$(CC) $(CFLAGS) ${COMMON_SRC} -D MEMMGR_UNIT_TEST -o memTest
+
+benchTest: ${COMMON_SRC} ${INTERFACE_SRC}
+	$(CC) $(CFLAGS) ${COMMON_SRC} ${INTERFACE_SRC} -D MAXTABLE_BENCH_TEST -o benchtest
 	
 sample: ${COMMON_SRC} ${INTERFACE_SRC}
-	$(CC) $(CFLAGS) ${COMMON_SRC} ${INTERFACE_SRC} -o sample
+	$(CC) $(CFLAGS) ${COMMON_SRC} ${INTERFACE_SRC} -D MAXTABLE_SAMPLE_TEST -o sample
         
 service: ${LIB_OBJS_C} ${LIB_OBJS_CPP}
 	$(AR) libservice.a ${LIB_OBJS_C} ${LIB_OBJS_CPP}
@@ -48,4 +51,4 @@ service_sample: service/src/sample.cpp libservice.a
 	$(CPP) $(CFLAGS) service/src/sample.cpp libservice.a -o service_sample
 
 clean: 
-	rm -rf startClient startMaster startRegion sample libservice.a ${LIB_OBJS_C} ${LIB_OBJS_CPP}
+	rm -rf startClient startMaster startRegion imql memTest benchTest sample libservice.a ${LIB_OBJS_C} ${LIB_OBJS_CPP}
