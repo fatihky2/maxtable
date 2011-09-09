@@ -674,6 +674,7 @@ blk_backmov(BLOCK *blk)
 	{
 		tmpblk = (BLOCK *) ((char *)nextblk+ BLOCKSIZE);
 
+		
 		assert((tmpblk->bblkno != -1) && (tmpblk->bfreeoff == BLKHEADERSIZE));
 
 
