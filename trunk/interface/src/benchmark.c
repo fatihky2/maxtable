@@ -15,12 +15,12 @@ int main()
 	conn * connection;
 
 
-	if(cli_connection("172.16.10.11", 1959, &connection))
+	if(cli_connection("127.0.0.1", 1959, &connection))
 	{
 		printf("hello\n");
 		char resp[256], cmd[256];
 		int i, len;
-if(0)
+if(1)
 {
 		memset(resp, 0, 256);
 		sprintf(cmd, "create table gu(id1 varchar, id2 int, id3 varchar)");
@@ -51,7 +51,7 @@ if(0)
 
 		gettimeofday(&tpStart, NULL);
 
-		for(i = 1; i < 5000; i ++)
+		for(i = 1; i < 20000; i ++)
 		{
 			memset(resp, 0, 256);
 			memset(cmd, 0, 256);

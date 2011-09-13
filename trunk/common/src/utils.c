@@ -107,14 +107,14 @@ backmove(register long *from, register long *to, register int length)
 		/*
 		** Move long words
 		*/
-		length -= 4;
+		length -= 8;
 		do
 		{
 			*--to = *--from;
-			length -= 4;
+			length -= 8;
 		} while (length > 0);
 
-		length = 4 + length;
+		length = 8 + length;
 	}
 
 	/* move the bytes */

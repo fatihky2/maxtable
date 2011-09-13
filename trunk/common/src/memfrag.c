@@ -708,10 +708,6 @@ memfreeheap(void *addr, char *file, int line)
 }
 
 
-
-
-#ifdef MEMMGR_UNIT_TEST
-
 static void
 prLINK(LINK *link)
 {
@@ -746,6 +742,9 @@ mem_prt_fragmp(MEMPOOL *mp)
 	printf("\n Pint Frag List : END \n");
 
 }
+
+
+#ifdef MEMMGR_UNIT_TEST
 
 
 int main()

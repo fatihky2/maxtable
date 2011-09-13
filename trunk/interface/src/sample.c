@@ -20,8 +20,9 @@ int main()
 		sprintf(cmd, "create table gu(id1 varchar, id2 int, id3 varchar)");
 		cli_commit(connection, cmd, resp, &len);
 		printf("ret: %s\n", resp);
-
-		for(i = 0; i < 20000; i ++)
+if (1)
+{
+		for(i = 0; i < 10000; i ++)
 		{
 			memset(resp, 0, 256);
 			memset(cmd, 0, 256);
@@ -29,17 +30,39 @@ int main()
 			cli_commit(connection, cmd, resp, &len);
 			printf("cmd: %s, ret(%d): %s\n", cmd, len, resp);
 		}
-		
-		for(i = 0; i < 200; i ++)
+
+
+		for(i = 0; i < 10000; i ++)
 		{
 			memset(resp, 0, 256);
 			memset(cmd, 0, 256);
-			sprintf(cmd, "select gu(gggg%d)", i*100);
+			sprintf(cmd, "select gu(gggg%d)", i);
 			cli_commit(connection, cmd, resp, &len);
 			resp[len] = '\0';
 			printf("cmd: %s, col_num: %d, ret(%d): %s, %d, %s\n", cmd, *((int *)(resp + len -4)), len, resp + *((int *)(resp + len -8)), *((int *)(resp + *((int *)(resp + len -12)))), resp + *((int *)(resp + len -16)));
 		}
 
+}
+		for(i = 0; i < 10; i ++)
+		{
+			memset(resp, 0, 256);
+			memset(cmd, 0, 256);
+			sprintf(cmd, "delete gu(gggg%d)", i);
+			cli_commit(connection, cmd, resp, &len);
+			resp[len] = '\0';
+		//	printf("cmd: %s, col_num: %d, ret(%d): %s, %d, %s\n", cmd, *((int *)(resp + len -4)), len, resp + *((int *)(resp + len -8)), *((int *)(resp + *((int *)(resp + len -12)))), resp + *((int *)(resp + len -16)));
+			printf("cmd: %s\n", cmd);
+		}
+
+		for(i = 0; i < 10; i ++)
+		{
+			memset(resp, 0, 256);
+			memset(cmd, 0, 256);
+			sprintf(cmd, "select gu(gggg%d)", i);
+			cli_commit(connection, cmd, resp, &len);
+			resp[len] = '\0';
+			printf("cmd: %s, col_num: %d, ret(%d): %s, %d, %s\n", cmd, *((int *)(resp + len -4)), len, resp + *((int *)(resp + len -8)), *((int *)(resp + *((int *)(resp + len -12)))), resp + *((int *)(resp + len -16)));
+		}
 		cli_exit(connection);
 	}
 	
