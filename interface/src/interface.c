@@ -141,7 +141,7 @@ int cli_commit(conn * connection, char * cmd, char * response, int * resp_len)
 
 	}
 
-	if((querytype == INSERT) || (querytype == SELECT))
+	if((querytype == INSERT) || (querytype == SELECT) || (querytype == DELETE))
 	{
 		INSMETA	* resp_ins = (INSMETA *)resp->result;
 		rg_conn * rg_connection;
@@ -230,6 +230,8 @@ int cli_commit(conn * connection, char * cmd, char * response, int * resp_len)
 			MEMCPY(send_buf, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
 			MEMCPY(send_buf + RPC_MAGIC_MAX_LEN, new_buf, new_size);
 
+			MEMFREEHEAP(sstab_key);
+
 			write(connection->connection_fd, send_buf, 
 						(new_size + RPC_MAGIC_MAX_LEN));
 
@@ -266,7 +268,7 @@ finish:
 
 	conn_destroy_resp(resp);
 	
-	if((querytype == INSERT) || (querytype == SELECT))
+	if((querytype == INSERT) || (querytype == SELECT) ||(querytype == DELETE))
 	{
 		conn_destroy_resp(rg_resp);
 	}

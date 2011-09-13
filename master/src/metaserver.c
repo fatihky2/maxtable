@@ -306,6 +306,11 @@ meta_crtab(TREE *command)
 			goto exit;
 		}
 	}
+	else
+	{
+		printf("Table %s has been created.\n",tab_name);
+		goto exit;
+	}
 	
 	
 	MEMCPY(tab_dir1, tab_dir, STRLEN(tab_dir));
@@ -1193,6 +1198,12 @@ meta_seldeltab(TREE *command, TABINFO *tabinfo)
 	
 	
 	assert(tab_hdr.tab_tablet > 0);
+
+	if (tab_hdr.tab_tablet == 0)
+	{
+		printf("Table %s has no data.\n", tab_name);
+		goto exit;
+	}
 
 	if (tab_hdr.tab_stat & TAB_DROPPED)
 	{

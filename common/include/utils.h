@@ -54,9 +54,9 @@ backmove1(register char *from, register char *to, register int length);
 void
 build_file_name(char	*filehdr, char *filename, int fileno);
 
-#define BACKMOVE1(s, d, l)	backmove((long *)(s), (long *)(d), l)
+#define BACKMOVE(s, d, l)	backmove((long *)(s), (long *)(d), l)
 
-#define BACKMOVE(s, d, l)	backmove1((s), (d), l)
+#define BACKMOVE1(s, d, l)	backmove1((s), (d), l)
 
 unsigned long
 hashstring(char *bytes, int nbytes, int seed);
