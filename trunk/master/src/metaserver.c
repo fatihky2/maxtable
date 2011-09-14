@@ -54,16 +54,20 @@ extern	TSS	*Tss;
 
 
 
-int	*sstab_map;
+SSTAB_INFOR	*sstab_map;
 
 TAB_SSTAB_MAP *tab_sstabmap;
 
 
-#define SSTAB_MAP_SET(i, flag)	(sstab_map[i] = flag)
+#define SSTAB_MAP_SET(i, flag)	(sstab_map[i].sstab_stat = flag)
 
-#define SSTAB_MAP_FREE(i)	(sstab_map[i] == SSTAB_FREE)
-#define SSTAB_MAP_USED(i)	(sstab_map[i] == SSTAB_USED)
-#define SSTAB_MAP_RESERV(i)	(sstab_map[i] == SSTAB_RESERVED)
+#define SSTAB_MAP_FREE(i)	(sstab_map[i].sstab_stat == SSTAB_FREE)
+#define SSTAB_MAP_USED(i)	(sstab_map[i].sstab_stat == SSTAB_USED)
+#define SSTAB_MAP_RESERV(i)	(sstab_map[i].sstab_stat == SSTAB_RESERVED)
+
+#define SSTAB_MAP_GET_SPLIT_TS(i)		(sstab_map[i].split_ts)
+#define SSTAB_MAP_SET_SPLIT_TS(i, split_ts)	(sstab_map[i].split_ts = (unsigned int)split_ts)
+
 
 
 MASTER_INFOR *Master_infor = NULL;
@@ -433,10 +437,10 @@ meta_crtab(TREE *command)
 
 	
 
-	int *sstab_map_tmp;
+	SSTAB_INFOR	*sstab_map_tmp;
 	
 	
-	sstab_map_tmp = (int *)malloc(SSTAB_MAP_SIZE);
+	sstab_map_tmp = (SSTAB_INFOR *)malloc(SSTAB_MAP_SIZE);
 
 	
 
@@ -864,6 +868,10 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 
 	
 	*(int *)(col_buf + col_buf_idx) = res_sstab_id;
+	col_buf_idx += sizeof(int);
+
+	
+	*(unsigned int *)(col_buf + col_buf_idx) = SSTAB_MAP_GET_SPLIT_TS(sstab_id);
 	col_buf_idx += sizeof(int);
 	
 	
@@ -1310,6 +1318,10 @@ meta_seldeltab(TREE *command, TABINFO *tabinfo)
 	col_buf_idx += sizeof(int);
 
 	
+	*(unsigned int *)(col_buf + col_buf_idx) = SSTAB_MAP_GET_SPLIT_TS(sstab_id);
+	col_buf_idx += sizeof(unsigned int);
+
+	
 	MEMCPY((col_buf + col_buf_idx), sstab_name, SSTABLE_NAME_MAX_LEN);
 	col_buf_idx += SSTABLE_NAME_MAX_LEN;
 
@@ -1439,7 +1451,7 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 		goto exit;
 	}
 		
-	keycol = par_get_colval_by_colid(command, 3, &keycolen);
+	
 	sstab_name= par_get_colval_by_colid(command, 1, &sstab_name_len);
 
 	int colen;
@@ -1451,6 +1463,21 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 
 	sstab_id = m_atoi(colptr, colen);
 
+	int split_ts;
+
+	colptr = par_get_colval_by_colid(command, 3, &colen);
+	split_ts = m_atoi(colptr, colen);
+
+	int split_sstabid;
+	
+	colptr = par_get_colval_by_colid(command, 4, &colen);
+	split_sstabid = m_atoi(colptr, colen);
+	
+	keycol = par_get_colval_by_colid(command, 5, &keycolen);
+
+	
+	SSTAB_MAP_SET_SPLIT_TS(split_sstabid, split_ts);
+	
 	SSTAB_MAP_SET(sstab_id, SSTAB_USED);
 
 	
@@ -1545,7 +1572,7 @@ meta_get_free_sstab()
 {
 	int i = 0;
 
-	while (i < SSTAB_MAP_SIZE)
+	while (i < SSTAB_MAP_ITEM)
 	{
 		if (SSTAB_MAP_FREE(i))
 		{
@@ -1563,7 +1590,7 @@ meta_prt_sstabmap(int begin, int end)
 {
 	while(begin < end)
 	{
-		printf("sstab_map[%d] == %d \n", begin, sstab_map[begin]);
+		printf("sstab_map[%d] == %d \n", begin, sstab_map[begin].sstab_stat);
 
 		begin++;
 	}

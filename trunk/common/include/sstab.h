@@ -28,9 +28,9 @@ void
 sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp);
 
 void
-sstab_namebyid(TABINFO *tabinfo, char *new_sstab);
+sstab_namebyid(char *old_sstab, char *new_sstab, int new_sstab_id);
 
-int *
+SSTAB_INFOR *
 sstab_map_get(int tabid, char *tab_dir, TAB_SSTAB_MAP **tab_sstab_map);
 
 void

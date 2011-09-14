@@ -30,6 +30,7 @@
 #include <time.h>
 #include "tabinfo.h"
 #include "file_op.h"
+#include "timestamp.h"
 
 
 extern	TSS	*Tss;
@@ -73,23 +74,19 @@ sstab_namebyname(char *old_sstab, char *new_sstab)
 
 
 void
-sstab_namebyid(TABINFO *tabinfo, char *new_sstab)
+sstab_namebyid(char *old_sstab, char *new_sstab, int new_sstab_id)
 {
 	char	nameidx[64];
 	int	idxpos;
 	char	tmpsstab[SSTABLE_NAME_MAX_LEN];
 	int	old_sstab_len;
-	char	*old_sstab;
-
-
-
-	old_sstab = tabinfo->t_sstab_name;
+	
 
 	old_sstab_len = STRLEN(old_sstab);
 	idxpos = str1nstr(old_sstab, "sstable", old_sstab_len);
 
 	MEMSET(nameidx, 64);
-	sprintf(nameidx, "%d", tabinfo->t_insmeta->res_sstab_id);
+	sprintf(nameidx, "%d", new_sstab_id);
 	
 	MEMSET(tmpsstab, SSTABLE_NAME_MAX_LEN);
 	MEMCPY(tmpsstab, old_sstab, idxpos);
@@ -98,7 +95,7 @@ sstab_namebyid(TABINFO *tabinfo, char *new_sstab)
 
 	sprintf(new_sstab, "%s%s", tmpsstab,nameidx);
 
-	printf("new_sstab = %s--------%d---\n", new_sstab,tabinfo->t_insmeta->res_sstab_id);
+	printf("new_sstab = %s--------%d---\n", new_sstab, new_sstab_id);
 
 	return;
 }
@@ -158,7 +155,7 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 	MEMSET(destbuf->bsstab_name, 256);
 
 //	sstab_namebyname(srctabinfo->t_sstab_name, destbuf->bsstab_name);
-	sstab_namebyid(srctabinfo, destbuf->bsstab_name);
+	sstab_namebyid(srctabinfo->t_sstab_name, destbuf->bsstab_name, srctabinfo->t_insmeta->res_sstab_id);
 
 	tabinfo = MEMALLOCHEAP(sizeof(TABINFO));
 	MEMSET(tabinfo, sizeof(TABINFO));
@@ -177,6 +174,16 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 		     srcbp->bsstab->bblk->bminlen, TAB_KEPT_BUF_VALID,
 		     srctabinfo->t_tabid, srctabinfo->t_insmeta->res_sstab_id);
 
+	
+	destbuf->bsstab->bblk->bnextsstabnum = srcbp->bsstab->bblk->bnextsstabnum;
+	destbuf->bsstab->bblk->bprevsstabnum = srcbp->bsstab->bblk->bsstabnum;
+	srcbp->bsstab->bblk->bnextsstabnum = srctabinfo->t_insmeta->res_sstab_id;
+	destbuf->bsstab->bblk->bsstabnum = srctabinfo->t_insmeta->res_sstab_id;
+
+	
+	mtts_increment(srctabinfo->t_insmeta->ts_low);
+	srcbp->bsstab->bblk->bts_lo = srctabinfo->t_insmeta->ts_low;
+	
 	if (ins_nxtsstab)
 	{
 		tabinfo->t_keptbuf = destbuf;
@@ -235,14 +242,14 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 }
 
 
-int *
+SSTAB_INFOR *
 sstab_map_get(int tabid, char *tab_dir, TAB_SSTAB_MAP **tab_sstab_map)
 {
 	LOCALTSS(tss);
-	char	tab_dir1[TABLE_NAME_MAX_LEN];
-	int	fd;
-	int	*sstab_map = NULL;
-	TAB_SSTAB_MAP *sstab_map_tmp;
+	char		tab_dir1[TABLE_NAME_MAX_LEN];
+	int		fd;
+	SSTAB_INFOR	*sstab_map = NULL;
+	TAB_SSTAB_MAP 	*sstab_map_tmp;
 
 
 	sstab_map_tmp = *tab_sstab_map;
