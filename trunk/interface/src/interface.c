@@ -221,7 +221,7 @@ int cli_commit(conn * connection, char * cmd, char * response, int * resp_len)
 
 			int split_sstabid = *(int *)(rg_resp->result + SSTABLE_NAME_MAX_LEN + sizeof(int) + sizeof(int));
 
-			int sstab_keylen = rg_resp->result_length - SSTABLE_NAME_MAX_LEN - sizeof(int) + 1;
+			int sstab_keylen = rg_resp->result_length - SSTABLE_NAME_MAX_LEN - sizeof(int) - sizeof(int) - sizeof(int) + 1;
 			char *sstab_key = MEMALLOCHEAP(sstab_keylen);
 			MEMSET(sstab_key, sstab_keylen);
 			MEMCPY(sstab_key, rg_resp->result + SSTABLE_NAME_MAX_LEN + sizeof(int) + sizeof(int) + sizeof(int), 
