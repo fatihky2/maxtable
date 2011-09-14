@@ -217,14 +217,18 @@ int cli_commit(conn * connection, char * cmd, char * response, int * resp_len)
 
 			int sstab_id = *(int *)(rg_resp->result + SSTABLE_NAME_MAX_LEN);
 
+			int split_ts = *(int *)(rg_resp->result + SSTABLE_NAME_MAX_LEN + sizeof(int));
+
+			int split_sstabid = *(int *)(rg_resp->result + SSTABLE_NAME_MAX_LEN + sizeof(int) + sizeof(int));
+
 			int sstab_keylen = rg_resp->result_length - SSTABLE_NAME_MAX_LEN - sizeof(int) + 1;
 			char *sstab_key = MEMALLOCHEAP(sstab_keylen);
 			MEMSET(sstab_key, sstab_keylen);
-			MEMCPY(sstab_key, rg_resp->result + SSTABLE_NAME_MAX_LEN + sizeof(int), 
+			MEMCPY(sstab_key, rg_resp->result + SSTABLE_NAME_MAX_LEN + sizeof(int) + sizeof(int) + sizeof(int), 
 				sstab_keylen - 1);
 
-			sprintf(new_buf, "addsstab into %s (%s, %d, %s)", tab_name, newsstabname, 
-									sstab_id, sstab_key);
+			sprintf(new_buf, "addsstab into %s (%s, %d, %d, %d, %s)", tab_name, newsstabname, 
+									sstab_id, split_ts, split_sstabid, sstab_key);
 
 			MEMSET(send_buf, LINE_BUF_SIZE);
 			MEMCPY(send_buf, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);

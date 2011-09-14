@@ -303,7 +303,7 @@ exit:
 	
 	if (tabinfo->t_stat & TAB_SSTAB_SPLIT)
 	{
-		resp_len = tabinfo->t_insrg->new_keylen + SSTABLE_NAME_MAX_LEN + sizeof(int);
+		resp_len = tabinfo->t_insrg->new_keylen + SSTABLE_NAME_MAX_LEN + 3 * sizeof(int);
 		resp_buf = (char *)MEMALLOCHEAP(resp_len);
 
 		MEMSET(resp_buf, resp_len);
@@ -311,10 +311,17 @@ exit:
 		int i = 0;
 
 		printf("tabinfo->t_insrg->new_sstab_name = %s \n", tabinfo->t_insrg->new_sstab_name);
-		//MEMCPY(resp_buf, tabinfo->t_insrg->new_sstab_name, STRLEN(tabinfo->t_insrg->new_sstab_name));
+
 		PUT_TO_BUFFER(resp_buf, i, tabinfo->t_insrg->new_sstab_name, SSTABLE_NAME_MAX_LEN);
-		//i += SSTABLE_NAME_MAX_LEN;
+
 		PUT_TO_BUFFER(resp_buf, i, &tabinfo->t_insmeta->res_sstab_id, sizeof(int));
+		
+		
+		PUT_TO_BUFFER(resp_buf, i, &tabinfo->t_insmeta->ts_low, sizeof(int));
+		
+		
+		PUT_TO_BUFFER(resp_buf, i, &tabinfo->t_insmeta->sstab_id, sizeof(int));
+		
 		PUT_TO_BUFFER(resp_buf, i, tabinfo->t_insrg->new_sstab_key, tabinfo->t_insrg->new_keylen);
 		
 //		printf("tabinfo->t_insmeta->sstab_id = %d,  tabinfo->t_insmeta->res_sstab_id = %d\n", tabinfo->t_insmeta->sstab_id, tabinfo->t_insmeta->res_sstab_id);
@@ -632,7 +639,8 @@ rg_handler(char *req_buf)
 
 	tabinfo->t_sstab_id = ins_meta->sstab_id;
 	tabinfo->t_sstab_name = ins_meta->sstab_name;
-	
+//	MEMCPY(tabinfo->t_sstab_name, ins_meta->sstab_name, STRLEN(ins_meta->sstab_name));
+
 	tabinfo_push(tabinfo);
 
 	switch(command->sym.command.querytype)

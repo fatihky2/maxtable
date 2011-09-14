@@ -22,11 +22,11 @@
 
 
 
-#define	BLKHEADERSIZE	40
+#define	BLKHEADERSIZE	52
 
 
-#define	BLOCKSIZE		(64 * 1024)		
-//#define	BLOCKSIZE		(512)
+//#define	BLOCKSIZE		(64 * 1024)		
+#define	BLOCKSIZE		(512)
 
 
 
@@ -39,8 +39,8 @@
 #define	SSTABLE_MAX_COUNT	16
 
 
-#define	BLOCK_MAX_COUNT		(16 * SSTABLE_MAX_COUNT + 4)	
-//#define	BLOCK_MAX_COUNT		(16 * SSTABLE_MAX_COUNT + 40 + 256 + 40)		
+//#define	BLOCK_MAX_COUNT		(16 * SSTABLE_MAX_COUNT + 4)	
+#define	BLOCK_MAX_COUNT		(16 * SSTABLE_MAX_COUNT + 40 + 256 + 40)		
 
 
 #define	BLOCK_CACHE_SIZE	((BLOCK_MAX_COUNT) * BLOCKSIZE)	
@@ -54,8 +54,11 @@ typedef	struct block
 	
 	int		bblkno;		
 	int		bnextblkno;	
+	int		bsstabnum;	
 	int		bsstabid;	
 	int		btabid;		
+	int		bnextsstabnum;	
+	int		bprevsstabnum;	
 	unsigned int	bts_lo;		
 	int		bnextrno;	
 	unsigned int    bts_hi;	 	
@@ -69,6 +72,7 @@ typedef	struct block
 
 
 #define	BLK_TABLET_SCHM		0x0001	
+#define BLK_SSTAB_SPLIT		0x0002	
 
 
 #define	ROW_OFFSET_ENTRYSIZE	sizeof(int)

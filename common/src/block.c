@@ -44,22 +44,34 @@ extern TSS	*Tss;
 BUF *
 blkget(TABINFO *tabinfo)
 {
-	BUF	*lastbp;
-	int     blkidx;
+	LOCALTSS(tss);
+	BUF		*lastbp;
+	BUF		*bp;
+	int     	blkidx;
+	int		last_blkidx;
+	char		last_sstab[SSTABLE_NAME_MAX_LEN];
+	int		last_sstabid;
+	int		nextsstabnum;
+	int		stat_chg;
+	BLK_ROWINFO	blk_rinfo;
 
 
-	lastbp = blk_getsstable(tabinfo);
+	stat_chg = FALSE;
+	
+nextsstab:
 
-	assert(lastbp);
+	bp = blk_getsstable(tabinfo);
 
-	if (0 && BLOCK_IS_EMPTY(lastbp))
+	assert(bp);
+
+	if (0 && BLOCK_IS_EMPTY(bp))
 	{
-		tabinfo->t_rowinfo->rblknum = lastbp->bblk->bblkno;
+		tabinfo->t_rowinfo->rblknum = bp->bblk->bblkno;
 		tabinfo->t_rowinfo->roffset = BLKHEADERSIZE;
-		tabinfo->t_rowinfo->rsstabid = lastbp->bblk->bsstabid;
+		tabinfo->t_rowinfo->rsstabid = bp->bblk->bsstabid;
 		
 		
-		return lastbp->bsstab;
+		return bp->bsstab;
 	}
 
 	
@@ -67,17 +79,113 @@ blkget(TABINFO *tabinfo)
 	
 	
 	tabinfo->t_sinfo->sistate |= SI_INDEX_BLK;
-	blkidx = blksrch(tabinfo, lastbp);
+	blkidx = blksrch(tabinfo, bp);
 
 	assert(blkidx < BLK_CNT_IN_SSTABLE);
 
 	tabinfo->t_sinfo->sistate &= ~SI_INDEX_BLK;
 
-	return (lastbp->bsstab + blkidx);
+	
+	if (   (tss->topid & TSS_OP_RANGESERVER) 
+	    && (tss->topid & TSS_OP_INSTAB))
+	{
+		BUF	*tmpbp;
+		int	tmpblkidx;
+
+	
+		tmpblkidx = blkidx;		
+		tmpbp = bp->bsstab + tmpblkidx;
+		
+
+		
+		if (   (tmpbp->bsstab->bblk->bstat & BLK_SSTAB_SPLIT)
+		    && !stat_chg)
+		{
+			
+			if (tmpbp->bsstab->bblk->bts_lo == tabinfo->t_insmeta->ts_low)
+			{
+				tmpbp->bsstab->bblk->bstat &= ~BLK_SSTAB_SPLIT;
+				goto finish;
+			}
+
+			assert(   (tmpbp->bsstab->bblk->bts_lo > tabinfo->t_insmeta->ts_low)
+			       || (tmpbp->bsstab->bblk->bts_lo == tabinfo->t_insmeta->ts_low));
+		}
+
+		
+		if (   !(tmpbp->bsstab->bblk->bstat & BLK_SSTAB_SPLIT)
+		    && !stat_chg)
+		{
+			goto finish;
+		}
+
+		
+		if (tabinfo->t_rowinfo->roffset == tmpbp->bblk->bfreeoff)
+		{
+			
+			if (tmpblkidx < (BLK_CNT_IN_SSTABLE - 1))
+			{
+				tmpblkidx++;
+				tmpbp = bp->bsstab + tmpblkidx;
+
+				if (tmpbp->bblk->bfreeoff > BLKHEADERSIZE)
+				{
+					goto finish;
+				}
+				else
+				{
+					assert(tmpbp->bblk->bfreeoff == BLKHEADERSIZE);					
+				}
+			}
+
+			
+			MEMSET(last_sstab, SSTABLE_NAME_MAX_LEN);
+			MEMCPY(last_sstab, tabinfo->t_sstab_name, STRLEN(tabinfo->t_sstab_name));
+			last_sstabid = tabinfo->t_sstab_id;
+			last_blkidx = blkidx;
+			lastbp = bp;
+			MEMCPY(&blk_rinfo, tabinfo->t_rowinfo, sizeof(BLK_ROWINFO));
+			
+			
+//			blk_getnextsstab(tabinfo, tmpbp->bsstab->bblk);
+
+			MEMSET(tabinfo->t_sstab_name, SSTABLE_NAME_MAX_LEN);			
+			
+			nextsstabnum = tmpbp->bsstab->bblk->bnextsstabnum;
+
+			sstab_namebyid(last_sstab, tabinfo->t_sstab_name, nextsstabnum);
+
+			tabinfo->t_sstab_id = nextsstabnum;			
+
+			stat_chg = TRUE;
+
+			goto nextsstab;			
+		}
+
+		
+		if (stat_chg && (tabinfo->t_rowinfo->roffset == BLKHEADERSIZE))
+		{
+			tabinfo->t_sstab_id = last_sstabid;
+
+			MEMSET(tabinfo->t_sstab_name, SSTABLE_NAME_MAX_LEN);
+			MEMCPY(tabinfo->t_sstab_name, last_sstab, STRLEN(last_sstab));
+			bp = lastbp;
+			blkidx = last_blkidx;
+
+			MEMCPY(tabinfo->t_rowinfo, &blk_rinfo, sizeof(BLK_ROWINFO));
+		}
+
+		
+	}
+
+finish:
+	
+	return (bp->bsstab + blkidx);
 
 	
 
 }
+
 
 
 int
@@ -239,6 +347,17 @@ blk_getsstable(TABINFO *tabinfo)
 	}
 
 
+	
+	if (   (tss->topid & TSS_OP_RANGESERVER) 
+	    && (tabinfo->t_insmeta->status & INS_META_1ST))
+	{
+		bp->bsstab->bblk->bsstabnum = tabinfo->t_insmeta->sstab_id;
+
+		
+		bp->bsstab->bblk->bnextsstabnum = -1;
+		bp->bsstab->bblk->bprevsstabnum = -1;
+	}
+	
 	if (SSTABLE_STATE(bp) != BUF_IOERR)
 	{
 		//return (bp + BLK_CNT_IN_SSTABLE - 1);
@@ -341,6 +460,13 @@ blkins(TABINFO *tabinfo, char *rp)
 
 finish:
 
+	if (tabinfo->t_stat & TAB_SSTAB_SPLIT)
+	{
+		bp->bsstab->bblk->bstat |= BLK_SSTAB_SPLIT;
+
+		
+	}
+	
 	bufdirty(bp);
 		
 	tabinfo->t_sinfo->sistate &= ~SI_INS_DATA;

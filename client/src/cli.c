@@ -290,8 +290,12 @@ conn_again:
 
 					sstab_id = *(int *)(resp->result + SSTABLE_NAME_MAX_LEN);
 
-					sprintf(send_rg_bp, "addsstab into %s (%s, %d, %s)", tab_name, newsstabname,
-						sstab_id, resp->result + SSTABLE_NAME_MAX_LEN + sizeof(int));
+					int split_ts = *(int *)(resp->result + SSTABLE_NAME_MAX_LEN + sizeof(int));
+
+					int split_sstabid = *(int *)(resp->result + SSTABLE_NAME_MAX_LEN + sizeof(int) + sizeof(int));
+
+					sprintf(send_rg_bp, "addsstab into %s (%s, %d, %d, %d, %s)", tab_name, newsstabname,
+						sstab_id, split_ts, split_sstabid, resp->result + SSTABLE_NAME_MAX_LEN + sizeof(int) + sizeof(int) + sizeof(int));
 
 					cli_str = send_rg_bp;
 
@@ -613,8 +617,13 @@ conn_again:
 				MEMCPY(newsstabname, resp->result, SSTABLE_NAME_MAX_LEN);
 				
 				sstab_id = *(int *)(resp->result + SSTABLE_NAME_MAX_LEN);
-				sprintf(send_rg_bp, "addsstab into %s (%s, %d, %s)", tab_name, newsstabname,
-						sstab_id, resp->result + SSTABLE_NAME_MAX_LEN + sizeof(int));
+
+				int split_ts = *(int *)(resp->result + SSTABLE_NAME_MAX_LEN + sizeof(int));
+
+				int split_sstabid = *(int *)(resp->result + SSTABLE_NAME_MAX_LEN + sizeof(int) + sizeof(int));
+				
+				sprintf(send_rg_bp, "addsstab into %s (%s, %d, %d, %d, %s)", tab_name, newsstabname,
+						sstab_id, split_ts, split_sstabid, resp->result + SSTABLE_NAME_MAX_LEN + sizeof(int) + sizeof(int) + sizeof(int));
 				
 				cli_str = send_rg_bp;
 

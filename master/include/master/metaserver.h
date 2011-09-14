@@ -118,18 +118,28 @@ typedef union infor_hdr
 	char		magic[RPC_MAGIC_MAX_LEN];
 } INFOR_HDR;
 
-#define SSTAB_MAP_SIZE	(1024 * 1024 * sizeof(int))
+#define SSTAB_MAP_ITEM	(1024 * 1024)
+
+typedef struct sstab_infor
+{
+	int		sstab_stat;	
+	unsigned int	split_ts;	
+} SSTAB_INFOR;
+
+#define SSTAB_MAP_SIZE	(SSTAB_MAP_ITEM * sizeof(SSTAB_INFOR))
 
 
 typedef struct tab_sstab_map
 {
-	int	tabid;
-	int	stat;
-	char	sstabmap_path[TABLE_NAME_MAX_LEN];
-	struct tab_sstab_map *nexttabmap;
-	int	sstab_map[SSTAB_MAP_SIZE];
+	int		tabid;
+	int		stat;
+	char		sstabmap_path[TABLE_NAME_MAX_LEN];
+	struct tab_sstab_map 
+			*nexttabmap;
+	SSTAB_INFOR	sstab_map[SSTAB_MAP_ITEM];
 	
 }TAB_SSTAB_MAP;
+
 
 #define SSTABMAP_CHG	0x0001
 
@@ -139,11 +149,13 @@ typedef struct insert_meta
 	union infor_hdr	i_hdr;
 	int		sstab_id;
 	int		res_sstab_id;
+	unsigned int	ts_low;		
 	char    	sstab_name[SSTABLE_NAME_MAX_LEN];
 	int		status;
 	int		col_num;	
 	int		varcol_num;	
 	int		row_minlen;
+	
 } INSMETA;
 
 
@@ -235,6 +247,8 @@ typedef struct master_infor
 	int		port;
 	SVR_IDX_FILE	rg_list;
 }MASTER_INFOR;
+
+
 
 
 #define TABINFO_INIT(tabinfo, sstab_name, srch_info, minlen, status, tabid, sstabid)	\
