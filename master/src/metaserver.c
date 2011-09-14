@@ -1319,7 +1319,7 @@ meta_seldeltab(TREE *command, TABINFO *tabinfo)
 
 	
 	*(unsigned int *)(col_buf + col_buf_idx) = SSTAB_MAP_GET_SPLIT_TS(sstab_id);
-	col_buf_idx += sizeof(unsigned int);
+	col_buf_idx += sizeof(int);
 
 	
 	MEMCPY((col_buf + col_buf_idx), sstab_name, SSTABLE_NAME_MAX_LEN);
