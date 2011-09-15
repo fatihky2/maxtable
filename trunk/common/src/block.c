@@ -138,6 +138,12 @@ nextsstab:
 				}
 			}
 
+			nextsstabnum = tmpbp->bsstab->bblk->bnextsstabnum;
+
+			if (nextsstabnum == -1)
+			{
+				goto finish;;
+			}
 			
 			MEMSET(last_sstab, SSTABLE_NAME_MAX_LEN);
 			MEMCPY(last_sstab, tabinfo->t_sstab_name, STRLEN(tabinfo->t_sstab_name));
@@ -151,8 +157,6 @@ nextsstab:
 
 			MEMSET(tabinfo->t_sstab_name, SSTABLE_NAME_MAX_LEN);			
 			
-			nextsstabnum = tmpbp->bsstab->bblk->bnextsstabnum;
-
 			sstab_namebyid(last_sstab, tabinfo->t_sstab_name, nextsstabnum);
 
 			tabinfo->t_sstab_id = nextsstabnum;			

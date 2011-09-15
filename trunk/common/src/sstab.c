@@ -181,7 +181,7 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 	destbuf->bsstab->bblk->bsstabnum = srctabinfo->t_insmeta->res_sstab_id;
 
 	
-	mtts_increment(srctabinfo->t_insmeta->ts_low);
+	srctabinfo->t_insmeta->ts_low = mtts_increment(srctabinfo->t_insmeta->ts_low);
 	srcbp->bsstab->bblk->bts_lo = srctabinfo->t_insmeta->ts_low;
 	
 	if (ins_nxtsstab)
