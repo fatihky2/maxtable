@@ -247,10 +247,8 @@ void * msg_recv(void *args)
 				
 				sockfd = resp_msg->fd;
 				msg_write(sockfd, resp_msg->data, resp_msg->n_size);
-				printf("write %d->[%s]\n", resp_msg->n_size, resp_msg->data);
+				printf("write %d->[%s] -- socketfd = %d \n", resp_msg->n_size, resp_msg->data, sockfd);
 
-
-				printf("We will FREE the item %d, resp_msg = 0x%x \n", i, resp_msg);
 				if(resp_msg->block_buffer)
 				{
 					free(resp_msg->block_buffer);
