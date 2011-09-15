@@ -22,14 +22,14 @@ if(1)
 		cli_commit(connection, cmd, resp, &len);
 		printf("ret: %s\n", resp);
 		
-		for(i = 40000; i < 50000; i++)
+		for(i = 2; i < 1000; )
 		{
-//			i += 2;
+			i += 2;
 			memset(resp, 0, 256);
 			memset(cmd, 0, 256);
 			sprintf(cmd, "insert into gu(gggg%d, %d, bbbb%d)", i, i, i);
 			cli_commit(connection, cmd, resp, &len);
-			printf("cmd: %s, ret(%d): %s\n", cmd, len, resp);
+			printf("Client 1: %s, ret(%d): %s\n", cmd, len, resp);
 		}
 
 }
