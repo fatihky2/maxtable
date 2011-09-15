@@ -198,6 +198,7 @@ void * msg_recv(void *args)
 						MEMCPY(new_msg->data, buf, n);
 						new_msg->fd = sockfd;
 						new_msg->n_size = n;
+						new_msg->block_buffer = NULL;
 						new_msg->next = NULL;
 					}
 			
@@ -225,22 +226,28 @@ void * msg_recv(void *args)
 
 			else if(events[i].events & EPOLLOUT)
 			{
-				msg_data * resp_msg = (msg_data *)events[i].data.ptr;						
+				msg_data * resp_msg = (msg_data *)events[i].data.ptr;
+
+				events[i].data.ptr = NULL;
+				
 				sockfd = resp_msg->fd;
 				write(sockfd, resp_msg->data, resp_msg->n_size);
 				printf("write %d->[%s]\n", resp_msg->n_size, resp_msg->data);
 
-	
-				ev.data.fd = sockfd;
-				ev.events = EPOLLIN;
-				epoll_ctl(epfd, EPOLL_CTL_MOD, sockfd, &ev);
 
+				printf("We will FREE the item %d, resp_msg = 0x%x \n", i, resp_msg);
 				if(resp_msg->block_buffer)
 				{
 					free(resp_msg->block_buffer);
 				}
 				
 				free(resp_msg);
+
+				
+	
+				ev.data.fd = sockfd;
+				ev.events = EPOLLIN;
+				epoll_ctl(epfd, EPOLL_CTL_MOD, sockfd, &ev);				
 			}
 		}
 	}
@@ -306,21 +313,15 @@ void msg_process(char * (*handler_request)(char *req_buf))
 
 		resp_size = conn_get_resp_size((RPCRESP *)resp);
 
-		resp_msg = malloc(sizeof(msg_data));
+		resp_msg = NULL;
+		resp_msg = (msg_data *)malloc(sizeof(msg_data));
+		assert(resp_msg);
 		MEMSET(resp_msg, sizeof(msg_data));
 		resp_msg->n_size = resp_size;
+		resp_msg->block_buffer = NULL;
+		assert(resp_size < MAXLINE);
 		MEMCPY(resp_msg->data, resp, resp_size);
-		resp_msg->fd = fd;
-
-	
-		ev.data.ptr = resp_msg;
-	
-		ev.events = EPOLLOUT;
-
-		epoll_ctl(epfd, EPOLL_CTL_MOD, fd, &ev);
-  
-		conn_destroy_req(req);
-		conn_destroy_resp_byte(resp);
+		resp_msg->fd = fd;	
 
 		if (req_msg->block_buffer != NULL)
 		{
@@ -328,6 +329,15 @@ void msg_process(char * (*handler_request)(char *req_buf))
 		}
 		
 		free(req_msg);
+		
+		ev.data.ptr = resp_msg;
+	
+		ev.events = EPOLLOUT;
+
+		epoll_ctl(epfd, EPOLL_CTL_MOD, fd, &ev);
+  
+		conn_destroy_req(req);
+		conn_destroy_resp_byte(resp);		
 		
 		tss_init(tss);
 	}

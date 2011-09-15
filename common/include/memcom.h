@@ -142,9 +142,9 @@ typedef struct memfrag
 #define ROUNDSIZE(size, round)	(((size) + ((round) - 1)) & ~((round) - 1))
 
 
-#define MAXSIZE_FRAGPOOL	MY_MEMPAGESIZE * 1024
-#define MAX_FRAG_SIZE		(65536 * sizeof(MEMFRAG))
-#define MAX_FRAG_ALLOCSIZE (MAX_FRAG_SIZE - sizeof(MEMFRAG) - sizeof(MEMBLK))
+#define MAXSIZE_FRAGPOOL	(MY_MEMPAGESIZE * 1024)
+#define MAX_FRAG_SIZE		(65536 * sizeof(MEMFRAG))	// 2M in 64bit platform
+#define MAX_FRAG_ALLOCSIZE 	(MAX_FRAG_SIZE - sizeof(MEMFRAG) - sizeof(MEMBLK))
 
 
 #define MAXSIZE_BLKPOOL		MY_MEMPAGESIZE * 1024
