@@ -22,8 +22,9 @@ if(1)
 		cli_commit(connection, cmd, resp, &len);
 		printf("ret: %s\n", resp);
 		
-		for(i = 1; i < 10000; i++)
+		for(i = 40000; i < 50000; i++)
 		{
+//			i += 2;
 			memset(resp, 0, 256);
 			memset(cmd, 0, 256);
 			sprintf(cmd, "insert into gu(gggg%d, %d, bbbb%d)", i, i, i);
@@ -31,8 +32,11 @@ if(1)
 			printf("cmd: %s, ret(%d): %s\n", cmd, len, resp);
 		}
 
+}
 
-		for(i = 1; i < 10000; i++)
+if (0)
+{
+		for(i = 2; i < 10000; i++)
 		{
 			memset(resp, 0, 256);
 			memset(cmd, 0, 256);
@@ -43,6 +47,7 @@ if(1)
 		}
 
 }
+	
 if (0)
 {
 		for(i = 0; i < 10; i++)
