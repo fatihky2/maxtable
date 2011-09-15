@@ -32,7 +32,7 @@ extern	TSS	*Tss;
 
 
 
-struct epoll_event ev, events[20];
+struct epoll_event events[20];
 
 msg_data * msg_list_head = NULL;
 msg_data * msg_list_tail = NULL;
@@ -50,6 +50,18 @@ int set_nonblock(int fd)
 	return fcntl(fd, F_SETFL, fcntl( fd, F_GETFL)|O_NONBLOCK);
 }
 
+void msg_write(int fd, char * buf, int size)
+{
+	int written = 0;
+	int ret;
+	while ((size - written) > 0)
+	{
+		ret = write(fd, buf + written, size - written);
+                
+		if(ret >= 0)
+                    written += ret;
+        }
+}
 
 void * msg_recv(void *args)
 
@@ -94,9 +106,11 @@ void * msg_recv(void *args)
 	if (epfd == -1) {
 		perror("epoll_create");
 	}
-	ev.data.fd = listenfd;
-	ev.events=  EPOLLIN;
-	if(epoll_ctl(epfd, EPOLL_CTL_ADD, listenfd, &ev) == -1){
+
+	struct epoll_event ev0;
+	ev0.data.fd = listenfd;
+	ev0.events=  EPOLLIN;
+	if(epoll_ctl(epfd, EPOLL_CTL_ADD, listenfd, &ev0) == -1){
 		perror("epoll_ctl");
 	}
 
@@ -131,6 +145,7 @@ void * msg_recv(void *args)
 				inet_ntop(AF_INET, &cliaddr.sin_addr, cliip, sizeof(cliip));
 				printf("New connection %s %d\n", cliip, ntohs(cliaddr.sin_port));
 
+				struct epoll_event ev;
 				ev.data.fd = connfd;
 				ev.events = EPOLLIN;
 				epoll_ctl(epfd, EPOLL_CTL_ADD, connfd, &ev);
@@ -231,7 +246,7 @@ void * msg_recv(void *args)
 				events[i].data.ptr = NULL;
 				
 				sockfd = resp_msg->fd;
-				write(sockfd, resp_msg->data, resp_msg->n_size);
+				msg_write(sockfd, resp_msg->data, resp_msg->n_size);
 				printf("write %d->[%s]\n", resp_msg->n_size, resp_msg->data);
 
 
@@ -244,7 +259,7 @@ void * msg_recv(void *args)
 				free(resp_msg);
 
 				
-	
+				struct epoll_event ev;
 				ev.data.fd = sockfd;
 				ev.events = EPOLLIN;
 				epoll_ctl(epfd, EPOLL_CTL_MOD, sockfd, &ev);				
@@ -330,9 +345,10 @@ void msg_process(char * (*handler_request)(char *req_buf))
 		
 		free(req_msg);
 		
+		struct epoll_event ev;
 		ev.data.ptr = resp_msg;
 	
-		ev.events = EPOLLOUT;
+		ev.events = EPOLLOUT | EPOLLET;
 
 		epoll_ctl(epfd, EPOLL_CTL_MOD, fd, &ev);
   
