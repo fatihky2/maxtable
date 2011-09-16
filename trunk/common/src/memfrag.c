@@ -707,6 +707,8 @@ memfreeheap(void *addr, char *file, int line)
 	return mp_frag_free(Kernel->ke_mp_frag, addr,file,line);
 }
 
+#ifdef MEMMGR_UNIT_TEST
+
 
 static void
 prLINK(LINK *link)
@@ -742,10 +744,6 @@ mem_prt_fragmp(MEMPOOL *mp)
 	printf("\n Pint Frag List : END \n");
 
 }
-
-
-#ifdef MEMMGR_UNIT_TEST
-
 
 int main()
 {
