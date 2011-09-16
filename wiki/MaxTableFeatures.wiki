@@ -9,3 +9,5 @@
   * *Range Query*: Range query is supported in MaxTable, because we support the data sort automatically .
 
   * *Re-balancing*: Periodically, the Metaserver may rebalance the tablet amongst Rangerservers. This is done to help with balancing disk space utilization amongst nodes. 
+
+  * *Availability of data*: 99.99%.
