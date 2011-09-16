@@ -59,7 +59,7 @@
 #define META_DEFAULT_CONF_PATH "config/master.conf"
 
 #define RANGE_DEFAULT_PORT 1949
-#define RANGE_DEFAULT_CONF_PATH "config/region.conf"
+#define RANGE_DEFAULT_CONF_PATH "config/ranger.conf"
 
 #define LINE_BUF_SIZE 1000 //Means the max size of one line
 

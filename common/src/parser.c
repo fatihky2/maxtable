@@ -18,7 +18,7 @@
 ** permissions and limitations under the License.
 */
 #include "master/metaserver.h"
-#include "region/rangeserver.h"
+#include "ranger/rangeserver.h"
 #include "utils.h"
 #include "parser.h"
 #include "tss.h"
