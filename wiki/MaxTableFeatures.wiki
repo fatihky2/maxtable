@@ -1,8 +1,8 @@
 #summary Features supported in MaxTable
 
-  * *Data writes*: When an application insert a data, for performance, writes are cached at the Ranger server. Periodically, the cache is flushed. Also, applications can force data to be flushed to the Ranger server. In either case, once data is flushed to the server, it is available for reading. In the Metaserver, all the metadata will be cached if your memory is enough. 
+  * *Data writes*: When an application insert a data, for consistency, applications will force data to be flushed to the Ranger server， Also, for performance, writes can be cached at the Ranger server, periodically, the cache is flushed. In either case, once data is flushed to the server, it is available for reading. In the Metaserver, all the metadata will be cached if your memory is enough. 
 
-  * *SSTable Map*: This feature will reduce the data consistency control and improve the performance of data write.
+  * *SSTable Map*: This feature will reduce the data consistency control and improve the performance of data write, and we use a innovative method to solve the conflicts betwwen writes so that it doesn't need any lock mutation for multi-writes.
 
   * *Cache All Data*: In MaxTable we cache all the metadata management and the hot point data in ranger server.
 
