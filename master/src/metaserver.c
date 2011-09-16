@@ -1222,7 +1222,7 @@ meta_seldeltab(TREE *command, TABINFO *tabinfo)
 	if (tab_hdr.tab_tablet == 0)
 	{
 		printf("Table should have one tablet at least! \n");
-		ex_raise(EX_ANY);
+		goto exit;
 	}
 
 	keycol = par_get_colval_by_colid(command, tab_hdr.tab_key_colid, &keycolen);
