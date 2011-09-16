@@ -49,8 +49,8 @@ typedef struct cli_infor
 	char	cli_conf_path[CLI_CONF_PATH_MAX_LEN]; 
 	char	cli_meta_ip[RANGE_ADDR_MAX_LEN];
 	int     cli_meta_port;
-	char    cli_region_ip[RANGE_ADDR_MAX_LEN];
-	int     cli_region_port;
+	char    cli_ranger_ip[RANGE_ADDR_MAX_LEN];
+	int     cli_ranger_port;
 	int     cli_status;
 	//List *	cli_tab_infor;
 } CLI_INFOR;
@@ -195,8 +195,8 @@ conn_again:
 		}
 		else if(CLI_IS_CONN2REGION(Cli_infor))
 		{
-		    ip		= Cli_infor->cli_region_ip;
-		    port	= Cli_infor->cli_region_port;
+		    ip		= Cli_infor->cli_ranger_ip;
+		    port	= Cli_infor->cli_ranger_port;
 		}
 		   
 		sockfd = conn_open(ip, port);
@@ -241,11 +241,11 @@ conn_again:
 			{
 				resp_ins = (INSMETA *)resp->result;
 
-				MEMCPY(Cli_infor->cli_region_ip, 
+				MEMCPY(Cli_infor->cli_ranger_ip, 
 				       resp_ins->i_hdr.rg_info.rg_addr, 
 				       RANGE_ADDR_MAX_LEN);
 
-				Cli_infor->cli_region_port = 
+				Cli_infor->cli_ranger_port = 
 					resp_ins->i_hdr.rg_info.rg_port;
 
 				/* Override the UNION part for this reques. */
@@ -315,11 +315,11 @@ conn_again:
 			{
 				resp_ins = (INSMETA *)resp->result;
 
-				MEMCPY(Cli_infor->cli_region_ip, 
+				MEMCPY(Cli_infor->cli_ranger_ip, 
 				       resp_ins->i_hdr.rg_info.rg_addr, 
 				       RANGE_ADDR_MAX_LEN);
 
-				Cli_infor->cli_region_port = 
+				Cli_infor->cli_ranger_port = 
 					resp_ins->i_hdr.rg_info.rg_port;
 
 				/* Override the UNION part for this reques. */
@@ -359,10 +359,10 @@ conn_again:
 
 				ranger_list = (RANGE_PROF *)resp->result;
 
-				MEMCPY(Cli_infor->cli_region_ip, ranger_list->rg_addr, 
+				MEMCPY(Cli_infor->cli_ranger_ip, ranger_list->rg_addr, 
 				   RANGE_ADDR_MAX_LEN);
 
-				Cli_infor->cli_region_port = ranger_list->rg_port;
+				Cli_infor->cli_ranger_port = ranger_list->rg_port;
 
 				/* 
 				** Re-construct the request for the ranger server. The information include
@@ -523,8 +523,8 @@ conn_again:
 	}
 	else if(CLI_IS_CONN2REGION(Cli_infor))
 	{
-	    ip		= Cli_infor->cli_region_ip;
-	    port	= Cli_infor->cli_region_port;
+	    ip		= Cli_infor->cli_ranger_ip;
+	    port	= Cli_infor->cli_ranger_port;
 	}
 	   
 	sockfd = conn_open(ip, port);
@@ -569,11 +569,11 @@ conn_again:
 		{
 			resp_ins = (INSMETA *)resp->result;
 
-			MEMCPY(Cli_infor->cli_region_ip, 
+			MEMCPY(Cli_infor->cli_ranger_ip, 
 			       resp_ins->i_hdr.rg_info.rg_addr, 
 			       RANGE_ADDR_MAX_LEN);
 
-			Cli_infor->cli_region_port = 
+			Cli_infor->cli_ranger_port = 
 				resp_ins->i_hdr.rg_info.rg_port;
 
 			/* Override the UNION part for this reques. */
@@ -644,11 +644,11 @@ conn_again:
 		{
 			resp_ins = (INSMETA *)resp->result;
 
-			MEMCPY(Cli_infor->cli_region_ip, 
+			MEMCPY(Cli_infor->cli_ranger_ip, 
 			       resp_ins->i_hdr.rg_info.rg_addr, 
 			       RANGE_ADDR_MAX_LEN);
 
-			Cli_infor->cli_region_port = 
+			Cli_infor->cli_ranger_port = 
 				resp_ins->i_hdr.rg_info.rg_port;
 
 			/* Override the UNION part for this reques. */
@@ -688,10 +688,10 @@ conn_again:
 
 			ranger_list = (RANGE_PROF *)resp->result;
 			
-			MEMCPY(Cli_infor->cli_region_ip, ranger_list->rg_addr, 
+			MEMCPY(Cli_infor->cli_ranger_ip, ranger_list->rg_addr, 
 			       RANGE_ADDR_MAX_LEN);
 
-			Cli_infor->cli_region_port = ranger_list->rg_port;
+			Cli_infor->cli_ranger_port = ranger_list->rg_port;
 
 			/* 
 			** Re-construct the request for the ranger server.  The information include

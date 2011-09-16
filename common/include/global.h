@@ -71,7 +71,7 @@
 #define SEND_HELLO "send_hello"
 #define CMD_CRT_TABLE   "create_table"
 
-#define REGION_KEY "region"
+#define RANGER_KEY "ranger"
 
 #define MASTER_KEY "master"
 

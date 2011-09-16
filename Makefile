@@ -9,14 +9,14 @@ REGION_SRC	= ranger/src/*.c
 MASTER_SRC	= master/src/*.c
 CLI_SRC		= client/src/*.c
 INTERFACE_SRC	= interface/src/*.c
-SERVICE_SRC = service/src/*.cpp
+SERVICE_SRC	= service/src/*.cpp
 
-LIB_SRCS = interface/src/*.c common/src/*.c
+LIB_SRCS	= interface/src/*.c common/src/*.c
 
-LIB_SRCS_C = $(wildcard ${LIB_SRCS})
-LIB_OBJS_C = $(patsubst %.c,%.o,$(LIB_SRCS_C))
-LIB_SRCS_CPP = $(wildcard ${SERVICE_SRC})
-LIB_OBJS_CPP = $(patsubst %.cpp,%.o,$(LIB_SRCS_CPP))
+LIB_SRCS_C	= $(wildcard ${LIB_SRCS})
+LIB_OBJS_C	= $(patsubst %.c,%.o,$(LIB_SRCS_C))
+LIB_SRCS_CPP	= $(wildcard ${SERVICE_SRC})
+LIB_OBJS_CPP	= $(patsubst %.cpp,%.o,$(LIB_SRCS_CPP))
 
 all: client master ranger memTest benchmark sample
 
