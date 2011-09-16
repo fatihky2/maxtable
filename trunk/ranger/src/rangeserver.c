@@ -24,7 +24,7 @@
 #include "list.h"
 #include "conf.h"
 #include "netconn.h"
-#include "region/rangeserver.h"
+#include "ranger/rangeserver.h"
 #include "memcom.h"
 #include "master/metaserver.h"
 #include "parser.h"

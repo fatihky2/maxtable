@@ -14,10 +14,10 @@ rm -rf ./meta_table
 
 rm startClient
 rm startMaster
-rm startRegion
+rm startRanger
 rm sample
 rm imql
 
 cp config/cli.conf.template config/cli.conf
 cp config/master.conf.template config/master.conf
-cp config/region.conf.template config/region.conf
+cp config/ranger.conf.template config/ranger.conf

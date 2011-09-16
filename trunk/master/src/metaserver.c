@@ -23,7 +23,7 @@
 #include "utils.h"
 #include "list.h"
 #include "master/metaserver.h"
-#include "region/rangeserver.h"
+#include "ranger/rangeserver.h"
 #include "conf.h"
 #include "netconn.h"
 #include "parser.h"
