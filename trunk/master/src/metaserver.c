@@ -154,7 +154,7 @@ meta_server_setup(char *conf_path)
 		
 //		WRITE(fd, rang_server, STRLEN(rang_server));
 
-		filebuf = (SVR_IDX_FILE *)MEMALLOCHEAP(SVR_IDX_FILE_SIZE);
+		filebuf = &(Master_infor->rg_list);
 		MEMSET(filebuf, SVR_IDX_FILE_SIZE);
 
 		filebuf->freeoff = SVR_IDX_FILE_HDR;
@@ -169,9 +169,7 @@ meta_server_setup(char *conf_path)
 		filebuf->stat = 0;
 	
 		WRITE(fd, filebuf, SVR_IDX_FILE_SIZE);
-
-		MEMFREEHEAP(filebuf);
-		
+	
 		CLOSE(fd);		
 	}
 	else
