@@ -362,11 +362,11 @@ cli_prt_help(char *cmd)
 {
 	if (!strncasecmp("help", cmd, 4))
 	{
-		printf("CREATE TABLE: create table table_name (col1_name col1_type, col2_name col2_type)\n");
-		printf("INSERT DATA:  insert into table_name (col1_value, col2_value)\n");
-		printf("SELECT DATA:  select table_name (col1_value)\n");
-		printf("DELETE DATA:  delete table_name (col1_value)\n");
-		printf("DROP TABLE:   drop table_name\n");
+		printf("CREATE TABLE....create table table_name (col1_name col1_type, col2_name col2_type)\n");
+		printf("INSERT DATA.....insert into table_name (col1_value, col2_value)\n");
+		printf("SELECT DATA.....select table_name (col1_value)\n");
+		printf("DELETE DATA.....delete table_name (col1_value)\n");
+		printf("DROP TABLE......drop table_name\n");
 
 		return TRUE;
 	}

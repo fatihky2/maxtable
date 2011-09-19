@@ -1171,6 +1171,7 @@ meta_seldeltab(TREE *command, TABINFO *tabinfo)
 	assert(command);
 
 	rtn_stat = FALSE;
+	col_buf= NULL;
 	sstab_rlen = 0;
 	sstab_idx = 0;
 	tab_name = command->sym.command.tabname;
@@ -1186,7 +1187,11 @@ meta_seldeltab(TREE *command, TABINFO *tabinfo)
 	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
 
-	assert(STAT(tab_dir, &st) == 0);
+	if (!(STAT(tab_dir, &st) == 0))
+	{
+		printf("Table %s is not exist.\n", tab_name);
+		goto exit;
+	}
 	
 	str1_to_str2(tab_meta_dir, '/', "sysobjects");
 
@@ -1202,10 +1207,6 @@ meta_seldeltab(TREE *command, TABINFO *tabinfo)
 	READ(fd1, &tab_hdr, sizeof(TABLEHDR));	
 
 	CLOSE(fd1);
-
-	
-	
-	assert(tab_hdr.tab_tablet > 0);
 
 	if (tab_hdr.tab_tablet == 0)
 	{
@@ -1277,8 +1278,6 @@ meta_seldeltab(TREE *command, TABINFO *tabinfo)
 
 	res_sstab_id = *(int *)row_locate_col(rp, TABLET_RESSSTABID_COLOFF_INROW, 
 					      ROW_MINLEN_IN_TABLET, &namelen);
-	
-	
 
 	
 	if (tabinfo->t_sinfo->sistate & SI_NODATA)
