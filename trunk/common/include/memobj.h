@@ -38,7 +38,7 @@ typedef struct memobject
 	MEMCOM		f_mc;		
 	LINK		f_block;	
 	LINK		f_free;		
-	LINK		f_used;		
+//	LINK		f_used;		
 	size_t		f_itemsize;	
 	size_t		f_maxengines;	
 	int		f_status;	

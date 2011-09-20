@@ -73,7 +73,7 @@ mp_obj_crt(size_t itemsize, size_t minitems, size_t maxitems)
 	INITQUE(&(fp->f_block));
 
 	
-	INITQUE(&(fp->f_used));
+//	INITQUE(&(fp->f_used));
 
 	itemsize = total_itemsize;
 	size = ROUNDSIZE(size, sizeof(ALIGNDATATYPE));
@@ -134,7 +134,7 @@ retry:
 		fp->f_count--;
 
 		
-		INSQTAIL(&(fp->f_used), item);
+//		INSQTAIL(&(fp->f_used), item);
 
 		
 		MEMCOM_UPDATE_USED(fp, 1);
@@ -229,7 +229,7 @@ int
 mp_obj_free(MEMOBJECT * fp, void * item)
 {
 	int     growsize;       
-	LINK    *list;          
+//	LINK    *list;          
 
 	if ( fp == NULL )
 	{
@@ -255,8 +255,8 @@ mp_obj_free(MEMOBJECT * fp, void * item)
 	fp->f_count++;
 
 	
-	list = &(((MEMOBJECT *)item)->f_used);
-	REMQUE(list, list, LINK);
+//	list = &(((MEMOBJECT *)item)->f_used);
+//	REMQUE(list, list, LINK);
 
 	
 	MEMCOM_UPDATE_USED(fp, -1);

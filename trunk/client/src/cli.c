@@ -910,7 +910,7 @@ int main(int argc, char **argv)
 		
 	ret = cli_deamon();
 
-//	tss_release();
+	tss_release();
 	
 	return ret;
 }
