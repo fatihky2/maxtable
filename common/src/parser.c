@@ -388,13 +388,13 @@ par_get_query(char *s_str, int *s_idx)
 double_parse:  
 
 	
-	while ((*s_str == ' ') || (*s_str == '\t'))
+	while ((*s_str != '\0') && ((*s_str == ' ') || (*s_str == '\t')))
 	{
 		s_str++;
 	}
 
 	
-	while(   (*s_str != separator) && (*s_str != ' ') 
+	while(   (*s_str != '\0') && (*s_str != separator) && (*s_str != ' ') 
 	      && (*s_str != '\t'))
 	{
 		start[len++] = *s_str++;
