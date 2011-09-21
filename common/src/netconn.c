@@ -163,7 +163,7 @@ conn_build_resp_byte(int status, int result_len, char *result)
 void
 conn_destroy_resp_byte(char* resp)
 {
-	assert(resp);
+	Assert(resp);
 
 	MEMFREEHEAP(resp);
 }
@@ -171,7 +171,7 @@ conn_destroy_resp_byte(char* resp)
 void
 conn_destroy_resp(RPCRESP* resp)
 {
-	assert(resp);
+	Assert(resp);
 
 	if (resp->result_length)
 	{

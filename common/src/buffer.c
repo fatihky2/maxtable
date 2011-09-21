@@ -20,6 +20,7 @@
 #include "global.h"
 #include "memcom.h"
 #include "master/metaserver.h"
+#include "utils.h"
 #include "buffer.h"
 #include "block.h"
 #include "cache.h"
@@ -141,10 +142,15 @@ bufwrite(BUF *bp)
 void
 bufawrite(BUF *bp)
 {
+	LOCALTSS(tss);
 	BLKIO		*blkioptr;
+	
 
-
-	printf(" Enter into the buffer writting.\n");
+	if (DEBUG_TEST(tss))
+	{
+		printf(" Enter into the buffer writting.\n");
+	}
+	
 	P_SPINLOCK(BUF_SPIN);
 
 	if (!(SSTABLE_STATE(bp) & BUF_DIRTY))
@@ -237,7 +243,7 @@ bufhash(BUF *bp)
 
 
 	
-	assert(!(SSTABLE_STATE(bp) & BUF_HASHED));	
+	Assert(!(SSTABLE_STATE(bp) & BUF_HASHED));	
 
 //	P_SPINLOCK(BUF_SPIN);
 
@@ -256,7 +262,7 @@ bufhash(BUF *bp)
 				V_SPINLOCK(BUF_SPIN);
 
 				
-				assert(0);
+				Assert(0);
 				return (bufptr);
 			}
 		}
@@ -401,7 +407,7 @@ retry:
 void
 bufdirty(BUF *bp)
 {	
-	assert(SSTABLE_STATE(bp) & BUF_DIRTY);
+	Assert(SSTABLE_STATE(bp) & BUF_DIRTY);
 	
 	P_SPINLOCK(BUF_SPIN);
 

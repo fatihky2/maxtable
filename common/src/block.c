@@ -62,7 +62,7 @@ nextsstab:
 
 	bp = blk_getsstable(tabinfo);
 
-	assert(bp);
+	Assert(bp);
 
 	if (0 && BLOCK_IS_EMPTY(bp))
 	{
@@ -81,7 +81,7 @@ nextsstab:
 	tabinfo->t_sinfo->sistate |= SI_INDEX_BLK;
 	blkidx = blksrch(tabinfo, bp);
 
-	assert(blkidx < BLK_CNT_IN_SSTABLE);
+	Assert(blkidx < BLK_CNT_IN_SSTABLE);
 
 	tabinfo->t_sinfo->sistate &= ~SI_INDEX_BLK;
 
@@ -108,7 +108,7 @@ nextsstab:
 				goto finish;
 			}
 
-			assert(   (tmpbp->bsstab->bblk->bts_lo > tabinfo->t_insmeta->ts_low)
+			Assert(   (tmpbp->bsstab->bblk->bts_lo > tabinfo->t_insmeta->ts_low)
 			       || (tmpbp->bsstab->bblk->bts_lo == tabinfo->t_insmeta->ts_low));
 		}
 
@@ -134,7 +134,7 @@ nextsstab:
 				}
 				else
 				{
-					assert(tmpbp->bblk->bfreeoff == BLKHEADERSIZE);					
+					Assert(tmpbp->bblk->bfreeoff == BLKHEADERSIZE);					
 				}
 			}
 
@@ -226,7 +226,7 @@ blksrch(TABINFO *tabinfo, BUF *bp)
 
 	blkidx = blk_get_location_sstab(tabinfo, bp);
 
-	assert(blkidx != -1);
+	Assert(blkidx != -1);
 
 	bp += blkidx;
 
@@ -312,11 +312,14 @@ blk_getsstable(TABINFO *tabinfo)
 	char	*sstab_name;
 	BUF	*bp;
 
-	printf("tabinfo->t_sstab_name = %s \n", tabinfo->t_sstab_name);
-
+	if (DEBUG_TEST(tss))
+	{
+		printf("tabinfo->t_sstab_name = %s \n", tabinfo->t_sstab_name);
+	}
+	
 	if (tabinfo->t_stat & TAB_KEPT_BUF_VALID)
 	{
-		assert(tabinfo->t_keptbuf);
+		Assert(tabinfo->t_keptbuf);
 
 		
 		return tabinfo->t_keptbuf;
@@ -395,8 +398,8 @@ blkins(TABINFO *tabinfo, char *rp)
 
 //	offset = blksrch(tabinfo, bp);
 
-	assert(tabinfo->t_rowinfo->rblknum == bp->bblk->bblkno);
-	assert(tabinfo->t_rowinfo->rsstabid == bp->bblk->bsstabid);
+	Assert(tabinfo->t_rowinfo->rblknum == bp->bblk->bblkno);
+	Assert(tabinfo->t_rowinfo->rsstabid == bp->bblk->bsstabid);
 	offset = tabinfo->t_rowinfo->roffset;
 
 	ign = 0;
@@ -503,8 +506,8 @@ blkdel(TABINFO *tabinfo)
 
 //	offset = blksrch(tabinfo, bp);
 
-	assert(tabinfo->t_rowinfo->rblknum == bp->bblk->bblkno);
-	assert(tabinfo->t_rowinfo->rsstabid == bp->bblk->bsstabid);
+	Assert(tabinfo->t_rowinfo->rblknum == bp->bblk->bblkno);
+	Assert(tabinfo->t_rowinfo->rsstabid == bp->bblk->bsstabid);
 	offset = tabinfo->t_rowinfo->roffset;
 
 	if (tabinfo->t_sinfo->sistate & SI_NODATA)
@@ -739,7 +742,7 @@ blk_split(BLOCK *blk)
 	nextblk = (BLOCK *) ((char *)blk + BLOCKSIZE);
 	rowcnt = blk->bnextrno;
 
-	assert((blk->bnextblkno!= -1) && (nextblk->bfreeoff == BLKHEADERSIZE)
+	Assert((blk->bnextblkno!= -1) && (nextblk->bfreeoff == BLKHEADERSIZE)
 		&& (rowcnt > 1));
 
 	
@@ -769,7 +772,7 @@ blk_split(BLOCK *blk)
 
 	nextblk->bminlen = blk->bminlen;
 
-	assert((blk->bnextrno + nextblk->bnextrno) == rowcnt);
+	Assert((blk->bnextrno + nextblk->bnextrno) == rowcnt);
 
 	return;
 }
@@ -805,7 +808,7 @@ blk_backmov(BLOCK *blk)
 		tmpblk = (BLOCK *) ((char *)nextblk+ BLOCKSIZE);
 
 		
-		assert((tmpblk->bblkno != -1) && (tmpblk->bfreeoff == BLKHEADERSIZE));
+		Assert((tmpblk->bblkno != -1) && (tmpblk->bfreeoff == BLKHEADERSIZE));
 
 
 		BLOCK_MOVE(tmpblk,nextblk);

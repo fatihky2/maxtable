@@ -286,7 +286,7 @@ meta_crtab(TREE *command)
 	SVR_IDX_FILE	*tablet_store;
 
 
-	assert(command);
+	Assert(command);
 	
 	rtn_stat = FALSE;
 	resp = NULL;
@@ -583,7 +583,7 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 	int		sstabmap_chg;
 
 
-	assert(command);
+	Assert(command);
 
 	rtn_stat = FALSE;
 	sstabmap_chg = FALSE;
@@ -602,7 +602,7 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
 
-	assert(STAT(tab_dir, &st) == 0);
+	Assert(STAT(tab_dir, &st) == 0);
 	
 	str1_to_str2(tab_meta_dir, '/', "sysobjects");
 
@@ -616,7 +616,7 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 
 	status = READ(fd1, &tab_hdr, sizeof(TABLEHDR));	
 
-	assert(status == sizeof(TABLEHDR));
+	Assert(status == sizeof(TABLEHDR));
 
 	if (tab_hdr.tab_stat & TAB_DROPPED)
 	{
@@ -631,7 +631,7 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 
 	sstab_map = sstab_map_get(tab_hdr.tab_id, tab_dir, &tab_sstabmap);
 
-	assert(sstab_map != NULL);
+	Assert(sstab_map != NULL);
 
 	if (tab_hdr.tab_tablet > 0)
 	{
@@ -665,7 +665,7 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 		
 		tss->tcur_rgprof = rebalan_get_rg_prof_by_addr(rg_addr);
 
-		assert(tss->tcur_rgprof);
+		Assert(tss->tcur_rgprof);
 
 		rg_port = tss->tcur_rgprof->rg_port;
 
@@ -698,7 +698,7 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 			sstab_res = FALSE;
 			if (!SSTAB_MAP_RESERV(res_sstab_id))
 			{
-				assert(SSTAB_MAP_USED(res_sstab_id));
+				Assert(SSTAB_MAP_USED(res_sstab_id));
 
 				res_sstab_id = meta_get_free_sstab();
 
@@ -777,7 +777,7 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 	}
 	else
 	{
-		assert(0);
+		Assert(0);
 	}
 	
 	
@@ -803,11 +803,11 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 			
 			rg_prof = (RANGE_PROF *)(Master_infor->rg_list.data);
 
-			assert(rg_prof->rg_stat & RANGER_IS_ONLINE);
+			Assert(rg_prof->rg_stat & RANGER_IS_ONLINE);
 		}
 		else
 		{
-			assert(0);
+			Assert(0);
 		}
 		
 		
@@ -832,7 +832,7 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 	
 	status = WRITE(fd1, &tab_hdr, sizeof(TABLEHDR));
 
-	assert(status == sizeof(TABLEHDR));
+	Assert(status == sizeof(TABLEHDR));
 	
 	CLOSE(fd1);
 
@@ -959,7 +959,7 @@ meta_droptab(TREE *command)
 	int		rg_port;
 
 
-	assert(command);
+	Assert(command);
 
 	rtn_stat = FALSE;
 	tab_name = command->sym.command.tabname;
@@ -975,7 +975,7 @@ meta_droptab(TREE *command)
 	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
 
-	assert(STAT(tab_dir, &st) == 0);
+	Assert(STAT(tab_dir, &st) == 0);
 	
 	str1_to_str2(tab_meta_dir, '/', "sysobjects");
 
@@ -989,7 +989,7 @@ meta_droptab(TREE *command)
 
 	status = READ(fd1, &tab_hdr, sizeof(TABLEHDR));	
 
-	assert(status == sizeof(TABLEHDR));
+	Assert(status == sizeof(TABLEHDR));
 
 	if (tab_hdr.tab_stat & TAB_DROPPED)
 	{
@@ -1004,7 +1004,7 @@ meta_droptab(TREE *command)
 	
 	status = WRITE(fd1, &tab_hdr, sizeof(TABLEHDR));
 
-	assert(status == sizeof(TABLEHDR));
+	Assert(status == sizeof(TABLEHDR));
 	
 	CLOSE(fd1);
 
@@ -1013,11 +1013,11 @@ meta_droptab(TREE *command)
 		
 		rg_prof = (RANGE_PROF *)(Master_infor->rg_list.data);
 
-		assert(rg_prof->rg_stat & RANGER_IS_ONLINE);
+		Assert(rg_prof->rg_stat & RANGER_IS_ONLINE);
 	}
 	else
 	{
-		assert(0);
+		Assert(0);
 	}
 
 	rg_addr = rg_prof->rg_addr;
@@ -1077,7 +1077,7 @@ meta_removtab(TREE *command)
 	int	status;
 
 
-	assert(command);
+	Assert(command);
 
 	rtn_stat = FALSE;
 	tab_name = command->sym.command.tabname;
@@ -1093,7 +1093,7 @@ meta_removtab(TREE *command)
 	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
 
-	assert(STAT(tab_dir, &st) == 0);
+	Assert(STAT(tab_dir, &st) == 0);
 	
 	str1_to_str2(tab_meta_dir, '/', "sysobjects");
 
@@ -1107,9 +1107,9 @@ meta_removtab(TREE *command)
 
 	status = READ(fd1, &tab_hdr, sizeof(TABLEHDR));	
 
-	assert(status == sizeof(TABLEHDR));
+	Assert(status == sizeof(TABLEHDR));
 	
-	assert(tab_hdr.tab_stat & TAB_DROPPED);
+	Assert(tab_hdr.tab_stat & TAB_DROPPED);
 	
 	CLOSE(fd1);
 
@@ -1166,7 +1166,7 @@ meta_seldeltab(TREE *command, TABINFO *tabinfo)
 	int		rg_port;
 
 
-	assert(command);
+	Assert(command);
 
 	rtn_stat = FALSE;
 	col_buf= NULL;
@@ -1244,7 +1244,7 @@ meta_seldeltab(TREE *command, TABINFO *tabinfo)
 	
 	tss->tcur_rgprof = rebalan_get_rg_prof_by_addr(rg_addr);
 
-	assert(tss->tcur_rgprof);
+	Assert(tss->tcur_rgprof);
 
 	rg_port = tss->tcur_rgprof->rg_port;
 	
@@ -1407,7 +1407,7 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 	char		*rg_addr;
 
 
-	assert(command);
+	Assert(command);
 
 	rtn_stat = FALSE;
 	tab_name = command->sym.command.tabname;
@@ -1423,7 +1423,7 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
 
-	assert(STAT(tab_dir, &st) == 0);
+	Assert(STAT(tab_dir, &st) == 0);
 	
 	str1_to_str2(tab_meta_dir, '/', "sysobjects");
 
@@ -1437,8 +1437,8 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 
 	status = READ(fd1, &tab_hdr, sizeof(TABLEHDR));	
 
-	assert(status == sizeof(TABLEHDR));
-	assert(tab_hdr.tab_tablet > 0);
+	Assert(status == sizeof(TABLEHDR));
+	Assert(tab_hdr.tab_tablet > 0);
 
 
 	if (tab_hdr.tab_stat & TAB_DROPPED)
@@ -1536,7 +1536,7 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 	
 	status = WRITE(fd1, &tab_hdr, sizeof(TABLEHDR));
 
-	assert(status == sizeof(TABLEHDR));
+	Assert(status == sizeof(TABLEHDR));
 	
 	CLOSE(fd1);
 
@@ -1681,7 +1681,7 @@ meta_rebalan_svr_idx_file(char *tab_dir, REBALANCE_DATA *rbd)
 	
 	status = READ(fd, tablet_store, sizeof(SVR_IDX_FILE));
 
-	assert(status == sizeof(SVR_IDX_FILE));
+	Assert(status == sizeof(SVR_IDX_FILE));
 
 	
 
@@ -1797,7 +1797,7 @@ meta_rebalancer(TREE *command)
 	int		rtn_stat;
 
 
-	assert(command);
+	Assert(command);
 	
 	rtn_stat = FALSE;
 	resp = NULL;
@@ -1868,7 +1868,7 @@ meta_rebalancer(TREE *command)
 			{
 				rp = (char *)blk + *offset;
 			
-				assert(*offset < blk->bfreeoff);
+				Assert(*offset < blk->bfreeoff);
 			
 				key_in_blk = row_locate_col(rp, TABLETSCHM_RGADDR_COLOFF_INROW, 
 							ROW_MINLEN_IN_TABLETSCHM, &keylen_in_blk);
@@ -1904,7 +1904,7 @@ meta_rebalancer(TREE *command)
 
 					rtn_stat = meta_rebalan_process(rbd);
 
-					assert(rtn_stat == TRUE);
+					Assert(rtn_stat == TRUE);
 					
 					CLOSE(fd1);
 
@@ -2030,8 +2030,12 @@ parse_again:
 			
 	    case TABCREAT:
 		resp = meta_crtab(command);
-						
-		printf("I got here - CREATING TABLE\n");
+
+		if (DEBUG_TEST(tss))
+		{
+			printf("I got here - CREATING TABLE\n");
+		}
+		
 		break;
 
 	    case INSERT:
@@ -2043,12 +2047,21 @@ parse_again:
 
 	    case SELECT:
 		resp = meta_seldeltab(command, tabinfo);
-		printf("I got here - SELECTING TABLE\n");
+		if (DEBUG_TEST(tss))
+		{
+			printf("I got here - SELECTING TABLE\n");
+		}
+		
 	    	break;
 
 	    case DELETE:
 	    	resp = meta_seldeltab(command, tabinfo);
-		printf("I got here - DELETE TABLE\n");
+
+		if (DEBUG_TEST(tss))
+		{
+			printf("I got here - DELETE TABLE\n");
+		}
+		
 	    	break;
 	    case ADDSSTAB:
 	    	resp = meta_addsstab(command, tabinfo);
@@ -2104,7 +2117,7 @@ meta_bld_sysrow(char *rp, int rlen, int tabletid, int sstabnum)
 	*(int *)(rp + rowidx) = sstabnum;
 	rowidx += sizeof(int);
 
-	assert(rowidx == rlen);
+	Assert(rowidx == rlen);
 }
 
 int main(int argc, char *argv[])

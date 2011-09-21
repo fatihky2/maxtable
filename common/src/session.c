@@ -18,27 +18,34 @@
 ** permissions and limitations under the License.
 */
 #include "master/metaserver.h"
+#include "utils.h"
 #include "memcom.h"
 #include "buffer.h"
 #include "block.h"
 #include "cache.h"
+#include "tss.h"
 
 
+extern	TSS	*Tss;
 extern KERNEL *Kernel;
 
 int
 session_close(TABINFO *tabinfo)
 {
+	LOCALTSS(tss);
 	BUF	*bp;
 	BUF	*tmp_bp;
 
 	bp = tabinfo->t_dnew;
 
-	printf("Enter into close table\n");
+	if (DEBUG_TEST(tss))
+	{
+		printf("Enter into close table\n");
+	}
 
 	for (bp = tabinfo->t_dnew; bp != (BUF *)tabinfo;)
 	{
-		assert(bp->bstat & BUF_DIRTY);
+		Assert(bp->bstat & BUF_DIRTY);
 		bufwrite(bp);
 
 		tmp_bp= bp;

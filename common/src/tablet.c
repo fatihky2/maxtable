@@ -66,7 +66,7 @@ tablet_crt(TABLEHDR *tablehdr, char *tabledir, char *rg_addr, char *rp, int minl
 
 	MEMCPY(tab_meta_dir, tabledir, STRLEN(tabledir));
 
-	assert(tablehdr->tab_tablet == 0);
+	Assert(tablehdr->tab_tablet == 0);
 
 	tablehdr->tab_tablet = 1;
 	
@@ -211,7 +211,7 @@ tablet_upd_col(char *newrp, char *oldrp, int rlen, int colid, char *newcolval, i
 
 		*(int *)colptr = *(int *)newcolval;
 
-		assert (newvalen == sizeof(int));
+		Assert (newvalen == sizeof(int));
 	    	
 	    	break;
 		
@@ -310,7 +310,7 @@ tablet_bld_row(char *sstab_rp, int sstab_rlen, char *tab_name, int tab_name_len,
 				sizeof(int));
 	}
 
-	assert(sstab_idx == sstab_rlen);
+	Assert(sstab_idx == sstab_rlen);
 
 	return min_rlen;
 }
@@ -351,8 +351,8 @@ tablet_srch_row(TABINFO *usertabinfo, TABLEHDR *tablehdr, int tabid, int sstabid
 	bp = blkget(tabinfo);
 //	offset = blksrch(tabinfo, bp);
 
-	assert(tabinfo->t_rowinfo->rblknum == bp->bblk->bblkno);
-	assert(tabinfo->t_rowinfo->rsstabid == bp->bblk->bsstabid);
+	Assert(tabinfo->t_rowinfo->rblknum == bp->bblk->bblkno);
+	Assert(tabinfo->t_rowinfo->rsstabid == bp->bblk->bsstabid);
 	offset = tabinfo->t_rowinfo->roffset;
 
 	bufunkeep(bp->bsstab);
@@ -408,7 +408,7 @@ tablet_schm_bld_row(char *rp, int rlen, int tabletid, char *tabletname,
 
 	rowidx += COLOFFSETENTRYSIZE;
 	
-	assert(rowidx == rlen);
+	Assert(rowidx == rlen);
 }
 
 
@@ -576,8 +576,8 @@ tablet_schm_srch_row(TABLEHDR *tablehdr, int tabid, int sstabid,
 	
 	bp = blkget(tabinfo);
 //	offset = blksrch(tabinfo, bp);
-	assert(tabinfo->t_rowinfo->rblknum == bp->bblk->bblkno);
-	assert(tabinfo->t_rowinfo->rsstabid == bp->bblk->bsstabid);
+	Assert(tabinfo->t_rowinfo->rblknum == bp->bblk->bblkno);
+	Assert(tabinfo->t_rowinfo->rsstabid == bp->bblk->bsstabid);
 	offset = tabinfo->t_rowinfo->roffset;
 	
 	bufunkeep(bp->bsstab);
@@ -620,6 +620,7 @@ tablet_namebyname(char *old_sstab, char *new_sstab)
 void
 tablet_namebyid(TABINFO *tabinfo, char *new_sstab)
 {
+	LOCALTSS(tss);
 	char	nameidx[64];
 	int	idxpos;
 	char	tmpsstab[SSTABLE_NAME_MAX_LEN];
@@ -635,7 +636,7 @@ tablet_namebyid(TABINFO *tabinfo, char *new_sstab)
 
 	MEMSET(nameidx, 64);
 
-	assert(tabinfo->t_stat & TAB_TABLET_SPLIT);
+	Assert(tabinfo->t_stat & TAB_TABLET_SPLIT);
 	sprintf(nameidx, "%d", tabinfo->t_split_tabletid);
 	
 	MEMSET(tmpsstab, SSTABLE_NAME_MAX_LEN);
@@ -645,8 +646,11 @@ tablet_namebyid(TABINFO *tabinfo, char *new_sstab)
 
 	sprintf(new_sstab, "%s%s", tmpsstab,nameidx);
 
-	printf("new_sstab = %s--------%d---\n", new_sstab,tabinfo->t_split_tabletid);
-
+	if (DEBUG_TEST(tss))
+	{
+		printf("new_sstab = %s--------%d---\n", new_sstab,tabinfo->t_split_tabletid);
+	}
+	
 	return;
 }
 
@@ -693,7 +697,7 @@ tablet_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 
 	while(nextblk->bblkno != -1)
 	{
-		assert(nextblk->bfreeoff > BLKHEADERSIZE);
+		Assert(nextblk->bfreeoff > BLKHEADERSIZE);
 
 		BLOCK_MOVE(blk,nextblk);
 		

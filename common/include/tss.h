@@ -78,6 +78,13 @@ typedef struct tss
 
 
 #define TSS_PARSER_ERR		0x0001
+#define TSS_DEBUG		0x0002
+
+
+#define DEBUG_TEST(tss)		((tss)->tstat & TSS_DEBUG)
+#define DEBUG_SET(tss)		((tss)->tstat |= TSS_DEBUG)
+#define DEBUG_CLR(tss)		((tss)->tstat &= ~TSS_DEBUG)
+
 
 
 typedef struct tssobj

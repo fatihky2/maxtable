@@ -279,7 +279,7 @@ finish:
 
 	if (sstab_split)
 	{
-		assert(querytype == INSERT);
+		Assert(querytype == INSERT);
 		conn_destroy_resp(sstab_split_resp);
 	}
 

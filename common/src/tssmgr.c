@@ -23,6 +23,7 @@
 #include "memcom.h"
 #include "memobj.h"
 #include "exception.h"
+#include "utils.h"
 
 
 TSS		*Tss;
@@ -57,7 +58,13 @@ void
 tss_init(TSS *tss)
 {
 	tss->texcptr = &tss->texcproc;
+
 	tss->tstat = 0;
+	
+#ifdef DEBUG
+	DEBUG_SET(tss);
+#endif
+
 	tss->ttabinfo = tss->toldtabinfo = NULL;
 	tss->tcmd_parser = NULL;
 	tss->tmeta_hdr = NULL;
@@ -74,7 +81,7 @@ tss_release()
 	int ret;
 
 	ret = mp_obj_free(Kernel->ke_tss_objpool, (void *)Tss->tssobjp);
-	assert(ret == MEMPOOL_SUCCESS);
+	Assert(ret == MEMPOOL_SUCCESS);
 
 	return;
 }

@@ -328,11 +328,11 @@ void msg_process(char * (*handler_request)(char *req_buf))
 
 		resp_msg = NULL;
 		resp_msg = (msg_data *)malloc(sizeof(msg_data));
-		assert(resp_msg);
+		Assert(resp_msg);
 		MEMSET(resp_msg, sizeof(msg_data));
 		resp_msg->n_size = resp_size;
 		resp_msg->block_buffer = NULL;
-		assert(resp_size < MAXLINE);
+		Assert(resp_size < MAXLINE);
 		MEMCPY(resp_msg->data, resp, resp_size);
 		resp_msg->fd = fd;	
 

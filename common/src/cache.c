@@ -183,7 +183,7 @@ ca_setup_pool()
 		}
 		else
 		{
-			//assert(temp == (i - count - 1));
+			//Assert(temp == (i - count - 1));
 			
 			
 			bp->bsstabnew = sbufptr;

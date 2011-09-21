@@ -106,7 +106,7 @@ conf_get_key(char *key, char* line)
 
 	config = conf_build(line, CONF_SEPARATOR);
 
-	assert(config->conf_opt_size == 2);
+	Assert(config->conf_opt_size == 2);
 
 	/* Key = Value*/
 	key_temp = trim(config->conf_opt_infor[0].conf_value, ' ');
@@ -125,7 +125,7 @@ conf_get_value(char *value, char* line)
 
 	config = conf_build(line, CONF_SEPARATOR);
 
-	assert(config->conf_opt_size == 2);
+	Assert(config->conf_opt_size == 2);
 
 	value_temp = trim(config->conf_opt_infor[1].conf_value, ' ');
 //	value_temp = config->conf_opt_infor[1].conf_value;
@@ -147,7 +147,7 @@ conf_get_value_by_key(char *value, char *file_path, char* target_key)
 	int	i;
 	int	file_size;	
 
-	assert(value != NULL);
+	Assert(value != NULL);
 
 	file_size = file_get_size(file_path);
 
@@ -161,7 +161,7 @@ conf_get_value_by_key(char *value, char *file_path, char* target_key)
 	{
 		conf_opt = config->conf_opt_infor[i].conf_value;
 
-		assert(STRLEN(conf_opt) != 0);
+		Assert(STRLEN(conf_opt) != 0);
 
 		MEMSET(key, TOKEN_NAME_MAX_LEN);
 		conf_get_key(key, conf_opt);
