@@ -267,6 +267,7 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 
 			if (!(col_offset > 0))
 			{
+				printf("Hit a row error!\n");
 				ex_raise(EX_ANY);
 			}
 			
@@ -284,6 +285,7 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 
 			if (ins_meta->varcol_num != col_num)
 			{
+				printf("Hit a row error!\n");
 				ex_raise(EX_ANY);
 			}
 		}		
@@ -447,6 +449,14 @@ rg_seldeltab(TREE *command, TABINFO *tabinfo)
 
 		Assert(tabinfo->t_rowinfo->rblknum == bp->bblk->bblkno);
 		Assert(tabinfo->t_rowinfo->rsstabid == bp->bblk->bsstabid);
+
+		if ((tabinfo->t_rowinfo->rblknum != bp->bblk->bblkno)
+		    || (tabinfo->t_rowinfo->rsstabid != bp->bblk->bsstabid))
+		{
+			printf("Hit a buffer error!\n");
+			ex_raise(EX_ANY);
+		}
+		
 		offset = tabinfo->t_rowinfo->roffset;
 	}
 	

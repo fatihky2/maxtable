@@ -46,6 +46,12 @@ session_close(TABINFO *tabinfo)
 	for (bp = tabinfo->t_dnew; bp != (BUF *)tabinfo;)
 	{
 		Assert(bp->bstat & BUF_DIRTY);
+
+		if (!(bp->bstat & BUF_DIRTY))
+		{
+			printf("Buffer should be DIRTY!\n");
+		}
+		
 		bufwrite(bp);
 
 		tmp_bp= bp;

@@ -431,8 +431,6 @@ meta_crtab(TREE *command)
 	MEMFREEHEAP(tab_hdr);
 
 	CLOSE(fd);
-
-
 	
 
 	SSTAB_INFOR	*sstab_map_tmp;
@@ -602,7 +600,11 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
 
-	Assert(STAT(tab_dir, &st) == 0);
+	if (STAT(tab_dir, &st) != 0)
+	{
+		printf("Table %s is not exist!\n", tab_name);
+		goto exit;
+	}
 	
 	str1_to_str2(tab_meta_dir, '/', "sysobjects");
 
@@ -618,6 +620,13 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 
 	Assert(status == sizeof(TABLEHDR));
 
+	if (status != sizeof(TABLEHDR))
+	{
+		printf("Table %s sysobjects hit error!\n", tab_name);
+		CLOSE(fd1);
+		ex_raise(EX_ANY);
+	}
+
 	if (tab_hdr.tab_stat & TAB_DROPPED)
 	{
 		printf("This table has been dropped.\n");
@@ -632,6 +641,13 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 	sstab_map = sstab_map_get(tab_hdr.tab_id, tab_dir, &tab_sstabmap);
 
 	Assert(sstab_map != NULL);
+
+	if (sstab_map == NULL)
+	{
+		printf("Table %s has no sstabmap in the metaserver!", tab_name);
+		CLOSE(fd1);
+		ex_raise(EX_ANY);
+	}
 
 	if (tab_hdr.tab_tablet > 0)
 	{
@@ -667,6 +683,14 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 
 		Assert(tss->tcur_rgprof);
 
+		if (tss->tcur_rgprof == NULL)
+		{
+			printf("Can't get the profile of ranger server %s\n", rg_addr);
+
+			CLOSE(fd1);
+			goto exit;
+		}
+
 		rg_port = tss->tcur_rgprof->rg_port;
 
 		
@@ -699,6 +723,13 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 			if (!SSTAB_MAP_RESERV(res_sstab_id))
 			{
 				Assert(SSTAB_MAP_USED(res_sstab_id));
+
+				if (!SSTAB_MAP_USED(res_sstab_id))
+				{
+					printf("SSTable map hit error!\n");
+					CLOSE(fd1);
+					goto exit;
+				}
 
 				res_sstab_id = meta_get_free_sstab();
 
@@ -778,6 +809,8 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 	else
 	{
 		Assert(0);
+		CLOSE(fd1);
+		ex_raise(EX_ANY);
 	}
 	
 	
@@ -804,10 +837,19 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 			rg_prof = (RANGE_PROF *)(Master_infor->rg_list.data);
 
 			Assert(rg_prof->rg_stat & RANGER_IS_ONLINE);
+
+			if (!(rg_prof->rg_stat & RANGER_IS_ONLINE))
+			{
+				printf("Ranger server %s is off-line\n", rg_prof->rg_addr);
+				CLOSE(fd1);
+				goto exit;
+			}
 		}
 		else
 		{
 			Assert(0);
+			CLOSE(fd1);
+			ex_raise(EX_ANY);
 		}
 		
 		
@@ -833,11 +875,15 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 	status = WRITE(fd1, &tab_hdr, sizeof(TABLEHDR));
 
 	Assert(status == sizeof(TABLEHDR));
-	
-	CLOSE(fd1);
 
+	if (status != sizeof(TABLEHDR))
+	{
+		printf("Table %s sysobjects hit error!\n", tab_name);
+		CLOSE(fd1);
+		ex_raise(EX_ANY);
+	}
 	
-	
+	CLOSE(fd1);	
 
 	
 	col_buf_len = sizeof(INSMETA) + sizeof(TABLEHDR) + tab_hdr.tab_col * (sizeof(COLINFO));
@@ -976,6 +1022,12 @@ meta_droptab(TREE *command)
 	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
 
 	Assert(STAT(tab_dir, &st) == 0);
+
+	if (STAT(tab_dir, &st) != 0)
+	{
+		printf("Table %s is not exist!\n", tab_name);
+		goto exit;
+	}
 	
 	str1_to_str2(tab_meta_dir, '/', "sysobjects");
 
@@ -990,6 +1042,13 @@ meta_droptab(TREE *command)
 	status = READ(fd1, &tab_hdr, sizeof(TABLEHDR));	
 
 	Assert(status == sizeof(TABLEHDR));
+	
+	if (status != sizeof(TABLEHDR))
+	{
+		printf("Table %s sysobjects hit error!\n", tab_name);
+		CLOSE(fd1);
+		ex_raise(EX_ANY);
+	}
 
 	if (tab_hdr.tab_stat & TAB_DROPPED)
 	{
@@ -1006,6 +1065,13 @@ meta_droptab(TREE *command)
 
 	Assert(status == sizeof(TABLEHDR));
 	
+	if (status != sizeof(TABLEHDR))
+	{
+		printf("Table %s sysobjects hit error!\n", tab_name);
+		CLOSE(fd1);
+		ex_raise(EX_ANY);
+	}
+	
 	CLOSE(fd1);
 
 	if(Master_infor->rg_list.nextrno > 0)
@@ -1014,10 +1080,19 @@ meta_droptab(TREE *command)
 		rg_prof = (RANGE_PROF *)(Master_infor->rg_list.data);
 
 		Assert(rg_prof->rg_stat & RANGER_IS_ONLINE);
+
+		if (!(rg_prof->rg_stat & RANGER_IS_ONLINE))
+		{
+			printf("Ranger server %s is off-line\n", rg_prof->rg_addr);
+			goto exit;
+		}
 	}
 	else
 	{
 		Assert(0);
+
+		printf("No ranger server is avlable\n");
+		ex_raise(EX_ANY);
 	}
 
 	rg_addr = rg_prof->rg_addr;
@@ -1094,6 +1169,12 @@ meta_removtab(TREE *command)
 	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
 
 	Assert(STAT(tab_dir, &st) == 0);
+
+	if (STAT(tab_dir, &st) != 0)
+	{
+		printf("Table %s is not exist!\n", tab_name);
+		goto exit;
+	}
 	
 	str1_to_str2(tab_meta_dir, '/', "sysobjects");
 
@@ -1110,7 +1191,22 @@ meta_removtab(TREE *command)
 	Assert(status == sizeof(TABLEHDR));
 	
 	Assert(tab_hdr.tab_stat & TAB_DROPPED);
+
 	
+	if (status != sizeof(TABLEHDR))
+	{
+		printf("Table %s sysobjects hit error!\n", tab_name);
+		CLOSE(fd1);
+		ex_raise(EX_ANY);
+	}
+	
+	if ((tab_hdr.tab_stat & TAB_DROPPED))
+	{
+		printf("Table %s should be dropped.\n", tab_name);
+		CLOSE(fd1);
+		goto exit;
+	}
+
 	CLOSE(fd1);
 
 	MEMSET(cmd_str, TABLE_NAME_MAX_LEN);
@@ -1245,6 +1341,14 @@ meta_seldeltab(TREE *command, TABINFO *tabinfo)
 	tss->tcur_rgprof = rebalan_get_rg_prof_by_addr(rg_addr);
 
 	Assert(tss->tcur_rgprof);
+
+	
+	if (tss->tcur_rgprof == NULL)
+	{
+		printf("Can't get the profile of ranger server %s\n", rg_addr);
+
+		goto exit;
+	}
 
 	rg_port = tss->tcur_rgprof->rg_port;
 	
@@ -1424,6 +1528,12 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
 
 	Assert(STAT(tab_dir, &st) == 0);
+
+	if (STAT(tab_dir, &st) != 0)
+	{
+		printf("Table %s is not exist!\n", tab_name);
+		goto exit;
+	}
 	
 	str1_to_str2(tab_meta_dir, '/', "sysobjects");
 
@@ -1440,6 +1550,19 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 	Assert(status == sizeof(TABLEHDR));
 	Assert(tab_hdr.tab_tablet > 0);
 
+	if (status != sizeof(TABLEHDR))
+	{
+		printf("Table %s sysobjects hit error!\n", tab_name);
+		CLOSE(fd1);
+		ex_raise(EX_ANY);
+	}
+
+	if (tab_hdr.tab_tablet == 0)
+	{
+		printf("Table %s should be has one tablet at least\n", tab_name);
+		CLOSE(fd1);
+		ex_raise(EX_ANY);
+	}
 
 	if (tab_hdr.tab_stat & TAB_DROPPED)
 	{
@@ -1537,6 +1660,13 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 	status = WRITE(fd1, &tab_hdr, sizeof(TABLEHDR));
 
 	Assert(status == sizeof(TABLEHDR));
+
+	if (status != sizeof(TABLEHDR))
+	{
+		printf("Table %s sysobjects hit error!\n", tab_name);
+		CLOSE(fd1);
+		ex_raise(EX_ANY);
+	}
 	
 	CLOSE(fd1);
 
@@ -1795,6 +1925,7 @@ meta_rebalancer(TREE *command)
 	int		transfer_tablet;
 	char		tab_tabletschm_dir[TABLE_NAME_MAX_LEN];
 	int		rtn_stat;
+	char		*tablet_schm_bp;
 
 
 	Assert(command);
@@ -1803,7 +1934,8 @@ meta_rebalancer(TREE *command)
 	resp = NULL;
 	tab_name = command->sym.command.tabname;
 	tab_name_len = command->sym.command.tabname_len;
-
+	rbd = NULL;
+	tablet_schm_bp = NULL;
 	
 	MEMSET(tab_dir, 256);
 	MEMSET(tab_dir1, 256);
@@ -1812,6 +1944,7 @@ meta_rebalancer(TREE *command)
 
 	if (STAT(tab_dir, &st) != 0)
 	{		
+		printf("Table %s is not exist!\n", tab_name);
 		goto exit;
 	}
 
@@ -1824,8 +1957,6 @@ meta_rebalancer(TREE *command)
 
 	if (transfer_tablet > 0)
 	{		
-		char	*tablet_schm_bp;
-
 		
 		MEMSET(tab_tabletschm_dir, TABLE_NAME_MAX_LEN);
 		MEMCPY(tab_tabletschm_dir, tab_dir, STRLEN(tab_dir));
@@ -1835,7 +1966,7 @@ meta_rebalancer(TREE *command)
 	
 		if (fd < 0)
 		{
-			printf("Table is not exist! \n");
+			printf("Table %s tabletscheme hit error! \n", tab_name);
 			goto exit;
 		}
 
@@ -1891,7 +2022,8 @@ meta_rebalancer(TREE *command)
 	
 					if (fd1 < 0)
 					{
-						printf("Table is not exist! \n");
+						printf("Table %s is not exist! \n", tabletname);
+						CLOSE(fd);
 						goto exit;
 					}
 
@@ -1905,6 +2037,15 @@ meta_rebalancer(TREE *command)
 					rtn_stat = meta_rebalan_process(rbd);
 
 					Assert(rtn_stat == TRUE);
+
+					if (rtn_stat != TRUE)
+					{
+						printf("Rebalancer hit error!\n");
+						rtn_stat = FALSE;
+						CLOSE(fd1);
+						CLOSE(fd);
+						goto exit;						
+					}
 					
 					CLOSE(fd1);
 
@@ -1938,17 +2079,24 @@ meta_rebalancer(TREE *command)
 		}
 
 		WRITE(fd, tablet_schm_bp, SSTABLE_SIZE);
-		CLOSE(fd);
-		
 
-		MEMFREEHEAP(tablet_schm_bp);
-		
+		CLOSE(fd);
 	}
 
-	MEMFREEHEAP(rbd);
 	rtn_stat = TRUE;
 	
 exit:
+
+	if (tablet_schm_bp)
+	{
+		MEMFREEHEAP(tablet_schm_bp);
+	}
+
+	if (rbd)
+	{
+		MEMFREEHEAP(rbd);
+	}
+	
 	if (rtn_stat)
 	{
 		resp = conn_build_resp_byte(RPC_SUCCESS, 0, NULL);
@@ -1995,12 +2143,25 @@ parse_again:
 		printf("PARSER ERR: Please input the command again by the 'help' signed.\n");
 		return NULL;
 	}
-	
+
+	volatile struct
+	{
+		TABINFO	*tabinfo;
+	} copy;
 
 	command = tss->tcmd_parser;
 	resp_buf_idx = 0;
 	resp_buf_size = 0;
+	copy.tabinfo = NULL;
+	tabinfo = NULL;
 	resp = NULL;
+
+	if(ex_handle(EX_ANY, yxue_handler))
+	{
+		tabinfo = copy.tabinfo;
+		
+		goto close;
+	}
 
 	tabinfo = MEMALLOCHEAP(sizeof(TABINFO));
 	MEMSET(tabinfo, sizeof(TABINFO));
@@ -2081,6 +2242,8 @@ parse_again:
 	}
 
 	session_close(tabinfo);
+
+close:
 
 	tabinfo_pop();
 	if (tabinfo!= NULL)
