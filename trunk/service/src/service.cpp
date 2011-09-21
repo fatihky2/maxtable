@@ -2,7 +2,7 @@
 
 #include "service.h"
 
-
+int ign;
 namespace transoft_network_service
 {
     switch_service::switch_service()
@@ -18,7 +18,7 @@ namespace transoft_network_service
     			
             memset(cmd, 0, 256);
             sprintf(cmd, "create table %s(id varchar, desc varchar)", service_name);
-            if(!cli_commit(service_connection, cmd, resp))
+            if(!cli_commit(service_connection, cmd, resp, &ign))
                 cout << "error when building switch service target." << endl; 
         }
     }
@@ -34,7 +34,7 @@ namespace transoft_network_service
         memset(resp, 0, 256);
         memset(cmd, 0, 256);
         sprintf(cmd, "insert into %s(%s, %s)", service_id.c_str(), inst.id.c_str(), inst.desc.c_str());
-        if(!cli_commit(service_connection, cmd, resp))
+        if(!cli_commit(service_connection, cmd, resp, &ign))
         {
             cout << "error when setting switch service target." << endl;
             return false;
@@ -50,7 +50,7 @@ namespace transoft_network_service
         memset(resp, 0, 256);
         memset(cmd, 0, 256);
         sprintf(cmd, "select %s(%s)", service_id.c_str(), id.c_str());
-        if(!cli_commit(service_connection, cmd, resp))
+        if(!cli_commit(service_connection, cmd, resp, &ign))
         {
             cout << "error when getting switch service target." << endl;
             return false;
