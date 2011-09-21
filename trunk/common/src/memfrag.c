@@ -62,7 +62,7 @@ mem_os_malloc(unsigned long size)
 	alloc_size += (unsigned long) MY_MEMPAGESIZE;
 	start_addr = (void *)malloc((unsigned int)alloc_size);
 
-	assert(start_addr != NULL);
+	Assert(start_addr != NULL);
 
 	
 	if ((long) start_addr % MY_MEMPAGESIZE)
@@ -348,7 +348,7 @@ retry:
 	
 	if (addr == NULL)
 	{
-		assert(addr);
+		Assert(addr);
 	}
 
 	if (TRACECMDLINE(MEM_USAGE))

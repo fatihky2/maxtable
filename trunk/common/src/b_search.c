@@ -18,6 +18,7 @@
 ** permissions and limitations under the License.
 */
 #include "master/metaserver.h"
+#include "utils.h"
 #include "row.h"
 #include "buffer.h"
 #include "block.h"
@@ -64,7 +65,7 @@ nextrow:
 		{			
 			if (ROW_IS_DELETED(srchinfo->brow))
 			{
-				assert(   (bp->bblk->bblkno == 0) 
+				Assert(   (bp->bblk->bblkno == 0) 
 				       && (srchinfo->boffset == BLKHEADERSIZE));
 				
 				result = LE;
@@ -96,9 +97,9 @@ nextrow:
 				    && (srchinfo->brownum == 0) 
 			    	    && (bp->bblk->bblkno == 0))
 				{
-					assert((srchinfo->boffset) == 
+					Assert((srchinfo->boffset) == 
 						(ROW_OFFSET_PTR(bp->bblk)[-(srchinfo->brownum)]));
-					//assert(last_offset == *offset);
+					//Assert(last_offset == *offset);
 					
 					tabinfo->t_stat |= TAB_TABLET_KEYROW_CHG;
 				}
@@ -128,7 +129,7 @@ nextrow:
 	    	{
 	    		if (tabinfo->t_sinfo->sistate & SI_INS_DATA) 
 	    		{
-	    			assert(srchinfo->brownum < srchinfo->btotrows);
+	    			Assert(srchinfo->brownum < srchinfo->btotrows);
 
 				(srchinfo->brownum)++;
 				
@@ -141,7 +142,7 @@ nextrow:
 				
 				srchinfo->boffset += ROW_GET_LENGTH(srchinfo->brow, bp->bblk->bminlen);
 
-				assert(srchinfo->boffset == ROW_OFFSET_PTR(bp->bblk)[-(srchinfo->brownum)]);			
+				Assert(srchinfo->boffset == ROW_OFFSET_PTR(bp->bblk)[-(srchinfo->brownum)]);			
 	    		}
 	    	}
 		else

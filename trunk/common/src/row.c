@@ -92,7 +92,7 @@ row_col_compare(int coltype, char *colval1, int colen1, char *colval2, int colen
         switch (coltype)
         {
 	    case CHAR:
-		assert((colen1 == 1) && (colen2 == 1));
+		Assert((colen1 == 1) && (colen2 == 1));
 		result = MT_COMPARE(*colval1, *colval2);
 
 		break;
@@ -117,7 +117,7 @@ row_col_compare(int coltype, char *colval1, int colen1, char *colval2, int colen
 		break;
 
 	    case INT4:
-		//assert((colen1 == 4) && (colen2 == 4));
+		//Assert((colen1 == 4) && (colen2 == 4));
 
 		result = MT_COMPARE(type_char2int(colval1), type_char2int(colval2));
 

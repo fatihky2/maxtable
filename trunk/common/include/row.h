@@ -90,7 +90,7 @@ do									\
 	varcount = ROW_GET_VARCNT((rp));				\
 	endrowp = ROW_GET_END((rp), (minlen));				\
 									\
-	assert ((int)(varcolid) <= (int)varcount);		 	\
+	Assert ((int)(varcolid) <= (int)varcount);		 	\
 	(thiscoloff) = ROW_GET_VARCOL_OFFSET(endrowp, (varcolid));	\
 									\
 	if ((varcolid) == varcount)					\
@@ -103,7 +103,7 @@ do									\
 	{								\
 		nextcoloff = ROW_GET_VARCOL_OFFSET(endrowp,		\
 						     (varcolid) + 1);	\
-		assert(nextcoloff >= (int)(thiscoloff));	 	\
+		Assert(nextcoloff >= (int)(thiscoloff));	 	\
 		(collen) = nextcoloff - (thiscoloff); 			\
 	}								\
 } while(0)

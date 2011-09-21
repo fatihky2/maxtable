@@ -76,6 +76,7 @@ sstab_namebyname(char *old_sstab, char *new_sstab)
 void
 sstab_namebyid(char *old_sstab, char *new_sstab, int new_sstab_id)
 {
+	LOCALTSS(tss);
 	char	nameidx[64];
 	int	idxpos;
 	char	tmpsstab[SSTABLE_NAME_MAX_LEN];
@@ -95,8 +96,11 @@ sstab_namebyid(char *old_sstab, char *new_sstab, int new_sstab_id)
 
 	sprintf(new_sstab, "%s%s", tmpsstab,nameidx);
 
-	printf("new_sstab = %s--------%d---\n", new_sstab, new_sstab_id);
-
+	if (DEBUG_TEST(tss))
+	{
+		printf("new_sstab = %s--------%d---\n", new_sstab, new_sstab_id);
+	}
+	
 	return;
 }
 
@@ -138,7 +142,7 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 
 	while(nextblk->bblkno != -1)
 	{
-		assert(nextblk->bfreeoff > BLKHEADERSIZE);
+		Assert(nextblk->bfreeoff > BLKHEADERSIZE);
 		
 		BLOCK_MOVE(blk,nextblk);
 

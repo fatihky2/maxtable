@@ -55,7 +55,7 @@ par_bld_cmd(char *data, int data_len, int querytype)
 void
 par_destroy_cmd(TREE *node)
 {
-	assert(PAR_NODE_IS_COMMAND(node->type));
+	Assert(PAR_NODE_IS_COMMAND(node->type));
 
 	MEMFREEHEAP(node);
 	return;
@@ -104,7 +104,7 @@ par_bld_const(char *data, int datalen, int datatype)
 void
 par_destroy_const(TREE *node)
 {
-	assert(PAR_NODE_IS_CONSTANT(node->type));
+	Assert(PAR_NODE_IS_CONSTANT(node->type));
 
 	MEMFREEHEAP(node->sym.constant.value);
 	MEMFREEHEAP(node);
@@ -138,7 +138,7 @@ par_bld_resdom(char *colname, char *coltype, int col_id)
 		
 		col_idx = type_get_index_by_name(coltype);
 
-		assert(!TYPE_IS_INVALID(col_idx));
+		Assert(!TYPE_IS_INVALID(col_idx));
 	
         	resd_node->coltype = TYPE_GET_TYPE_NUM(col_idx);
 		resd_node->colen = TYPE_GET_LEN(col_idx);
@@ -148,7 +148,7 @@ par_bld_resdom(char *colname, char *coltype, int col_id)
 	{
 		col_len = STRLEN(colname);
 
-		assert(col_len < 256);
+		Assert(col_len < 256);
 		MEMCPY(resd_node->colname, colname, col_len);
 	}
 
@@ -162,7 +162,7 @@ par_bld_resdom(char *colname, char *coltype, int col_id)
 void
 par_destroy_resdom(TREE * node)
 {
-	assert(PAR_NODE_IS_RESDOM(node->type));
+	Assert(PAR_NODE_IS_RESDOM(node->type));
 
 	if(node->right)
 	{

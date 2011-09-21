@@ -32,6 +32,12 @@ extern "c" {
 #define MIN(a, b) ((a) < (b))?(a):(b)
 #define MAX(a, b) ((a) > (b))?(a):(b)
 
+#ifdef DEBUG
+#define Assert(cond) assert(cond)
+#else
+#define Assert(cond)
+#endif
+
 
 char * 
 trim(char *str, char deli);

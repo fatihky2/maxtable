@@ -20,6 +20,7 @@
 #include "global.h"
 #include <pthread.h>
 #include "master/metaserver.h"
+#include "utils.h"
 #include "buffer.h"
 #include "hkgc.h"
 #include "spinlock.h"
@@ -77,7 +78,7 @@ hkgc_get_sstabmap(TAB_SSTAB_MAP *sstabmap)
 	}
 	else
 	{
-		assert(hkgc->hk_sstabmap == sstabmap);
+		Assert(hkgc->hk_sstabmap == sstabmap);
 	}
 	
 	V_SPINLOCK(hkgc->hk_sstabmap_mutex);

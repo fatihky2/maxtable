@@ -100,7 +100,7 @@ rg_droptab(TREE *command)
 	char		*resp;
 
 
-	assert(command);
+	Assert(command);
 
 	rtn_stat = FALSE;
 	
@@ -145,6 +145,7 @@ exit:
 char *
 rg_instab(TREE *command, TABINFO *tabinfo)
 {
+	LOCALTSS(tss);
 	char		*sstable;
 	char		*tab_name;
 	int		tab_name_len;
@@ -168,7 +169,7 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 	int		resp_len;
 
 
-	assert(command);
+	Assert(command);
 
 	rtn_stat = FALSE;
 	sstab_rlen = 0;
@@ -194,8 +195,11 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 		}
 	}
 
+	if (DEBUG_TEST(tss))
+	{
+		printf("ins_meta->sstab_name =%s \n", ins_meta->sstab_name);
+	}
 	
-	printf("ins_meta->sstab_name =%s \n", ins_meta->sstab_name);
 	sstable = ins_meta->sstab_name;
 
 	str1_to_str2(tab_dir, '/', sstable);
@@ -208,10 +212,11 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 		ins_meta->status |= INS_META_1ST;
 	}
 
-	printf("ins_meta->sstab_name =%s \n", ins_meta->sstab_name);
-	printf("tab_dir =%s \n", tab_dir);
-
-
+	if (DEBUG_TEST(tss))
+	{
+		printf("ins_meta->sstab_name =%s \n", ins_meta->sstab_name);
+		printf("tab_dir =%s \n", tab_dir);
+	}
 	
 	row_build_hdr(rp, 0, 0, ins_meta->varcol_num);
 
@@ -258,7 +263,7 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 		}
 		else
 		{
-			assert(col_offset > 0);
+			Assert(col_offset > 0);
 
 			if (!(col_offset > 0))
 			{
@@ -275,7 +280,7 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 				col_offset = -1;
 			}
 			
-			assert(ins_meta->varcol_num == col_num);
+			Assert(ins_meta->varcol_num == col_num);
 
 			if (ins_meta->varcol_num != col_num)
 			{
@@ -310,8 +315,11 @@ exit:
 
 		int i = 0;
 
-		printf("tabinfo->t_insrg->new_sstab_name = %s \n", tabinfo->t_insrg->new_sstab_name);
-
+		if (DEBUG_TEST(tss))
+		{
+			printf("tabinfo->t_insrg->new_sstab_name = %s \n", tabinfo->t_insrg->new_sstab_name);
+		}
+		
 		PUT_TO_BUFFER(resp_buf, i, tabinfo->t_insrg->new_sstab_name, SSTABLE_NAME_MAX_LEN);
 
 		PUT_TO_BUFFER(resp_buf, i, &tabinfo->t_insmeta->res_sstab_id, sizeof(int));
@@ -325,7 +333,7 @@ exit:
 		PUT_TO_BUFFER(resp_buf, i, tabinfo->t_insrg->new_sstab_key, tabinfo->t_insrg->new_keylen);
 		
 //		printf("tabinfo->t_insmeta->sstab_id = %d,  tabinfo->t_insmeta->res_sstab_id = %d\n", tabinfo->t_insmeta->sstab_id, tabinfo->t_insmeta->res_sstab_id);
-		assert(resp_len == i);
+		Assert(resp_len == i);
 	}
 	
 	if (rtn_stat)
@@ -351,6 +359,7 @@ exit:
 char *
 rg_seldeltab(TREE *command, TABINFO *tabinfo)
 {
+	LOCALTSS(tss);
 	char		*sstable;
 	char		*tab_name;
 	int		tab_name_len;
@@ -370,7 +379,7 @@ rg_seldeltab(TREE *command, TABINFO *tabinfo)
 	int 		rlen;
 
 
-	assert(command);
+	Assert(command);
 
 	rtn_stat = FALSE;
 	sstab_rlen = 0;
@@ -397,8 +406,11 @@ rg_seldeltab(TREE *command, TABINFO *tabinfo)
 		}
 	}
 
+	if (DEBUG_TEST(tss))
+	{
+		printf("ins_meta->sstab_name =%s \n", ins_meta->sstab_name);
+	}
 	
-	printf("ins_meta->sstab_name =%s \n", ins_meta->sstab_name);
 	sstable = ins_meta->sstab_name;
 
 	str1_to_str2(tab_dir, '/', sstable);
@@ -410,9 +422,12 @@ rg_seldeltab(TREE *command, TABINFO *tabinfo)
 		goto exit; 
 	}
 
-	printf("ins_meta->sstab_name =%s \n", ins_meta->sstab_name);
-	printf("tab_dir =%s \n", tab_dir);
-
+	if (DEBUG_TEST(tss))
+	{
+		printf("ins_meta->sstab_name =%s \n", ins_meta->sstab_name);
+		printf("tab_dir =%s \n", tab_dir);
+	}
+	
 	keycol = par_get_colval_by_colid(command, tabinfo->t_key_colid, &keycolen);
 
 	TABINFO_INIT(tabinfo, ins_meta->sstab_name, tabinfo->t_sinfo, tabinfo->t_row_minlen, 
@@ -430,8 +445,8 @@ rg_seldeltab(TREE *command, TABINFO *tabinfo)
 		bp = blkget(tabinfo);
 //		offset = blksrch(tabinfo, bp);
 
-		assert(tabinfo->t_rowinfo->rblknum == bp->bblk->bblkno);
-		assert(tabinfo->t_rowinfo->rsstabid == bp->bblk->bsstabid);
+		Assert(tabinfo->t_rowinfo->rblknum == bp->bblk->bblkno);
+		Assert(tabinfo->t_rowinfo->rsstabid == bp->bblk->bsstabid);
 		offset = tabinfo->t_rowinfo->roffset;
 	}
 	
@@ -525,7 +540,7 @@ rg_fill_resd(TREE *command, COLINFO *colinfor, int totcol)
 			colid = command->sym.resdom.colid;
 			col_info = meta_get_colinfor(colid, totcol, colinfor);
 
-			assert(col_info);
+			Assert(col_info);
 
 			command->sym.resdom.coloffset = col_info->col_offset;
 			command->sym.resdom.coltype = col_info->col_type;
@@ -572,7 +587,7 @@ rg_handler(char *req_buf)
 
 		command = tss->tcmd_parser;
 
-		assert(command->sym.command.querytype == DROP);
+		Assert(command->sym.command.querytype == DROP);
 
 		return rg_droptab(command);
 	}
@@ -646,14 +661,23 @@ rg_handler(char *req_buf)
 	switch(command->sym.command.querytype)
 	{
 	    case TABCREAT:
-				
-		printf("I got here - CREATING TABLE\n");
+
+		if (DEBUG_TEST(tss))
+		{
+			printf("I got here - CREATING TABLE\n");
+		}
+		
 		break;
 
 	    case INSERT:
     		tabinfo->t_stat |= TAB_INS_DATA;
 		resp = rg_instab(command, tabinfo);
-		printf("I got here - INSERTING TABLE\n");
+
+		if (DEBUG_TEST(tss))
+		{
+			printf("I got here - INSERTING TABLE\n");
+		}
+		
 	    	break;
 
 	    case CRTINDEX:
@@ -662,16 +686,26 @@ rg_handler(char *req_buf)
 	    case SELECT:
     		tabinfo->t_stat |= TAB_SRCH_DATA;
 		resp = rg_seldeltab(command, tabinfo);
-		printf("I got here - SELECTING TABLE\n");
+
+		if (DEBUG_TEST(tss))
+		{
+			printf("I got here - SELECTING TABLE\n");
+		}
+		
 	    	break;
 
 	    case DELETE:
 	    	tabinfo->t_stat |= TAB_DEL_DATA;
 		resp = rg_seldeltab(command, tabinfo);
-		printf("I got here - DELETE TABLE\n");
+
+		if (DEBUG_TEST(tss))
+		{
+			printf("I got here - DELETE TABLE\n");
+		}
+		
 	    	break;
 	    case DROP:
-	    	assert(0);
+	    	Assert(0);
 	    	break;
 	    case REBALANCE:
 	    	break;
@@ -693,7 +727,7 @@ close:
 
 		if (tabinfo->t_insrg)
 		{
-			assert(tabinfo->t_stat & TAB_SSTAB_SPLIT);
+			Assert(tabinfo->t_stat & TAB_SSTAB_SPLIT);
 
 			if (tabinfo->t_insrg->new_sstab_key)
 			{
@@ -787,7 +821,7 @@ rg_regist()
 	PUT_TO_BUFFER(send_buf, idx, Range_infor->rg_ip, RANGE_ADDR_MAX_LEN);
 	PUT_TO_BUFFER(send_buf, idx, &(Range_infor->port), RANGE_PORT_MAX_LEN);
 
-	assert(idx == (2 * RPC_MAGIC_MAX_LEN + RANGE_ADDR_MAX_LEN + RANGE_PORT_MAX_LEN));
+	Assert(idx == (2 * RPC_MAGIC_MAX_LEN + RANGE_ADDR_MAX_LEN + RANGE_PORT_MAX_LEN));
 	
 	write(sockfd, send_buf, idx);
 
@@ -816,7 +850,7 @@ rg_rebalan_process_sender(REBALANCE_DATA * rbd, char *rg_addr, int port)
 
 	status = WRITE(sockfd, rbd, sizeof(REBALANCE_DATA));
 
-	assert (status == sizeof(REBALANCE_DATA));
+	Assert (status == sizeof(REBALANCE_DATA));
 
 	resp = conn_recv_resp(sockfd);
 
@@ -891,7 +925,7 @@ rg_rebalancer(REBALANCE_DATA * rbd)
 			{
 				rp = (char *)blk + *offset;
 			
-				assert(*offset < blk->bfreeoff);
+				Assert(*offset < blk->bfreeoff);
 			
 				sstabname = row_locate_col(rp, TABLET_SSTABNAME_COLOFF_INROW, 
 							ROW_MINLEN_IN_TABLET, &namelen);
@@ -921,7 +955,7 @@ rg_rebalancer(REBALANCE_DATA * rbd)
 		
 				rtn_stat = rg_rebalan_process_sender(rbd_sstab, rbd->rbd_min_tablet_rg,
 								rbd->rbd_min_tablet_rgport);
-				assert(rtn_stat == TRUE);
+				Assert(rtn_stat == TRUE);
 
 
 				if (rtn_stat == TRUE)
@@ -962,7 +996,7 @@ rg_rebalancer(REBALANCE_DATA * rbd)
 		MEMCPY(tab_sstab_dir, tab_dir, STRLEN(tab_dir));
 		str1_to_str2(tab_sstab_dir, '/', rbd->rbd_sstabname);	
 
-		assert(STAT(tab_sstab_dir, &st) != 0);
+		Assert(STAT(tab_sstab_dir, &st) != 0);
 		
 		OPEN(fd1, tab_sstab_dir, (O_CREAT|O_WRONLY|O_TRUNC));
 		

@@ -24,6 +24,10 @@
 #include "dskio.h"
 #include "file_op.h"
 #include "buffer.h"
+#include "tss.h"
+
+
+extern	TSS	*Tss;
 
 int
 dopen(char * name, long flags)
@@ -58,6 +62,7 @@ dclose(int fd)
 int
 dstartio(BLKIO * blkiop)
 {
+	LOCALTSS(tss);
 	int	status;
 	int	fd;
 	int	flags;
@@ -66,9 +71,12 @@ dstartio(BLKIO * blkiop)
 	flags = (blkiop->bioflags & DBREAD) ? D_READ_ONLY : 0;
 	fd = dopen(blkiop->biobp->bsstab_name, flags);
 
-	printf(" Enter into the dstartio. fd = %d\n", fd);
-	printf(" Enter into the dstartio. bsstab_name = %s\n", blkiop->biobp->bsstab_name);
-
+	if (DEBUG_TEST(tss))
+	{
+		printf(" Enter into the dstartio. fd = %d\n", fd);
+		printf(" Enter into the dstartio. bsstab_name = %s\n", blkiop->biobp->bsstab_name);
+	}
+	
 	if (blkiop->bioflags & DBREAD) 
 	{
 		status = READ(fd, blkiop->biomaddr, blkiop->biosize);
