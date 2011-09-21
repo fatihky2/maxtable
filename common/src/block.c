@@ -64,20 +64,16 @@ nextsstab:
 
 	Assert(bp);
 
+
 	if (0 && BLOCK_IS_EMPTY(bp))
 	{
 		tabinfo->t_rowinfo->rblknum = bp->bblk->bblkno;
 		tabinfo->t_rowinfo->roffset = BLKHEADERSIZE;
 		tabinfo->t_rowinfo->rsstabid = bp->bblk->bsstabid;
 		
-		
 		return bp->bsstab;
 	}
 
-	
-
-	
-	
 	tabinfo->t_sinfo->sistate |= SI_INDEX_BLK;
 	blkidx = blksrch(tabinfo, bp);
 
