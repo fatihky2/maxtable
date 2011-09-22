@@ -21,6 +21,7 @@
 // exception_handler.cpp : Defines the entry point for the console application.
 //
 
+#include "utils.h"
 #include "exception.h" 
 #include "tss.h"
 
@@ -63,7 +64,7 @@ ex_handle(int exce_num, EXC_FUNC_PTR handler)
 int 
 yxue_handler(int exce_num)
 {
-	printf("We are handling the exception\n");
+	traceprint("We are handling the exception\n");
 	return EX_ANY;
 }
 

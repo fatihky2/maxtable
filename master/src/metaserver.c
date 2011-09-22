@@ -310,7 +310,7 @@ meta_crtab(TREE *command)
 	}
 	else
 	{
-		printf("Table %s has been created.\n",tab_name);
+		traceprint("Table %s has been created.\n",tab_name);
 		goto exit;
 	}
 	
@@ -602,7 +602,7 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 
 	if (STAT(tab_dir, &st) != 0)
 	{
-		printf("Table %s is not exist!\n", tab_name);
+		traceprint("Table %s is not exist!\n", tab_name);
 		goto exit;
 	}
 	
@@ -622,14 +622,14 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 
 	if (status != sizeof(TABLEHDR))
 	{
-		printf("Table %s sysobjects hit error!\n", tab_name);
+		traceprint("Table %s sysobjects hit error!\n", tab_name);
 		CLOSE(fd1);
 		ex_raise(EX_ANY);
 	}
 
 	if (tab_hdr.tab_stat & TAB_DROPPED)
 	{
-		printf("This table has been dropped.\n");
+		traceprint("This table has been dropped.\n");
 		CLOSE(fd1);
 		goto exit;
 	}
@@ -644,7 +644,7 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 
 	if (sstab_map == NULL)
 	{
-		printf("Table %s has no sstabmap in the metaserver!", tab_name);
+		traceprint("Table %s has no sstabmap in the metaserver!", tab_name);
 		CLOSE(fd1);
 		ex_raise(EX_ANY);
 	}
@@ -685,7 +685,7 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 
 		if (tss->tcur_rgprof == NULL)
 		{
-			printf("Can't get the profile of ranger server %s\n", rg_addr);
+			traceprint("Can't get the profile of ranger server %s\n", rg_addr);
 
 			CLOSE(fd1);
 			goto exit;
@@ -726,7 +726,7 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 
 				if (!SSTAB_MAP_USED(res_sstab_id))
 				{
-					printf("SSTable map hit error!\n");
+					traceprint("SSTable map hit error!\n");
 					CLOSE(fd1);
 					goto exit;
 				}
@@ -840,7 +840,7 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 
 			if (!(rg_prof->rg_stat & RANGER_IS_ONLINE))
 			{
-				printf("Ranger server %s is off-line\n", rg_prof->rg_addr);
+				traceprint("Ranger server %s is off-line\n", rg_prof->rg_addr);
 				CLOSE(fd1);
 				goto exit;
 			}
@@ -878,7 +878,7 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 
 	if (status != sizeof(TABLEHDR))
 	{
-		printf("Table %s sysobjects hit error!\n", tab_name);
+		traceprint("Table %s sysobjects hit error!\n", tab_name);
 		CLOSE(fd1);
 		ex_raise(EX_ANY);
 	}
@@ -1025,7 +1025,7 @@ meta_droptab(TREE *command)
 
 	if (STAT(tab_dir, &st) != 0)
 	{
-		printf("Table %s is not exist!\n", tab_name);
+		traceprint("Table %s is not exist!\n", tab_name);
 		goto exit;
 	}
 	
@@ -1045,14 +1045,14 @@ meta_droptab(TREE *command)
 	
 	if (status != sizeof(TABLEHDR))
 	{
-		printf("Table %s sysobjects hit error!\n", tab_name);
+		traceprint("Table %s sysobjects hit error!\n", tab_name);
 		CLOSE(fd1);
 		ex_raise(EX_ANY);
 	}
 
 	if (tab_hdr.tab_stat & TAB_DROPPED)
 	{
-		printf("This table has been dropped.\n");
+		traceprint("This table has been dropped.\n");
 		CLOSE(fd1);
 		goto exit;
 	}
@@ -1067,7 +1067,7 @@ meta_droptab(TREE *command)
 	
 	if (status != sizeof(TABLEHDR))
 	{
-		printf("Table %s sysobjects hit error!\n", tab_name);
+		traceprint("Table %s sysobjects hit error!\n", tab_name);
 		CLOSE(fd1);
 		ex_raise(EX_ANY);
 	}
@@ -1083,7 +1083,7 @@ meta_droptab(TREE *command)
 
 		if (!(rg_prof->rg_stat & RANGER_IS_ONLINE))
 		{
-			printf("Ranger server %s is off-line\n", rg_prof->rg_addr);
+			traceprint("Ranger server %s is off-line\n", rg_prof->rg_addr);
 			goto exit;
 		}
 	}
@@ -1091,7 +1091,7 @@ meta_droptab(TREE *command)
 	{
 		Assert(0);
 
-		printf("No ranger server is avlable\n");
+		traceprint("No ranger server is avlable\n");
 		ex_raise(EX_ANY);
 	}
 
@@ -1172,7 +1172,7 @@ meta_removtab(TREE *command)
 
 	if (STAT(tab_dir, &st) != 0)
 	{
-		printf("Table %s is not exist!\n", tab_name);
+		traceprint("Table %s is not exist!\n", tab_name);
 		goto exit;
 	}
 	
@@ -1195,14 +1195,14 @@ meta_removtab(TREE *command)
 	
 	if (status != sizeof(TABLEHDR))
 	{
-		printf("Table %s sysobjects hit error!\n", tab_name);
+		traceprint("Table %s sysobjects hit error!\n", tab_name);
 		CLOSE(fd1);
 		ex_raise(EX_ANY);
 	}
 	
 	if ((tab_hdr.tab_stat & TAB_DROPPED))
 	{
-		printf("Table %s should be dropped.\n", tab_name);
+		traceprint("Table %s should be dropped.\n", tab_name);
 		CLOSE(fd1);
 		goto exit;
 	}
@@ -1283,7 +1283,7 @@ meta_seldeltab(TREE *command, TABINFO *tabinfo)
 
 	if (!(STAT(tab_dir, &st) == 0))
 	{
-		printf("Table %s is not exist.\n", tab_name);
+		traceprint("Table %s is not exist.\n", tab_name);
 		goto exit;
 	}
 	
@@ -1293,7 +1293,7 @@ meta_seldeltab(TREE *command, TABINFO *tabinfo)
 	
 	if (fd1 < 0)
 	{
-		printf("Table is not exist! \n");
+		traceprint("Table is not exist! \n");
 		goto exit;
 	}
 
@@ -1304,19 +1304,19 @@ meta_seldeltab(TREE *command, TABINFO *tabinfo)
 
 	if (tab_hdr.tab_tablet == 0)
 	{
-		printf("Table %s has no data.\n", tab_name);
+		traceprint("Table %s has no data.\n", tab_name);
 		goto exit;
 	}
 
 	if (tab_hdr.tab_stat & TAB_DROPPED)
 	{
-		printf("This table has been dropped.\n");
+		traceprint("This table has been dropped.\n");
 		goto exit;
 	}
 
 	if (tab_hdr.tab_tablet == 0)
 	{
-		printf("Table should have one tablet at least! \n");
+		traceprint("Table should have one tablet at least! \n");
 		goto exit;
 	}
 
@@ -1345,7 +1345,7 @@ meta_seldeltab(TREE *command, TABINFO *tabinfo)
 	
 	if (tss->tcur_rgprof == NULL)
 	{
-		printf("Can't get the profile of ranger server %s\n", rg_addr);
+		traceprint("Can't get the profile of ranger server %s\n", rg_addr);
 
 		goto exit;
 	}
@@ -1531,7 +1531,7 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 
 	if (STAT(tab_dir, &st) != 0)
 	{
-		printf("Table %s is not exist!\n", tab_name);
+		traceprint("Table %s is not exist!\n", tab_name);
 		goto exit;
 	}
 	
@@ -1552,21 +1552,21 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 
 	if (status != sizeof(TABLEHDR))
 	{
-		printf("Table %s sysobjects hit error!\n", tab_name);
+		traceprint("Table %s sysobjects hit error!\n", tab_name);
 		CLOSE(fd1);
 		ex_raise(EX_ANY);
 	}
 
 	if (tab_hdr.tab_tablet == 0)
 	{
-		printf("Table %s should be has one tablet at least\n", tab_name);
+		traceprint("Table %s should be has one tablet at least\n", tab_name);
 		CLOSE(fd1);
 		ex_raise(EX_ANY);
 	}
 
 	if (tab_hdr.tab_stat & TAB_DROPPED)
 	{
-		printf("This table has been dropped.\n");
+		traceprint("This table has been dropped.\n");
 		CLOSE(fd1);
 		goto exit;
 	}
@@ -1663,7 +1663,7 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 
 	if (status != sizeof(TABLEHDR))
 	{
-		printf("Table %s sysobjects hit error!\n", tab_name);
+		traceprint("Table %s sysobjects hit error!\n", tab_name);
 		CLOSE(fd1);
 		ex_raise(EX_ANY);
 	}
@@ -1717,7 +1717,7 @@ meta_prt_sstabmap(int begin, int end)
 {
 	while(begin < end)
 	{
-		printf("sstab_map[%d] == %d \n", begin, sstab_map[begin].sstab_stat);
+		traceprint("sstab_map[%d] == %d \n", begin, sstab_map[begin].sstab_stat);
 
 		begin++;
 	}
@@ -1903,7 +1903,7 @@ meta_rebalan_process(REBALANCE_DATA *rbd)
 	if (resp->status_code != RPC_SUCCESS)
 	{
 		rtn_stat = FALSE;
-		printf("\n ERROR \n");
+		traceprint("\n ERROR \n");
 	}
 	
 	conn_close(sockfd, NULL, resp);
@@ -1944,7 +1944,7 @@ meta_rebalancer(TREE *command)
 
 	if (STAT(tab_dir, &st) != 0)
 	{		
-		printf("Table %s is not exist!\n", tab_name);
+		traceprint("Table %s is not exist!\n", tab_name);
 		goto exit;
 	}
 
@@ -1966,7 +1966,7 @@ meta_rebalancer(TREE *command)
 	
 		if (fd < 0)
 		{
-			printf("Table %s tabletscheme hit error! \n", tab_name);
+			traceprint("Table %s tabletscheme hit error! \n", tab_name);
 			goto exit;
 		}
 
@@ -2022,7 +2022,7 @@ meta_rebalancer(TREE *command)
 	
 					if (fd1 < 0)
 					{
-						printf("Table %s is not exist! \n", tabletname);
+						traceprint("Table %s is not exist! \n", tabletname);
 						CLOSE(fd);
 						goto exit;
 					}
@@ -2040,7 +2040,7 @@ meta_rebalancer(TREE *command)
 
 					if (rtn_stat != TRUE)
 					{
-						printf("Rebalancer hit error!\n");
+						traceprint("Rebalancer hit error!\n");
 						rtn_stat = FALSE;
 						CLOSE(fd1);
 						CLOSE(fd);
@@ -2140,7 +2140,7 @@ parse_again:
 	{
 		parser_close();
 		tss->tstat |= TSS_PARSER_ERR;
-		printf("PARSER ERR: Please input the command again by the 'help' signed.\n");
+		traceprint("PARSER ERR: Please input the command again by the 'help' signed.\n");
 		return NULL;
 	}
 
@@ -2194,7 +2194,7 @@ parse_again:
 
 		if (DEBUG_TEST(tss))
 		{
-			printf("I got here - CREATING TABLE\n");
+			traceprint("I got here - CREATING TABLE\n");
 		}
 		
 		break;
@@ -2210,7 +2210,7 @@ parse_again:
 		resp = meta_seldeltab(command, tabinfo);
 		if (DEBUG_TEST(tss))
 		{
-			printf("I got here - SELECTING TABLE\n");
+			traceprint("I got here - SELECTING TABLE\n");
 		}
 		
 	    	break;
@@ -2220,7 +2220,7 @@ parse_again:
 
 		if (DEBUG_TEST(tss))
 		{
-			printf("I got here - DELETE TABLE\n");
+			traceprint("I got here - DELETE TABLE\n");
 		}
 		
 	    	break;

@@ -345,7 +345,7 @@ conn_again:
 			}
 			else
 			{
-				printf("Result : %s\n",resp->result);
+				traceprint("Result : %s\n",resp->result);
 				meta_only = TRUE;
 			}
 			break;
@@ -674,7 +674,7 @@ conn_again:
 		}
 		else
 		{
-			printf("Result : %s\n",resp->result);
+			traceprint("Result : %s\n",resp->result);
 			meta_only = TRUE;
 		}
 		break;

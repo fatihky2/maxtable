@@ -713,8 +713,8 @@ memfreeheap(void *addr, char *file, int line)
 static void
 prLINK(LINK *link)
 {
-	printf("\n LinkAddr = 0x%p \n", link);
-	printf("\t prev=0x%p \t next=0x%p \n", link->prev, link->next);
+	traceprint("\n LinkAddr = 0x%p \n", link);
+	traceprint("\t prev=0x%p \t next=0x%p \n", link->prev, link->next);
 }
 
 
@@ -725,8 +725,8 @@ mem_prt_fragmp(MEMPOOL *mp)
 	FLINK   *free_link;
 	MEMFRAG *mfp;
 
-	printf("\n Pint Frag List : BEGIN \n");
-	printf("\n Free  Frag LIST \n");
+	traceprint("\n Pint Frag List : BEGIN \n");
+	traceprint("\n Free  Frag LIST \n");
 
 	FOR_QUEUE(FLINK, &mp->mp_free_frags, free_link)
     	{
@@ -734,14 +734,14 @@ mem_prt_fragmp(MEMPOOL *mp)
 		prLINK((LINK *)mfp);
 	}
 
-	printf("\n All  Frag LIST \n");
+	traceprint("\n All  Frag LIST \n");
 
 	FOR_QUEUE(MEMFRAG, &(mp->mp_frags), mfp)
     	{
 		prLINK((LINK *)mfp);
 	}
 
-	printf("\n Pint Frag List : END \n");
+	traceprint("\n Pint Frag List : END \n");
 
 }
 
@@ -751,11 +751,11 @@ int main()
 	char *test_char2;
 	char *test_char3;
 
-	printf(" \n-------------Create MemPool \n");
+	traceprint(" \n-------------Create MemPool \n");
 	mem_init_alloc_regions();
 	mem_prt_fragmp(Globle_mp);
 
-	printf(" \n-------------MemPool After Allocting\n");
+	traceprint(" \n-------------MemPool After Allocting\n");
 	test_char1 = MEMALLOCHEAP(1600);
 
 	test_char2 = MEMALLOCHEAP(1600);
@@ -764,7 +764,7 @@ int main()
 
 	mem_prt_fragmp(Globle_mp);
 
-	printf(" \n-------------MemPool After Free\n");
+	traceprint(" \n-------------MemPool After Free\n");
 	MEMFREEHEAP(test_char2);		
 	mem_prt_fragmp(Globle_mp);
 	return 1;

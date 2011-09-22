@@ -94,7 +94,7 @@ tablet_crt(TABLEHDR *tablehdr, char *tabledir, char *rg_addr, char *rp, int minl
 	
 	tablet_schm_bld_row(temprp, rlen, tablehdr->tab_tablet, tablet_name, rg_addr, keycol, keycolen);
 	
-	tablet_schm_ins_row(tablehdr->tab_id, TABLETSCHM_ID, tab_meta_dir, temprp, tablehdr->tab_tablet);
+	tablet_schm_ins_row(tablehdr->tab_id, TABLETSCHM_ID, tab_meta_dir, temprp, 0);
 
 	
 	session_close( &tabinfo);
@@ -648,7 +648,7 @@ tablet_namebyid(TABINFO *tabinfo, char *new_sstab)
 
 	if (DEBUG_TEST(tss))
 	{
-		printf("new_sstab = %s--------%d---\n", new_sstab,tabinfo->t_split_tabletid);
+		traceprint("new_sstab = %s--------%d---\n", new_sstab,tabinfo->t_split_tabletid);
 	}
 	
 	return;

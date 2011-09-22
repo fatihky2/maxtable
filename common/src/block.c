@@ -310,7 +310,7 @@ blk_getsstable(TABINFO *tabinfo)
 
 	if (DEBUG_TEST(tss))
 	{
-		printf("tabinfo->t_sstab_name = %s \n", tabinfo->t_sstab_name);
+		traceprint("tabinfo->t_sstab_name = %s \n", tabinfo->t_sstab_name);
 	}
 	
 	if (tabinfo->t_stat & TAB_KEPT_BUF_VALID)
@@ -361,13 +361,13 @@ blk_getsstable(TABINFO *tabinfo)
 		bp->bsstab->bblk->bprevsstabnum = -1;
 	}
 	
-	if (SSTABLE_STATE(bp) != BUF_IOERR)
+	if (SSTABLE_STATE(bp) & BUF_IOERR)
 	{
 		//return (bp + BLK_CNT_IN_SSTABLE - 1);
-		return bp;
+		return NULL;
 	}
 
-	return NULL;
+	return bp;
 }
 
 
@@ -508,7 +508,7 @@ blkdel(TABINFO *tabinfo)
 
 	if (tabinfo->t_sinfo->sistate & SI_NODATA)
 	{
-		printf("We can not find the row to be deleted.\n");	
+		traceprint("We can not find the row to be deleted.\n");	
 		return FALSE;
 	}
 

@@ -21,6 +21,7 @@
 
 /* Only for I/O that only include write and read */
 #include "global.h"
+#include "utils.h"
 #include "dskio.h"
 #include "file_op.h"
 #include "buffer.h"
@@ -73,8 +74,8 @@ dstartio(BLKIO * blkiop)
 
 	if (DEBUG_TEST(tss))
 	{
-		printf(" Enter into the dstartio. fd = %d\n", fd);
-		printf(" Enter into the dstartio. bsstab_name = %s\n", blkiop->biobp->bsstab_name);
+		traceprint(" Enter into the dstartio. fd = %d\n", fd);
+		traceprint(" Enter into the dstartio. bsstab_name = %s\n", blkiop->biobp->bsstab_name);
 	}
 	
 	if (blkiop->bioflags & DBREAD) 

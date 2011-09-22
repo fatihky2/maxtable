@@ -89,7 +89,7 @@ bufwait(BUF *bp)
 
 	if (SSTABLE_STATE(bp) & BUF_IOERR)
 	{
-		printf("IO error\n");
+		traceprint("IO error\n");
 	}
 }
 
@@ -148,7 +148,7 @@ bufawrite(BUF *bp)
 
 	if (DEBUG_TEST(tss))
 	{
-		printf(" Enter into the buffer writting.\n");
+		traceprint(" Enter into the buffer writting.\n");
 	}
 	
 	P_SPINLOCK(BUF_SPIN);
@@ -342,7 +342,7 @@ bufunhash(BUF *bp)
 fail:
 //	V_SPINLOCK(BUF_SPIN);
 
-	printf(" Block header error \n");
+	traceprint(" Block header error \n");
 
 	return;
 }
