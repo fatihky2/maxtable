@@ -98,7 +98,7 @@ sstab_namebyid(char *old_sstab, char *new_sstab, int new_sstab_id)
 
 	if (DEBUG_TEST(tss))
 	{
-		printf("new_sstab = %s--------%d---\n", new_sstab, new_sstab_id);
+		traceprint("new_sstab = %s--------%d---\n", new_sstab, new_sstab_id);
 	}
 	
 	return;

@@ -337,7 +337,7 @@ par_prt_tree(TREE *command)
 	{
 		if (PAR_NODE_IS_COMMAND(command->type))
 		{
-			printf("Table Name : %s\n", command->sym.command.tabname);
+			traceprint("Table Name : %s\n", command->sym.command.tabname);
 			printf("------------------------------\n");
 		}
 		else if (PAR_NODE_IS_RESDOM(command->type))

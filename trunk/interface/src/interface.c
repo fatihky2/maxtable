@@ -116,7 +116,7 @@ int cli_commit(conn * connection, char * cmd, char * response, int * resp_len)
 	{
 		parser_close();
 		tss->tstat |= TSS_PARSER_ERR;
-		printf("PARSER ERR: Please input the command again by the 'help' signed.\n");
+		traceprint("PARSER ERR: Please input the command again by the 'help' signed.\n");
 		return FALSE;
 	}
 
@@ -135,7 +135,7 @@ int cli_commit(conn * connection, char * cmd, char * response, int * resp_len)
 	resp = conn_recv_resp(connection->connection_fd);
 	if (resp->status_code != RPC_SUCCESS)
 	{
-		printf("\n ERROR in response \n");
+		traceprint("\n ERROR in response \n");
 		rtn_stat = FALSE;
 		goto finish;
 
@@ -195,7 +195,7 @@ int cli_commit(conn * connection, char * cmd, char * response, int * resp_len)
 		
 		if (rg_resp->status_code != RPC_SUCCESS)
 		{
-			printf("\n ERROR in rg_server response \n");
+			traceprint("\n ERROR in rg_server response \n");
 			rtn_stat = FALSE;
 			goto finish;
 
@@ -244,7 +244,7 @@ int cli_commit(conn * connection, char * cmd, char * response, int * resp_len)
 			sstab_split = TRUE;
 			if (sstab_split_resp->status_code != RPC_SUCCESS)
 			{
-				printf("\n ERROR in meta_server response \n");
+				traceprint("\n ERROR in meta_server response \n");
 				rtn_stat = FALSE;
 				MEMFREEHEAP(new_buf);
 				goto finish;

@@ -292,7 +292,7 @@ conn_open(char* ip_address, int port)
 
 	if (ret < 0)
 	{
-		printf("Connection is failed \n");
+		traceprint("Connection is failed \n");
 	}
 
 cleanup:    
@@ -337,7 +337,7 @@ conn_recv_resp(int sockfd)
 	{    	
 		resp = conn_build_resp(NULL);
 
-		printf("Remote Server is not connectable!\n");
+		traceprint("Remote Server is not connectable!\n");
 	}
 	else
 	{

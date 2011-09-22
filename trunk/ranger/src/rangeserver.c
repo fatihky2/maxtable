@@ -197,7 +197,7 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 
 	if (DEBUG_TEST(tss))
 	{
-		printf("ins_meta->sstab_name =%s \n", ins_meta->sstab_name);
+		traceprint("ins_meta->sstab_name =%s \n", ins_meta->sstab_name);
 	}
 	
 	sstable = ins_meta->sstab_name;
@@ -214,8 +214,8 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 
 	if (DEBUG_TEST(tss))
 	{
-		printf("ins_meta->sstab_name =%s \n", ins_meta->sstab_name);
-		printf("tab_dir =%s \n", tab_dir);
+		traceprint("ins_meta->sstab_name =%s \n", ins_meta->sstab_name);
+		traceprint("tab_dir =%s \n", tab_dir);
 	}
 	
 	row_build_hdr(rp, 0, 0, ins_meta->varcol_num);
@@ -267,7 +267,7 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 
 			if (!(col_offset > 0))
 			{
-				printf("Hit a row error!\n");
+				traceprint("Hit a row error!\n");
 				ex_raise(EX_ANY);
 			}
 			
@@ -285,7 +285,7 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 
 			if (ins_meta->varcol_num != col_num)
 			{
-				printf("Hit a row error!\n");
+				traceprint("Hit a row error!\n");
 				ex_raise(EX_ANY);
 			}
 		}		
@@ -319,7 +319,7 @@ exit:
 
 		if (DEBUG_TEST(tss))
 		{
-			printf("tabinfo->t_insrg->new_sstab_name = %s \n", tabinfo->t_insrg->new_sstab_name);
+			traceprint("tabinfo->t_insrg->new_sstab_name = %s \n", tabinfo->t_insrg->new_sstab_name);
 		}
 		
 		PUT_TO_BUFFER(resp_buf, i, tabinfo->t_insrg->new_sstab_name, SSTABLE_NAME_MAX_LEN);
@@ -410,7 +410,7 @@ rg_seldeltab(TREE *command, TABINFO *tabinfo)
 
 	if (DEBUG_TEST(tss))
 	{
-		printf("ins_meta->sstab_name =%s \n", ins_meta->sstab_name);
+		traceprint("ins_meta->sstab_name =%s \n", ins_meta->sstab_name);
 	}
 	
 	sstable = ins_meta->sstab_name;
@@ -426,8 +426,8 @@ rg_seldeltab(TREE *command, TABINFO *tabinfo)
 
 	if (DEBUG_TEST(tss))
 	{
-		printf("ins_meta->sstab_name =%s \n", ins_meta->sstab_name);
-		printf("tab_dir =%s \n", tab_dir);
+		traceprint("ins_meta->sstab_name =%s \n", ins_meta->sstab_name);
+		traceprint("tab_dir =%s \n", tab_dir);
 	}
 	
 	keycol = par_get_colval_by_colid(command, tabinfo->t_key_colid, &keycolen);
@@ -453,7 +453,7 @@ rg_seldeltab(TREE *command, TABINFO *tabinfo)
 		if ((tabinfo->t_rowinfo->rblknum != bp->bblk->bblkno)
 		    || (tabinfo->t_rowinfo->rsstabid != bp->bblk->bsstabid))
 		{
-			printf("Hit a buffer error!\n");
+			traceprint("Hit a buffer error!\n");
 			ex_raise(EX_ANY);
 		}
 		
@@ -591,7 +591,7 @@ rg_handler(char *req_buf)
 		{
 			parser_close();
 			tss->tstat |= TSS_PARSER_ERR;
-			printf("PARSER ERR: Please input the command again by the 'help' signed.\n");
+			traceprint("PARSER ERR: Please input the command again by the 'help' signed.\n");
 			return NULL;
 		}
 
@@ -636,7 +636,7 @@ rg_handler(char *req_buf)
 	{
 		parser_close();
 		tss->tstat |= TSS_PARSER_ERR;
-		printf("PARSER ERR: Please input the command again by the 'help' signed.\n");
+		traceprint("PARSER ERR: Please input the command again by the 'help' signed.\n");
 		return NULL;
 	}
 
@@ -674,7 +674,7 @@ rg_handler(char *req_buf)
 
 		if (DEBUG_TEST(tss))
 		{
-			printf("I got here - CREATING TABLE\n");
+			traceprint("I got here - CREATING TABLE\n");
 		}
 		
 		break;
@@ -685,7 +685,7 @@ rg_handler(char *req_buf)
 
 		if (DEBUG_TEST(tss))
 		{
-			printf("I got here - INSERTING TABLE\n");
+			traceprint("I got here - INSERTING TABLE\n");
 		}
 		
 	    	break;
@@ -699,7 +699,7 @@ rg_handler(char *req_buf)
 
 		if (DEBUG_TEST(tss))
 		{
-			printf("I got here - SELECTING TABLE\n");
+			traceprint("I got here - SELECTING TABLE\n");
 		}
 		
 	    	break;
@@ -710,7 +710,7 @@ rg_handler(char *req_buf)
 
 		if (DEBUG_TEST(tss))
 		{
-			printf("I got here - DELETE TABLE\n");
+			traceprint("I got here - DELETE TABLE\n");
 		}
 		
 	    	break;
@@ -839,7 +839,7 @@ rg_regist()
 
 	if (resp->status_code != RPC_SUCCESS)
 	{
-		printf("\n ERROR \n");
+		traceprint("\n ERROR \n");
 	}
 	
 	conn_close(sockfd, NULL, resp);
@@ -867,7 +867,7 @@ rg_rebalan_process_sender(REBALANCE_DATA * rbd, char *rg_addr, int port)
 	if (resp->status_code != RPC_SUCCESS)
 	{
 		rtn_stat = FALSE;
-		printf("\n ERROR \n");
+		traceprint("\n ERROR \n");
 	}
 	
 	conn_close(sockfd, NULL, resp);
@@ -949,7 +949,7 @@ rg_rebalancer(REBALANCE_DATA * rbd)
 		
 				if (fd1 < 0)
 				{
-					printf("Table is not exist! \n");
+					traceprint("Table is not exist! \n");
 					goto exit;
 				}
 		
@@ -1012,7 +1012,7 @@ rg_rebalancer(REBALANCE_DATA * rbd)
 		
 		if (fd1 < 0)
 		{
-			printf("Table is not exist! \n");
+			traceprint("Table is not exist! \n");
 			goto exit;
 		}
 

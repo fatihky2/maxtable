@@ -40,7 +40,7 @@ session_close(TABINFO *tabinfo)
 
 	if (DEBUG_TEST(tss))
 	{
-		printf("Enter into close table\n");
+		traceprint("Enter into close table\n");
 	}
 
 	for (bp = tabinfo->t_dnew; bp != (BUF *)tabinfo;)
@@ -49,7 +49,7 @@ session_close(TABINFO *tabinfo)
 
 		if (!(bp->bstat & BUF_DIRTY))
 		{
-			printf("Buffer should be DIRTY!\n");
+			traceprint("Buffer should be DIRTY!\n");
 		}
 		
 		bufwrite(bp);

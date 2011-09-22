@@ -147,7 +147,7 @@ row_prt_offtab(int *offtab, int n)
 
 	for(i = 0; i < n; i++)
 	{
-		printf("offtab[-%d] : %d \n", i, offtab[-i]);
+		traceprint("offtab[-%d] : %d \n", i, offtab[-i]);
 	}
 }
 
