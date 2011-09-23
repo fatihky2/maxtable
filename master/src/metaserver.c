@@ -1320,8 +1320,17 @@ meta_seldeltab(TREE *command, TABINFO *tabinfo)
 		goto exit;
 	}
 
-	keycol = par_get_colval_by_colid(command, tab_hdr.tab_key_colid, &keycolen);
+	sstab_map = sstab_map_get(tab_hdr.tab_id, tab_dir, &tab_sstabmap);
 
+	Assert(sstab_map != NULL);
+
+	if (sstab_map == NULL)
+	{
+		traceprint("Table %s has no sstabmap in the metaserver!", tab_name);
+		ex_raise(EX_ANY);
+	}
+	
+	keycol = par_get_colval_by_colid(command, tab_hdr.tab_key_colid, &keycolen);
 	
 	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));

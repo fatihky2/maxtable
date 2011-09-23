@@ -175,7 +175,7 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 	tabinfo_push(tabinfo);
 
 	TABINFO_INIT(tabinfo, destbuf->bsstab_name, tabinfo->t_sinfo, 
-		     srcbp->bsstab->bblk->bminlen, TAB_KEPT_BUF_VALID,
+		     srcbp->bsstab->bblk->bminlen, TAB_KEPT_BUF_VALID | TAB_DO_SPLIT,
 		     srctabinfo->t_tabid, srctabinfo->t_insmeta->res_sstab_id);
 
 	

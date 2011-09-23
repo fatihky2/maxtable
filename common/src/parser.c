@@ -209,13 +209,13 @@ parser_open(char *s_str)
 
 	    case SELECT:
 	        
-		
+		tss->topid |= TSS_OP_SELDELTAB;
 		rtn_stat = par_seldel_tab((s_str + s_idx), SELECT);
 
 	        break;
 
 	    case DELETE:
-	    	
+	    	tss->topid |= TSS_OP_SELDELTAB;
 	    	rtn_stat = par_seldel_tab((s_str + s_idx), DELETE);
 	        break;
 	    case ADDSSTAB:
