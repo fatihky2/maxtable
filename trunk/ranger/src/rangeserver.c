@@ -299,16 +299,15 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 		*(int *)(rp + ins_meta->row_minlen) = rp_idx;
 	}
 
-	blkins(tabinfo, rp);
 
-	rtn_stat = TRUE;
+	rtn_stat = blkins(tabinfo, rp);
 
 exit:
 
 	resp_len = 0;
 	resp_buf = NULL;
 	
-	if (tabinfo->t_stat & TAB_SSTAB_SPLIT)
+	if (rtn_stat && (tabinfo->t_stat & TAB_SSTAB_SPLIT))
 	{
 		resp_len = tabinfo->t_insrg->new_keylen + SSTABLE_NAME_MAX_LEN + 3 * sizeof(int);
 		resp_buf = (char *)MEMALLOCHEAP(resp_len);
@@ -345,6 +344,11 @@ exit:
 	}
 	else
 	{
+		if (tabinfo->t_stat & TAB_RETRY_LOOKUP)
+		{
+			;
+		}
+		
 		resp = conn_build_resp_byte(RPC_FAIL, 0, NULL);
 	}
 
@@ -439,13 +443,24 @@ rg_seldeltab(TREE *command, TABINFO *tabinfo)
 	
 	if (tabinfo->t_stat & TAB_DEL_DATA)
 	{
-		blkdel(tabinfo);
+		rtn_stat = blkdel(tabinfo);
+
+		if (rtn_stat)
+		{
+			goto exit;
+		}
 	}
 	else
 	{
 		
 		bp = blkget(tabinfo);
 //		offset = blksrch(tabinfo, bp);
+
+		
+		if (tabinfo->t_stat & TAB_RETRY_LOOKUP)
+		{
+			goto exit;
+		}
 
 		Assert(tabinfo->t_rowinfo->rblknum == bp->bblk->bblkno);
 		Assert(tabinfo->t_rowinfo->rsstabid == bp->bblk->bsstabid);
@@ -484,7 +499,7 @@ rg_seldeltab(TREE *command, TABINFO *tabinfo)
 	
 	rtn_stat = TRUE;
 
-	exit:
+exit:
 	if (rtn_stat)
 	{
 		if (tabinfo->t_stat & TAB_DEL_DATA)
@@ -500,6 +515,11 @@ rg_seldeltab(TREE *command, TABINFO *tabinfo)
 	}
 	else
 	{
+		if (tabinfo->t_stat & TAB_RETRY_LOOKUP)
+		{
+			;
+		}
+		
 		resp = conn_build_resp_byte(RPC_FAIL, 0, NULL);
 	}
 

@@ -83,7 +83,7 @@ nextsstab:
 
 	
 	if (   (tss->topid & TSS_OP_RANGESERVER) 
-	    && (tss->topid & TSS_OP_INSTAB))
+	    && ((tss->topid & TSS_OP_INSTAB) || (tss->topid & TSS_OP_SELDELTAB)))
 	{
 		BUF	*tmpbp;
 		int	tmpblkidx;
@@ -112,11 +112,22 @@ nextsstab:
 		if (   !(tmpbp->bsstab->bblk->bstat & BLK_SSTAB_SPLIT)
 		    && !stat_chg)
 		{
+			if(   !(tabinfo->t_stat & TAB_DO_SPLIT) 
+			   && (tmpbp->bsstab->bblk->bts_lo < tabinfo->t_insmeta->ts_low))
+			{
+				/* 
+				** TODO: we need to retry this request.  If the processing is not FIFO,
+				** it will hit the insert is not sorted.
+				*/
+				tabinfo->t_stat |= TAB_RETRY_LOOKUP;
+			}
+			
 			goto finish;
 		}
 
 		
-		if (tabinfo->t_rowinfo->roffset == tmpbp->bblk->bfreeoff)
+		if (   ((tss->topid & TSS_OP_SELDELTAB) && (tabinfo->t_sinfo->sistate & SI_NODATA))
+		    || ((tss->topid & TSS_OP_INSTAB) && (tabinfo->t_rowinfo->roffset == tmpbp->bblk->bfreeoff)))
 		{
 			
 			if (tmpblkidx < (BLK_CNT_IN_SSTABLE - 1))
@@ -244,12 +255,17 @@ blksrch(TABINFO *tabinfo, BUF *bp)
 	rp = srchinfo->brow;
 	last_offset = srchinfo->boffset;
 
-	
-	if ((result != EQ) && !(tabinfo->t_stat & TAB_SCHM_SRCH))
-	{
-		tabinfo->t_sinfo->sistate |= SI_NODATA;
+	if (!(tabinfo->t_stat & TAB_SCHM_SRCH))
+	{	
+		if ((result == EQ))
+		{
+			tabinfo->t_sinfo->sistate &= ~SI_NODATA;
+		}
+		else
+		{
+			tabinfo->t_sinfo->sistate |= SI_NODATA;
+		}
 	}
-
 	
 	if (rowno == BLK_GET_NEXT_ROWNO(bp))
 	{
@@ -390,6 +406,11 @@ blkins(TABINFO *tabinfo, char *rp)
 	
 	bp = blkget(tabinfo);
 
+	if (tabinfo->t_stat & TAB_RETRY_LOOKUP)
+	{
+		return FALSE;
+	}
+
 	bufpredirty(bp);
 
 //	offset = blksrch(tabinfo, bp);
@@ -497,6 +518,11 @@ blkdel(TABINFO *tabinfo)
 	tabinfo->t_sinfo->sistate |= SI_DEL_DATA;
 	
 	bp = blkget(tabinfo);
+
+	if (tabinfo->t_stat & TAB_RETRY_LOOKUP)
+	{
+		return FALSE;
+	}
 
 	bufpredirty(bp);
 

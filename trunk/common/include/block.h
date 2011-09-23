@@ -25,8 +25,8 @@
 #define	BLKHEADERSIZE	52
 
 
-#define	BLOCKSIZE		(64 * 1024)		
-//#define	BLOCKSIZE		(512)
+//#define	BLOCKSIZE		(64 * 1024)		
+#define	BLOCKSIZE		(512)
 
 
 
@@ -39,8 +39,8 @@
 #define	SSTABLE_MAX_COUNT	16
 
 
-#define	BLOCK_MAX_COUNT		(16 * SSTABLE_MAX_COUNT + 4)	
-//#define	BLOCK_MAX_COUNT		(16 * SSTABLE_MAX_COUNT + 40 + 256 + 40)		
+//#define	BLOCK_MAX_COUNT		(16 * SSTABLE_MAX_COUNT + 4)	
+#define	BLOCK_MAX_COUNT		(16 * SSTABLE_MAX_COUNT + 40 + 256 + 40)		
 
 
 #define	BLOCK_CACHE_SIZE	((BLOCK_MAX_COUNT) * BLOCKSIZE)	
