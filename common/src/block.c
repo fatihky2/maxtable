@@ -192,9 +192,6 @@ nextsstab:
 finish:
 	
 	return (bp->bsstab + blkidx);
-
-	
-
 }
 
 
@@ -634,9 +631,7 @@ blk_file_back_move(BLOCK *blk)
 		
 		}
 		offtab[-i] = offset;
-	}
-
-	
+	}	
 }
 
 

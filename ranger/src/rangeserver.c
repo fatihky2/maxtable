@@ -344,12 +344,14 @@ exit:
 	}
 	else
 	{
-		if (tabinfo->t_stat & TAB_RETRY_LOOKUP)
-		{
-			;
-		}
-		
-		resp = conn_build_resp_byte(RPC_FAIL, 0, NULL);
+		if(tabinfo->t_stat & TAB_RETRY_LOOKUP)
+        	{
+	                resp = conn_build_resp_byte(RPC_RETRY, 0, NULL);
+        	}
+        	else
+        	{
+			resp = conn_build_resp_byte(RPC_FAIL, 0, NULL);
+        	}
 	}
 
 	if (resp_buf)
@@ -515,12 +517,14 @@ exit:
 	}
 	else
 	{
-		if (tabinfo->t_stat & TAB_RETRY_LOOKUP)
-		{
-			;
-		}
-		
-		resp = conn_build_resp_byte(RPC_FAIL, 0, NULL);
+		if(tabinfo->t_stat & TAB_RETRY_LOOKUP)
+        	{
+	                resp = conn_build_resp_byte(RPC_RETRY, 0, NULL);
+        	}
+        	else
+        	{
+			resp = conn_build_resp_byte(RPC_FAIL, 0, NULL);
+        	}
 	}
 
 	if (col_buf != NULL)
@@ -745,16 +749,8 @@ rg_handler(char *req_buf)
 	}
 
 
-        if(tabinfo->t_stat & TAB_RETRY_LOOKUP)
-        {
-                conn_destroy_resp_byte(resp);
-                resp = conn_build_resp_byte(RPC_RETRY, 0, NULL);
-        }
-        else
-        {
-                session_close(tabinfo);
-        }
-
+	session_close(tabinfo);
+       
 
 close:
 

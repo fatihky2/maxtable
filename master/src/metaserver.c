@@ -2250,15 +2250,7 @@ parse_again:
 	    	break;
 	}
 
-	 if(tabinfo->t_stat & TAB_RETRY_LOOKUP)
-        {
-                conn_destroy_resp_byte(resp);
-                resp = conn_build_resp_byte(RPC_RETRY, 0, NULL);
-        }
-	else
-	{
-		session_close(tabinfo);
-	}
+	session_close(tabinfo);	
 
 close:
 
