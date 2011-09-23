@@ -125,6 +125,8 @@ int cli_commit(conn * connection, char * cmd, char * response, int * resp_len)
 	MEMCPY(tab_name, ((TREE *)(tss->tcmd_parser))->sym.command.tabname,
 	((TREE *)(tss->tcmd_parser))->sym.command.tabname_len);
 
+retry:
+
 	send_buf_size = strlen(cmd);
 	memset(send_buf, 0, LINE_BUF_SIZE);
 	memcpy(send_buf, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
@@ -192,6 +194,15 @@ int cli_commit(conn * connection, char * cmd, char * response, int * resp_len)
 		        (resp->result_length + send_buf_size + RPC_MAGIC_MAX_LEN));
 
 		rg_resp = conn_recv_resp(rg_connection->connection_fd);
+
+		if (rg_resp->status_code == RPC_RETRY)
+                {
+                        traceprint("\n need to try \n");
+                        conn_destroy_resp(resp);
+			conn_destroy_resp(rg_resp);
+                        goto retry;
+
+                }
 		
 		if (rg_resp->status_code != RPC_SUCCESS)
 		{
