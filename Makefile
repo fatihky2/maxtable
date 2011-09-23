@@ -18,10 +18,10 @@ LIB_OBJS_C	= $(patsubst %.c,%.o,$(LIB_SRCS_C))
 LIB_SRCS_CPP	= $(wildcard ${SERVICE_SRC})
 LIB_OBJS_CPP	= $(patsubst %.cpp,%.o,$(LIB_SRCS_CPP))
 
-all: client master ranger memTest benchmark sample
+all: client master ranger memTest benchmark sample client_lib
 
 %.o : %.c
-	$(CC) -o $@ -c $< $(CFLAGS)
+	$(CC) -o $@ -c $< $(CFLAGS) -fPIC
 %.o : %.cpp
 	$(CPP) -o $@ -c $< $(CFLAGS)
 
@@ -50,5 +50,8 @@ service: ${LIB_OBJS_C} ${LIB_OBJS_CPP}
 service_sample: service/src/sample.cpp libservice.a
 	$(CPP) $(CFLAGS) service/src/sample.cpp libservice.a -o service_sample
 
+client_lib: ${LIB_OBJS_C}
+	$(CC) -shared -fPIC -o libclient.so ${LIB_OBJS_C}
+
 clean: 
-	rm -rf startClient startMaster startRanger imql memTest benchmark sample libservice.a ${LIB_OBJS_C} ${LIB_OBJS_CPP}
+	rm -rf startClient startMaster startRanger imql memTest benchmark sample libservice.a ${LIB_OBJS_C} ${LIB_OBJS_CPP} libclient.so

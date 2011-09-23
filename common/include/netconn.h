@@ -26,7 +26,8 @@
 #define RPC_SUCCESS	0	
 #define RPC_CONN_FAIL	1	
 #define RPC_FAIL	2 	
-#define RPC_PARSER_ERR	3	
+#define RPC_PARSER_ERR	3
+#define RPC_RETRY	4	
 
 #define RPC_MAGIC_MAX_LEN	8
 #define RPC_REQUEST_MAGIC "rpcrqst"
