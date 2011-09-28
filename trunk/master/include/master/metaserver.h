@@ -158,6 +158,13 @@ typedef struct insert_meta
 	
 } INSMETA;
 
+typedef struct select_range
+{
+	INSMETA		left_range;
+	INSMETA		right_range;	
+} SELRANGE;
+
+
 
 #define	INS_META_1ST	0x0001	
 
@@ -184,6 +191,7 @@ typedef struct tab_info
 	TABLETHDR	*t_tablethdr;
 	COLINFO		*t_colinfo;
 	INSMETA		*t_insmeta;
+	SELRANGE	*t_selrg;
 	int		t_row_minlen;
 	int		t_stat;
 	int		t_sstab_id;	

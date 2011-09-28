@@ -18,7 +18,7 @@
 extern	TSS	*Tss;
 
 extern int 
-sel_resp_rejoin(char * src_buf, char * dest_buf, int src_len, int * dest_len, char *index_buf);
+sel_resp_rejoin(char * src_buf, char * dest_buf, int src_len, int * dest_len, char *index_buf, int querytype);
 
 static int 
 cli_prt_help(char *cmd);
@@ -143,9 +143,21 @@ retry:
 
 	}
 
-	if((querytype == INSERT) || (querytype == SELECT) || (querytype == DELETE))
+	if((querytype == INSERT) || (querytype == SELECT) || (querytype == DELETE) || (querytype == SELECTRANGE))
 	{
-		INSMETA	* resp_ins = (INSMETA *)resp->result;
+		INSMETA		*resp_ins;
+		SELRANGE	*resp_selrg;
+		
+		if (querytype == SELECTRANGE)
+		{			
+			resp_selrg = (SELRANGE *)resp->result;
+			resp_ins = &(resp_selrg->left_range);
+		}
+		else
+		{
+			resp_ins = (INSMETA *)resp->result;
+		}
+		
 		rg_conn * rg_connection;
 		int i;
 
@@ -183,8 +195,15 @@ retry:
 
 		}
 
-		memcpy(resp->result, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
-
+		if (querytype == SELECTRANGE)
+		{
+			MEMCPY(resp->result, RPC_SELECTRANGE_MAGIC, RPC_MAGIC_MAX_LEN);
+		}
+		else
+		{
+			memcpy(resp->result, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
+		}
+		
 		memset(send_rg_buf, 0, LINE_BUF_SIZE);
 		memcpy(send_rg_buf, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
 		memcpy(send_rg_buf + RPC_MAGIC_MAX_LEN, resp->result, resp->result_length);
@@ -270,8 +289,42 @@ retry:
 
 	if(querytype == SELECT)
 	{
-		sel_resp_rejoin(rg_resp->result, response, rg_resp->result_length, resp_len, resp->result);
+		sel_resp_rejoin(rg_resp->result, response, rg_resp->result_length, resp_len, resp->result, querytype);
 		//strcpy(response, rg_resp->result);
+	}
+	else if (querytype == SELECTRANGE)
+	{
+		char	*rp;
+		int	rlen;
+		int	result_len = 0;
+		int	rowcnt;
+		int	row_idx = 0;
+		char	rowbp[512];
+		int	rlen_t;
+
+		rowcnt = *(int *)(rg_resp->result);
+		rp = rg_resp->result + sizeof(int);
+
+		while(row_idx < rowcnt)
+		{
+			rlen = *(int *)rp;
+			rp += sizeof(int);
+
+			result_len += (rlen + sizeof(int));
+
+			Assert(result_len < rg_resp->result_length);
+
+			MEMSET(rowbp, 512);
+			sel_resp_rejoin(rp, rowbp, rlen, &rlen_t, resp->result, querytype);
+
+			printf(" %s\n", rowbp);
+		
+			rp += rlen;
+			row_idx++;
+		}
+		
+		*resp_len = sizeof(SUC_RET);
+		strcpy(response, SUC_RET);
 	}
 	else
 	{
@@ -300,13 +353,24 @@ finish:
 }
 
 
-int sel_resp_rejoin(char * src_buf, char * dest_buf, int src_len, int * dest_len, char *index_buf)
+int sel_resp_rejoin(char * src_buf, char * dest_buf, int src_len, int * dest_len, char *index_buf, int querytype)
 {
 	char col_off_tab[COL_OFFTAB_MAX_SIZE];
 	int col_off_idx = COL_OFFTAB_MAX_SIZE;
+	INSMETA 	*ins_meta;
+	SELRANGE	*resp_selrg;
 
-	INSMETA *ins_meta = (INSMETA *)index_buf;
-	index_buf += sizeof(INSMETA);
+	if (querytype == SELECTRANGE)
+	{			
+		resp_selrg = (SELRANGE *)index_buf;
+		ins_meta = &(resp_selrg->left_range);
+		index_buf += sizeof(SELRANGE);
+	}
+	else
+	{
+		ins_meta = (INSMETA *)index_buf;
+		index_buf += sizeof(INSMETA);
+	}	
 
 	TABLEHDR *tab_hdr = (TABLEHDR *)index_buf;
 	index_buf += sizeof(TABLEHDR);
@@ -376,6 +440,7 @@ cli_prt_help(char *cmd)
 		printf("CREATE TABLE....create table table_name (col1_name col1_type, col2_name col2_type)\n");
 		printf("INSERT DATA.....insert into table_name (col1_value, col2_value)\n");
 		printf("SELECT DATA.....select table_name (col1_value)\n");
+		printf("SELECT RANGE....selectrange table_name (col1_value1, col1_value2)\n");
 		printf("DELETE DATA.....delete table_name (col1_value)\n");
 		printf("DROP TABLE......drop table_name\n");
 
