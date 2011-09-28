@@ -1,0 +1,4 @@
+metaserver=172.16.10.11
+metaport=1959
+rangerserver=172.16.10.11
+rangerport=1949
