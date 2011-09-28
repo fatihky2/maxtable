@@ -27,7 +27,7 @@
 extern TSS		*Tss;
 
 RANGE_PROF *
-rebalan_get_rg_prof_by_addr(char *rg_addr)
+rebalan_get_rg_prof_by_addr(char *rg_addr, int rg_port)
 {
 	LOCALTSS(tss);
 	RANGE_PROF	*rg_prof;
@@ -41,7 +41,9 @@ rebalan_get_rg_prof_by_addr(char *rg_addr)
 
 	for(i = 0; i < rglist->nextrno; i++)
 	{
-		if (!strncasecmp(rg_addr, rg_prof[i].rg_addr, RANGE_ADDR_MAX_LEN))
+		if (!strncasecmp(rg_addr, rg_prof[i].rg_addr, RANGE_ADDR_MAX_LEN)
+			&& (rg_prof[i].rg_port == rg_port)
+		)
 		{
 			found = TRUE;
 			break;

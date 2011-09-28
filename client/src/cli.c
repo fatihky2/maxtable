@@ -109,7 +109,6 @@ cli_prt_help(char *cmd)
 		printf("CREATE TABLE....create table table_name (col1_name col1_type, col2_name col2_type)\n");
 		printf("INSERT DATA.....insert into table_name (col1_value, col2_value)\n");
 		printf("SELECT DATA.....select table_name (col1_value)\n");
-		printf("SELECT RANGE....selectrange table_name (col1_value1, col1_value2)\n");
 		printf("DELETE DATA.....delete table_name (col1_value)\n");
 		printf("DROP TABLE......drop table_name\n");
 
@@ -122,24 +121,23 @@ int
 cli_deamon()
 {
 	LOCALTSS(tss);
-	int		ret = 0;
-	char 		*cli_str;
-	char 		*ip;
-	int		port;
-	RPCRESP		*resp;
-	RPCREQ 		*req;
-	int 		sockfd;
-	int 		querytype;
-	int		meta_only;
-	int 		meta_again;
-	char		*send_rg_bp = NULL;
-	int		send_rg_bp_idx;
-	int		send_buf_size;
-	char 		buf[LINE_BUF_SIZE];
-	char		send_buf[LINE_BUF_SIZE];
-	INSMETA		*resp_ins;
-	SELRANGE	*resp_selrg;
-	char		tab_name[64];
+	int	ret = 0;
+	char 	*cli_str;
+	char 	*ip;
+	int	port;
+	RPCRESP	*resp;
+	RPCREQ 	*req;
+	int 	sockfd;
+	int 	querytype;
+	int	meta_only;
+	int 	meta_again;
+	char	*send_rg_bp = NULL;
+	int	send_rg_bp_idx;
+	int	send_buf_size;
+	char 	buf[LINE_BUF_SIZE];
+	char	send_buf[LINE_BUF_SIZE];
+	INSMETA	*resp_ins;
+	char	tab_name[64];
 
 	printf("Please type \"help\" if you need some further information.\n");
 	
@@ -316,43 +314,6 @@ conn_again:
 		    case CRTINDEX:
 			break;
 			
-		    case SELECTRANGE:
-			if (CLI_IS_CONN2MASTER(Cli_infor))
-			{
-				resp_selrg = (SELRANGE *)resp->result;
-
-				resp_ins = &(resp_selrg->left_range);
-
-				MEMCPY(Cli_infor->cli_ranger_ip, 
-				       resp_ins->i_hdr.rg_info.rg_addr, 
-				       RANGE_ADDR_MAX_LEN);
-
-				Cli_infor->cli_ranger_port = 
-					resp_ins->i_hdr.rg_info.rg_port;
-
-				/* Override the UNION part for this reques. */
-				MEMCPY(resp->result, RPC_SELECTRANGE_MAGIC, RPC_MAGIC_MAX_LEN);
-
-				send_buf_size = resp->result_length + STRLEN(cli_str);
-				send_rg_bp = MEMALLOCHEAP(send_buf_size);				
-
-				send_rg_bp_idx = 0;
-				PUT_TO_BUFFER(send_rg_bp, send_rg_bp_idx, 
-					      resp->result, resp->result_length);
-				PUT_TO_BUFFER(send_rg_bp, send_rg_bp_idx, 
-					      cli_str, STRLEN(cli_str));
-
-				cli_str = send_rg_bp;
-
-				meta_only = FALSE;
-			}
-			else
-			{
-				traceprint("Result : %s\n",resp->result);
-				meta_only = TRUE;
-			}
-			break;
-			
 		    case SELECT:
 		    case DELETE:
 			if (CLI_IS_CONN2MASTER(Cli_infor))
@@ -496,23 +457,22 @@ static int
 cli_test_main(char *cmd)
 {
 	LOCALTSS(tss);
-	int		ret = 0;
-	char 		*cli_str;
-	char 		*ip;
-	int		port;
-	RPCRESP		*resp;
-	RPCREQ 		*req;
-	int 		sockfd;
-	int 		querytype;
-	int		meta_only;
-	int 		meta_again;
-	char		*send_rg_bp = NULL;
-	int		send_rg_bp_idx;
-	int		send_buf_size;
-	char		send_buf[LINE_BUF_SIZE];
-	INSMETA		*resp_ins;
-	char		tab_name[64];
-	SELRANGE	*resp_selrg;
+	int	ret = 0;
+	char 	*cli_str;
+	char 	*ip;
+	int	port;
+	RPCRESP	*resp;
+	RPCREQ 	*req;
+	int 	sockfd;
+	int 	querytype;
+	int	meta_only;
+	int 	meta_again;
+	char	*send_rg_bp = NULL;
+	int	send_rg_bp_idx;
+	int	send_buf_size;
+	char	send_buf[LINE_BUF_SIZE];
+	INSMETA	*resp_ins;
+	char	tab_name[64];
 
 	
 
@@ -682,44 +642,7 @@ conn_again:
 		
 	    case CRTINDEX:
 		break;
-
-	    case SELECTRANGE:
-		if (CLI_IS_CONN2MASTER(Cli_infor))
-		{
-			resp_selrg = (SELRANGE *)resp->result;
-
-			resp_ins = &(resp_selrg->left_range);
-
-			MEMCPY(Cli_infor->cli_ranger_ip, 
-			       resp_ins->i_hdr.rg_info.rg_addr, 
-			       RANGE_ADDR_MAX_LEN);
-
-			Cli_infor->cli_ranger_port = 
-				resp_ins->i_hdr.rg_info.rg_port;
-
-			/* Override the UNION part for this reques. */
-			MEMCPY(resp->result, RPC_SELECTRANGE_MAGIC, RPC_MAGIC_MAX_LEN);
-
-			send_buf_size = resp->result_length + STRLEN(cli_str);
-			send_rg_bp = MEMALLOCHEAP(send_buf_size);				
-
-			send_rg_bp_idx = 0;
-			PUT_TO_BUFFER(send_rg_bp, send_rg_bp_idx, 
-				      resp->result, resp->result_length);
-			PUT_TO_BUFFER(send_rg_bp, send_rg_bp_idx, 
-				      cli_str, STRLEN(cli_str));
-
-			cli_str = send_rg_bp;
-
-			meta_only = FALSE;
-		}
-		else
-		{
-			traceprint("Result : %s\n",resp->result);
-			meta_only = TRUE;
-		}
-		break;
-	    
+		
 	    case SELECT:
 	    case DELETE:
 		if (CLI_IS_CONN2MASTER(Cli_infor))

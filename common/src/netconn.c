@@ -17,6 +17,8 @@
 ** implied. See the License for the specific language governing
 ** permissions and limitations under the License.
 */
+#include <sys/time.h>
+
 #include "master/metaserver.h"
 #include "utils.h"
 #include "netconn.h"
@@ -254,7 +256,7 @@ conn_destroy_req(RPCREQ *req)
 
 
 
-
+/*
 static void 
 setTcpKeepAlive(int sockfd)
 {
@@ -264,7 +266,7 @@ setTcpKeepAlive(int sockfd)
 		;
 	}
 }
-
+*/
 
 
 int 
@@ -286,7 +288,7 @@ conn_open(char* ip_address, int port)
 	inet_pton(AF_INET, ip_address, &servaddr.sin_addr);
 	servaddr.sin_port = htons(port);
 
-	setTcpKeepAlive(sockfd);
+	//setTcpKeepAlive(sockfd);
 
 	ret = connect(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr));
 
@@ -348,6 +350,61 @@ conn_recv_resp(int sockfd)
 	return resp;
 }
 
+RPCRESP * 
+conn_recv_resp_abt(int sockfd)
+{
+	char 		*buf;
+	int 		n;
+	RPCRESP		*resp;
+
+	buf = MEMALLOCHEAP(CONN_BUF_SIZE);
+
+//	MEMSET(buf, CONN_BUF_SIZE);
+	
+	struct timeval tv;
+	tv.tv_sec = RECVIO_TIMEOUT;
+	tv.tv_usec = 0;
+	setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+
+	n = read(sockfd, buf, CONN_BUF_SIZE);
+
+	if(n > 0)
+	{
+		resp = conn_build_resp(buf);
+	}
+	else
+	{
+		if(n == 0)
+		{
+			traceprint("Rg server is closed after client send request, before client receive response!\n");
+		}
+		else if(errno == ECONNRESET)
+		{
+			traceprint("Rg server is closed before client send request!\n");
+		}
+		else if((errno == ETIMEDOUT)||(errno == EHOSTUNREACH)||(errno == ENETUNREACH))
+		{
+			traceprint("Rg server is breakdown before client send request!\n");
+		}
+		else if(errno == EWOULDBLOCK)
+		{
+			traceprint("Rg server is breakdown after client send request, before client receive response!\n");
+		}
+		else
+		{
+			traceprint("Client receive response error for unknown reason!\n");
+			perror("Error in rg server response");
+		}
+		resp = conn_build_resp(NULL);
+		resp->status_code = RPC_UNAVAIL;
+	}
+	
+    
+	MEMFREEHEAP(buf);
+	return resp;
+}
+
+
 void
 conn_close(int sockfd, RPCREQ* req, RPCRESP* resp)
 {
@@ -359,7 +416,7 @@ conn_close(int sockfd, RPCREQ* req, RPCRESP* resp)
 
 int
 conn_chk_reqmagic(char *str)
-{	
+{
 	if (!strncasecmp(RPC_REQUEST_MAGIC, str, STRLEN(RPC_REQUEST_MAGIC)))
 	{
 		return RPC_REQ_NORMAL_OP;
@@ -371,10 +428,6 @@ conn_chk_reqmagic(char *str)
 	else if (!strncasecmp(RPC_RBD_MAGIC, str, STRLEN(RPC_RBD_MAGIC)))
 	{
 		return RPC_REQ_REBALANCE_OP;
-	}
-	else if (!strncasecmp(RPC_SELECTRANGE_MAGIC, str, STRLEN(RPC_RBD_MAGIC)))
-	{
-		return RPC_REQ_SELECTRANGE_OP;
 	}
 		
 

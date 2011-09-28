@@ -28,6 +28,8 @@
 #define RPC_FAIL	2 	
 #define RPC_PARSER_ERR	3
 #define RPC_RETRY	4	
+#define RPC_UNAVAIL	5
+
 
 #define RPC_MAGIC_MAX_LEN	8
 #define RPC_REQUEST_MAGIC "rpcrqst"
@@ -37,8 +39,14 @@
 #define	RPC_DROP_TABLE_MAGIC	"drop"
 #define RPC_RG2MASTER_REPORT	"rg_rpt"
 #define RPC_RBD_MAGIC		"rebalan"
-#define RPC_SELECTRANGE_MAGIC	"sel_rg"
+#define RPC_MASTER2RG_HEARTBEAT	"hb_rqst"
+#define RPC_RECOVERY 			"re_cov"
+#define RPC_MASTER2RG_NOTIFY	"rsync"
 
+
+
+#define RECVIO_TIMEOUT			5
+#define HEARTBEAT_INTERVAL		5
 
 
 #define CONF_META_IP    "metaserver"
@@ -83,7 +91,6 @@ typedef struct rpcresp
 #define	RPC_REQ_NORMAL_OP	0x0001
 #define RPC_REQ_DROP_OP		0x0002
 #define RPC_REQ_REBALANCE_OP	0x0004
-#define RPC_REQ_SELECTRANGE_OP	0x0008
 
 
 char *
@@ -121,6 +128,10 @@ conn_send_req(RPCREQ* req, int sockfd);
 
 RPCRESP * 
 conn_recv_resp(int sockfd);
+
+RPCRESP * 
+conn_recv_resp_abt(int sockfd);
+
 
 void
 conn_close(int sockfd, RPCREQ* req, RPCRESP* resp);
