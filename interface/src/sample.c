@@ -36,7 +36,7 @@ if(0)
 
 if (1)
 {
-		for(i = 2; i < 1000; i++)
+		for(i = 6; i < 10; i++)
 		{
 			memset(resp, 0, 256);
 			memset(cmd, 0, 256);
@@ -47,6 +47,16 @@ if (1)
 		}
 
 }
+
+if (1)
+{		
+		memset(resp, 0, 256);
+		memset(cmd, 0, 256);
+		sprintf(cmd, "selectrange gu(gggg10, gggg11)");
+		cli_commit(connection, cmd, resp, &len);
+		printf("Client 1: %s, ret(%d): %s\n", cmd, len, resp);
+}
+
 	
 if (0)
 {

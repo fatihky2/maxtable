@@ -45,6 +45,7 @@
 #include "tabinfo.h"
 #include "tablet.h"
 #include "rebalancer.h"
+#include "sstab.h"
 
 
 
@@ -536,8 +537,233 @@ exit:
 
 }
 
+
+
+
+char *
+rg_selrangetab(TREE *command, TABINFO *tabinfo)
+{
+	LOCALTSS(tss);
+	char		*sstable;
+	char		*tab_name;
+	int		tab_name_len;
+	char		tab_dir[TABLE_NAME_MAX_LEN];
+	int		status;
+	int		rtn_stat;
+	int		sstab_rlen;
+	int		sstab_idx;
+	char		*resp;
+	INSMETA 	*ins_meta;
+	COLINFO 	*col_info;
+	BUF		*bp;
+	char		*keycol;
+	int		keycolen;
+	int		offset;
+	char   		*col_buf;
+	int 		rlen;
+	char		last_sstab[SSTABLE_NAME_MAX_LEN];
+
+
+	Assert(command);
+
+	rtn_stat = FALSE;
+	sstab_rlen = 0;
+	sstab_idx = 0;
+	col_buf = NULL;
+	tab_name = command->sym.command.tabname;
+	tab_name_len = command->sym.command.tabname_len;
+	ins_meta = tabinfo->t_insmeta;
+	col_info = tabinfo->t_colinfo;
+
+	MEMSET(tab_dir, TABLE_NAME_MAX_LEN);
+	MEMCPY(tab_dir, MT_RANGE_TABLE, STRLEN(MT_RANGE_TABLE));
+
+	
+	str1_to_str2(tab_dir, '/', tab_name);
+
+	if (STAT(tab_dir, &st) != 0)
+	{
+		MKDIR(status, tab_dir, 0755);
+
+		if (status < 0)
+		{
+			goto exit;
+		}
+	}
+
+	if (DEBUG_TEST(tss))
+	{
+		traceprint("ins_meta->sstab_name =%s \n", ins_meta->sstab_name);
+	}
+	
+	sstable = ins_meta->sstab_name;
+
+	str1_to_str2(tab_dir, '/', sstable);
+	MEMSET(ins_meta->sstab_name, SSTABLE_NAME_MAX_LEN);
+	MEMCPY(ins_meta->sstab_name, tab_dir, STRLEN(tab_dir));
+
+	if (STAT(tab_dir, &st) != 0)
+	{
+		goto exit; 
+	}
+
+	if (DEBUG_TEST(tss))
+	{
+		traceprint("ins_meta->sstab_name =%s \n", ins_meta->sstab_name);
+		traceprint("tab_dir =%s \n", tab_dir);
+	}
+	
+	keycol = par_get_colval_by_colid(command, 1, &keycolen);
+	
+	char	*right_rangekey;
+	int	right_keylen;
+	right_rangekey = par_get_colval_by_colid(command, 2, &right_keylen);
+	
+	TABINFO_INIT(tabinfo, ins_meta->sstab_name, tabinfo->t_sinfo, tabinfo->t_row_minlen, 
+			0, tabinfo->t_tabid, tabinfo->t_sstab_id);
+	SRCH_INFO_INIT(tabinfo->t_sinfo, keycol, keycolen, 1, VARCHAR, -1);
+
+
+	/* Mallocate max buffer length. */
+	
+	col_buf = MEMALLOCHEAP(512);
+	MEMSET(col_buf, 512);
+	int	col_len = sizeof(int);
+	int	rowcnt = 0;
+	
+
+	bp = blkget(tabinfo);
+
+	
+	if (tabinfo->t_stat & TAB_RETRY_LOOKUP)
+	{
+		goto exit;
+	}
+
+	Assert(tabinfo->t_rowinfo->rblknum == bp->bblk->bblkno);
+	Assert(tabinfo->t_rowinfo->rsstabid == bp->bblk->bsstabid);
+
+	if ((tabinfo->t_rowinfo->rblknum != bp->bblk->bblkno)
+	    || (tabinfo->t_rowinfo->rsstabid != bp->bblk->bsstabid))
+	{
+		traceprint("Hit a buffer error!\n");
+		ex_raise(EX_ANY);
+	}
+	
+	offset = tabinfo->t_rowinfo->roffset;
+
+	
+	while (TRUE)
+	{
+		char *rp = (char *)(bp->bblk) + offset;
+		
+		rlen = ROW_GET_LENGTH(rp, bp->bblk->bminlen);
+
+		char	*key_in_blk;
+		int	keylen_in_blk;
+		int 	result;
+		
+		key_in_blk = row_locate_col(rp, tabinfo->t_sinfo->sicoloff, bp->bblk->bminlen, 
+						    &keylen_in_blk);
+		
+		result = row_col_compare(tabinfo->t_sinfo->sicoltype, key_in_blk, keylen_in_blk,
+					right_rangekey, right_keylen);
+
+		if (result == GR)
+		{
+			break;
+		}
+		
+		if ((col_len + sizeof(int) + rlen - sizeof(ROWFMT)) < 512)
+		{
+			char	*data_start = meta_get_coldata(bp, offset, sizeof(ROWFMT));
+			
+			*(int *)(col_buf + col_len) = rlen - sizeof(ROWFMT);
+			col_len += sizeof(int);
+			MEMCPY(col_buf + col_len, data_start, rlen - sizeof(ROWFMT));
+			col_len += rlen - sizeof(ROWFMT);
+			rowcnt++;
+		}
+		else
+		{
+			*(int *)col_buf = rowcnt;
+			break;
+		}
+
+		offset += rlen;
+
+		if (bp->bblk->bfreeoff > offset)
+		{	
+			Assert(bp->bblk->bfreeoff > offset);
+		}
+		else
+		{
+			if (bp->bblk->bnextblkno != -1)
+			{
+				bp++;
+				offset = BLKHEADERSIZE;
+			}
+			else if (bp->bsstab->bblk->bnextsstabnum != -1)
+			{
+				MEMSET(last_sstab, SSTABLE_NAME_MAX_LEN);
+				MEMCPY(last_sstab, tabinfo->t_sstab_name, STRLEN(tabinfo->t_sstab_name));
+				
+				MEMSET(tabinfo->t_sstab_name, SSTABLE_NAME_MAX_LEN);			
+				
+				sstab_namebyid(last_sstab, tabinfo->t_sstab_name, 
+							bp->bsstab->bblk->bnextsstabnum);
+
+				bp = blk_getsstable(tabinfo);
+				offset = BLKHEADERSIZE;
+			}
+			else
+			{
+				break;
+			}
+		}
+
+		
+	}
+	rtn_stat = TRUE;
+
+exit:
+	if (rtn_stat)
+	{
+		if (tabinfo->t_stat & TAB_DEL_DATA)
+		{
+			
+			resp = conn_build_resp_byte(RPC_SUCCESS, 0, NULL);
+		}
+		else
+		{
+			
+			resp = conn_build_resp_byte(RPC_SUCCESS, 512, col_buf);
+		}
+	}
+	else
+	{
+		if(tabinfo->t_stat & TAB_RETRY_LOOKUP)
+        	{
+	                resp = conn_build_resp_byte(RPC_RETRY, 0, NULL);
+        	}
+        	else
+        	{
+			resp = conn_build_resp_byte(RPC_FAIL, 0, NULL);
+        	}
+	}
+
+	if (col_buf != NULL)
+	{
+		MEMFREEHEAP(col_buf);
+	}
+	
+	return resp;
+
+}
+
+
 int
-rg_get_meta(char *req_buf, INSMETA **ins_meta, TABLEHDR **tab_hdr, COLINFO **col_info)
+rg_get_meta(char *req_buf, INSMETA **ins_meta, SELRANGE **sel_rg,TABLEHDR **tab_hdr, COLINFO **col_info)
 {
 	int	rtn_stat;
 
@@ -557,6 +783,17 @@ rg_get_meta(char *req_buf, INSMETA **ins_meta, TABLEHDR **tab_hdr, COLINFO **col
 
 		*col_info = (COLINFO *)req_buf;
 	}
+
+	if (rtn_stat & RPC_REQ_SELECTRANGE_OP)
+	{	
+		*sel_rg = (SELRANGE *)req_buf;
+		req_buf += sizeof(SELRANGE);
+
+		*tab_hdr = (TABLEHDR *)req_buf;
+		req_buf += sizeof(TABLEHDR);
+
+		*col_info = (COLINFO *)req_buf;
+	} 
 
 	return rtn_stat;	
 }
@@ -601,9 +838,16 @@ rg_handler(char *req_buf)
 	TABINFO		*tabinfo;
 	int		req_op;
 	BLK_ROWINFO	blk_rowinfo;
+	SELRANGE	*sel_rg;
 	
 
-	if ((req_op = rg_get_meta(req_buf, &ins_meta, &tab_hdr, &col_info)) == 0)
+
+	ins_meta	= NULL;
+	sel_rg		= NULL;
+	tab_hdr		= NULL;
+	col_info	= NULL;
+	
+	if ((req_op = rg_get_meta(req_buf, &ins_meta, &sel_rg, &tab_hdr, &col_info)) == 0)
 	{
 		return NULL;
 	}
@@ -648,10 +892,19 @@ rg_handler(char *req_buf)
 		
 		goto close;
 	}
-	
-	req_buf += sizeof(INSMETA) + sizeof(TABLEHDR) + 
+
+	if (req_op & RPC_REQ_SELECTRANGE_OP)
+	{
+		ins_meta = &(sel_rg->left_range);
+		
+		req_buf += sizeof(SELRANGE) + sizeof(TABLEHDR) + 
 				ins_meta->col_num * sizeof(COLINFO);
-	
+	}
+	else
+	{	
+		req_buf += sizeof(INSMETA) + sizeof(TABLEHDR) + 
+				ins_meta->col_num * sizeof(COLINFO);
+	}
 	
 	tss->tcol_info = col_info;
 	tss->tmeta_hdr = ins_meta;
@@ -679,6 +932,7 @@ rg_handler(char *req_buf)
 	tabinfo->t_dold = tabinfo->t_dnew = (BUF *) tabinfo;
 	tabinfo->t_colinfo = col_info;
 	tabinfo->t_insmeta = ins_meta;
+	tabinfo->t_selrg = sel_rg;
 
 	tabinfo->t_key_colid = tab_hdr->tab_key_colid;
 	tabinfo->t_key_coltype = tab_hdr->tab_key_coltype;
@@ -738,6 +992,17 @@ rg_handler(char *req_buf)
 		}
 		
 	    	break;
+
+	    case SELECTRANGE:
+
+		resp = rg_selrangetab(command, tabinfo);
+
+		if (DEBUG_TEST(tss))
+		{
+			traceprint("I got here - SELECTRANGE TABLE\n");
+		}
+	    	break;
+		
 	    case DROP:
 	    	Assert(0);
 	    	break;

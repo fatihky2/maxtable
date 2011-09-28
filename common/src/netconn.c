@@ -359,7 +359,7 @@ conn_close(int sockfd, RPCREQ* req, RPCRESP* resp)
 
 int
 conn_chk_reqmagic(char *str)
-{
+{	
 	if (!strncasecmp(RPC_REQUEST_MAGIC, str, STRLEN(RPC_REQUEST_MAGIC)))
 	{
 		return RPC_REQ_NORMAL_OP;
@@ -371,6 +371,10 @@ conn_chk_reqmagic(char *str)
 	else if (!strncasecmp(RPC_RBD_MAGIC, str, STRLEN(RPC_RBD_MAGIC)))
 	{
 		return RPC_REQ_REBALANCE_OP;
+	}
+	else if (!strncasecmp(RPC_SELECTRANGE_MAGIC, str, STRLEN(RPC_RBD_MAGIC)))
+	{
+		return RPC_REQ_SELECTRANGE_OP;
 	}
 		
 

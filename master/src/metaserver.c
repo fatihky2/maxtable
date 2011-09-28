@@ -1493,6 +1493,276 @@ exit:
 
 
 
+
+char *
+meta_selrangetab(TREE *command, TABINFO *tabinfo)
+{
+	LOCALTSS(tss);
+	char		*tab_name;
+	int		tab_name_len;
+	char		tab_dir[TABLE_NAME_MAX_LEN];
+	char		tab_meta_dir[TABLE_NAME_MAX_LEN];
+	char   		*col_buf;
+	int		col_buf_idx;
+	int		col_buf_len;
+	int		fd1;
+	int		rtn_stat;
+	TABLEHDR	tab_hdr;
+	int		sstab_rlen;
+	int		sstab_idx;
+	char		*resp;
+	char		*rp;
+	char		*name;
+	int		namelen;
+	char		sstab_name[SSTABLE_NAME_MAX_LEN];
+	int		sstab_id;
+	int		res_sstab_id;
+	char		*rg_addr;
+	int		rg_port;
+
+
+	Assert(command);
+
+	rtn_stat = FALSE;
+	col_buf= NULL;
+	sstab_rlen = 0;
+	sstab_idx = 0;
+	tab_name = command->sym.command.tabname;
+	tab_name_len = command->sym.command.tabname_len;
+
+	MEMSET(tab_dir, TABLE_NAME_MAX_LEN);
+	MEMCPY(tab_dir, MT_META_TABLE, STRLEN(MT_META_TABLE));
+
+	
+	str1_to_str2(tab_dir, '/', tab_name);
+
+	
+	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
+	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
+
+	if (!(STAT(tab_dir, &st) == 0))
+	{
+		traceprint("Table %s is not exist.\n", tab_name);
+		goto exit;
+	}
+	
+	str1_to_str2(tab_meta_dir, '/', "sysobjects");
+
+	OPEN(fd1, tab_meta_dir, (O_RDONLY));
+	
+	if (fd1 < 0)
+	{
+		traceprint("Table is not exist! \n");
+		goto exit;
+	}
+
+	
+	READ(fd1, &tab_hdr, sizeof(TABLEHDR));	
+
+	CLOSE(fd1);
+
+	if (tab_hdr.tab_tablet == 0)
+	{
+		traceprint("Table %s has no data.\n", tab_name);
+		goto exit;
+	}
+
+	if (tab_hdr.tab_stat & TAB_DROPPED)
+	{
+		traceprint("This table has been dropped.\n");
+		goto exit;
+	}
+
+	if (tab_hdr.tab_tablet == 0)
+	{
+		traceprint("Table should have one tablet at least! \n");
+		goto exit;
+	}
+
+	sstab_map = sstab_map_get(tab_hdr.tab_id, tab_dir, &tab_sstabmap);
+
+	Assert(sstab_map != NULL);
+
+	if (sstab_map == NULL)
+	{
+		traceprint("Table %s has no sstabmap in the metaserver!", tab_name);
+		ex_raise(EX_ANY);
+	}
+
+	char	*range_leftkey;
+	int	leftkeylen;
+	char	*range_rightkey;
+	int	rightkeylen;
+	
+	range_leftkey = par_get_colval_by_colid(command, 1, &leftkeylen);
+	range_rightkey = par_get_colval_by_colid(command, 2, &rightkeylen);
+	
+	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
+	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
+	str1_to_str2(tab_meta_dir, '/', "tabletscheme");
+
+
+	char	*keycol;
+	int	keycolen;
+	int	k;
+
+	col_buf_len = sizeof(SELRANGE) + sizeof(TABLEHDR) + tab_hdr.tab_col * (sizeof(COLINFO));
+	col_buf = MEMALLOCHEAP(col_buf_len);
+	MEMSET(col_buf, col_buf_len);
+	col_buf_idx = 0;
+
+	for (k = 0; k < 2; k++)
+	{
+		keycol = (k == 0) ? range_leftkey : range_rightkey;
+		keycolen = (k == 0) ? leftkeylen : rightkeylen;
+
+		rp = tablet_schm_srch_row(&tab_hdr, tab_hdr.tab_id, TABLETSCHM_ID, tab_meta_dir, 
+					  keycol, keycolen);
+
+		name = row_locate_col(rp, TABLETSCHM_TABLETNAME_COLOFF_INROW, ROW_MINLEN_IN_TABLETSCHM, 
+				      &namelen);
+
+		
+		int ign;
+		rg_addr = row_locate_col(rp, TABLETSCHM_RGADDR_COLOFF_INROW, ROW_MINLEN_IN_TABLETSCHM, 
+					 &ign);
+		
+		tss->tcur_rgprof = rebalan_get_rg_prof_by_addr(rg_addr);
+
+		Assert(tss->tcur_rgprof);
+
+		
+		if (tss->tcur_rgprof == NULL)
+		{
+			traceprint("Can't get the profile of ranger server %s\n", rg_addr);
+
+			goto exit;
+		}
+
+		rg_port = tss->tcur_rgprof->rg_port;
+		
+		
+		
+		MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
+		MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
+		str1_to_str2(tab_meta_dir, '/', name);
+
+		int tabletid;
+
+		tabletid = *(int *)row_locate_col(rp, TABLETSCHM_TABLETID_COLOFF_INROW, 
+						  ROW_MINLEN_IN_TABLETSCHM, &namelen);
+
+		rp = tablet_srch_row(tabinfo, &tab_hdr, tab_hdr.tab_id, tabletid, tab_meta_dir, 
+				     keycol, keycolen);
+
+		
+		name = row_locate_col(rp, TABLET_SSTABNAME_COLOFF_INROW, ROW_MINLEN_IN_TABLET, 
+				      &namelen);
+
+		MEMSET(sstab_name, SSTABLE_NAME_MAX_LEN);
+				
+		MEMCPY(sstab_name, name, STRLEN(name));
+
+		
+		sstab_id = *(int *)row_locate_col(rp,TABLET_SSTABID_COLOFF_INROW, ROW_MINLEN_IN_TABLET, 
+						  &namelen);
+
+		res_sstab_id = *(int *)row_locate_col(rp, TABLET_RESSSTABID_COLOFF_INROW, 
+						      ROW_MINLEN_IN_TABLET, &namelen);
+
+		
+		if (tabinfo->t_sinfo->sistate & SI_NODATA)
+		{
+			goto exit;
+		}
+
+
+		MEMCPY((col_buf + col_buf_idx), rg_addr, STRLEN(rg_addr));
+		col_buf_idx += RANGE_ADDR_MAX_LEN;
+
+		*(int *)(col_buf + col_buf_idx) = rg_port;
+		col_buf_idx += sizeof(int);
+
+		*(int *)(col_buf + col_buf_idx) = RANGER_IS_ONLINE;
+		col_buf_idx += sizeof(int);
+		
+		*(int *)(col_buf + col_buf_idx) = 0;
+		col_buf_idx += sizeof(int);
+
+		
+		*(int *)(col_buf + col_buf_idx) = sstab_id;
+		col_buf_idx += sizeof(int);
+
+		
+		*(int *)(col_buf + col_buf_idx) = res_sstab_id;
+		col_buf_idx += sizeof(int);
+
+		
+		*(unsigned int *)(col_buf + col_buf_idx) = SSTAB_MAP_GET_SPLIT_TS(sstab_id);
+		col_buf_idx += sizeof(int);
+
+		
+		MEMCPY((col_buf + col_buf_idx), sstab_name, SSTABLE_NAME_MAX_LEN);
+		col_buf_idx += SSTABLE_NAME_MAX_LEN;
+
+		
+		col_buf_idx += sizeof(int);
+
+		
+	        *(int *)(col_buf + col_buf_idx) = tab_hdr.tab_col;
+		col_buf_idx += sizeof(int);
+
+		*(int *)(col_buf + col_buf_idx) = tab_hdr.tab_varcol;
+		col_buf_idx += sizeof(int);
+
+		*(int *)(col_buf + col_buf_idx) = tab_hdr.tab_row_minlen;
+		col_buf_idx += sizeof(int);
+
+	}
+	
+	MEMCPY((col_buf + col_buf_idx), &tab_hdr, sizeof(TABLEHDR));
+	col_buf_idx += sizeof(TABLEHDR);
+	
+	
+	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
+	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
+	str1_to_str2(tab_meta_dir, '/', "syscolumns");
+
+	OPEN(fd1, tab_meta_dir, (O_RDONLY));
+
+	if (fd1 < 0)
+	{
+		goto exit;
+	}
+
+	
+	READ(fd1, (col_buf + col_buf_idx), tab_hdr.tab_col * sizeof(COLINFO));
+
+	CLOSE(fd1);
+
+	col_buf_idx += tab_hdr.tab_col * sizeof(COLINFO);
+	rtn_stat = TRUE;
+
+exit:
+	if (rtn_stat)
+	{
+		
+		resp = conn_build_resp_byte(RPC_SUCCESS, col_buf_idx, col_buf);
+	}
+	else
+	{
+		resp = conn_build_resp_byte(RPC_FAIL, 0, NULL);
+	}
+
+	if (col_buf != NULL)
+	{
+		MEMFREEHEAP(col_buf);
+	}
+
+	return resp;
+}
+
+
 char *
 meta_addsstab(TREE *command, TABINFO *tabinfo)
 {
@@ -2203,7 +2473,7 @@ parse_again:
 
 		if (DEBUG_TEST(tss))
 		{
-			traceprint("I got here - CREATING TABLE\n");
+			traceprint("I got here - CREAT TABLE\n");
 		}
 		
 		break;
@@ -2219,7 +2489,7 @@ parse_again:
 		resp = meta_seldeltab(command, tabinfo);
 		if (DEBUG_TEST(tss))
 		{
-			traceprint("I got here - SELECTING TABLE\n");
+			traceprint("I got here - SELECT TABLE\n");
 		}
 		
 	    	break;
@@ -2233,6 +2503,16 @@ parse_again:
 		}
 		
 	    	break;
+
+	    case SELECTRANGE:
+	    	resp = meta_selrangetab(command, tabinfo);
+		if (DEBUG_TEST(tss))
+		{
+			traceprint("I got here - SELECTRANGE TABLE\n");
+		}
+		
+	    	break;
+		
 	    case ADDSSTAB:
 	    	resp = meta_addsstab(command, tabinfo);
 	    	break;
