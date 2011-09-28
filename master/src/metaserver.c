@@ -99,6 +99,8 @@ struct stat st;
 static void
 meta_heartbeat_setup(RANGE_PROF * rg_addr);
 
+static int
+meta_recovery_rg(char * req_buf);
 
 static int
 meta_get_free_sstab();
@@ -1762,397 +1764,6 @@ meta_prt_sstabmap(int begin, int end)
 	}
 }
 
-void * meta_heartbeat(void *args)
-{
-	RANGE_PROF * rg_addr = (RANGE_PROF *)args;
-	int hb_conn;
-	char	send_buf[256];
-	int idx;
-	RPCRESP * resp;
-
-	//wait 5s to make sure rg server's network service is ready
-	sleep(5);
-
-	//need to be fixed. in this case(hb_conn<0), need to tell rg server register is failed
-	if((hb_conn = conn_open(rg_addr->rg_addr, rg_addr->rg_port)) < 0)
-	{
-		perror("error in create connection to rg server on meta server: ");
-		goto finish;
-
-	}
-
-	while(TRUE)
-	{
-		sleep(HEARTBEAT_INTERVAL);
-		MEMSET(send_buf, 256);
-		
-		idx = 0;
-		PUT_TO_BUFFER(send_buf, idx, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
-		PUT_TO_BUFFER(send_buf, idx, RPC_MASTER2RG_HEARTBEAT, RPC_MAGIC_MAX_LEN);
-			
-		write(hb_conn, send_buf, idx);
-
-		resp = conn_recv_resp_abt(hb_conn);
-
-		if (resp->status_code == RPC_UNAVAIL)
-		{
-			traceprint("\n rg server is un-available \n");
-			conn_destroy_resp(resp);
-			goto finish;
-
-		}
-		
-		//to be fix here
-		//maybe more info will be added in hearbeat msg,  such as overload monitor
-		//so need to add some process routine on resp here in the future
-	}
-
-finish:
-	
-	if(hb_conn > 0)
-	{
-		//update meta and rg_list here, put update task to msg list
-		msg_data * new_msg;
-		int idx = 0;
-		new_msg = malloc(sizeof(msg_data));
-		MEMSET(new_msg, sizeof(msg_data));
-		
-		PUT_TO_BUFFER(new_msg->data, idx, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
-		PUT_TO_BUFFER(new_msg->data, idx, RPC_RECOVERY, RPC_MAGIC_MAX_LEN);
-		PUT_TO_BUFFER(new_msg->data, idx, rg_addr->rg_addr, RANGE_ADDR_MAX_LEN);
-		PUT_TO_BUFFER(new_msg->data, idx, &(rg_addr->rg_port), RANGE_PORT_MAX_LEN);
-		new_msg->fd = -1;
-		new_msg->n_size = idx;
-		new_msg->block_buffer = NULL;
-		new_msg->next = NULL;
-		
-		pthread_mutex_lock(&mutex);
-		if (msg_list_head == NULL)
-		{
-			msg_list_head = new_msg;
-			msg_list_tail = new_msg;
-		} 
-		else
-		{
-			msg_list_tail->next = new_msg;
-			msg_list_tail = new_msg;
-		}
-		msg_list_len++;
-		
-		pthread_cond_signal(&cond);
-		pthread_mutex_unlock(&mutex);
-
-		close(hb_conn);
-	}
-
-	pthread_detach(pthread_self());
-
-	return NULL;
-	
-}
-
-
-static void
-meta_heartbeat_setup(RANGE_PROF * rg_addr)
-{
-	
-	pthread_create(&(rg_addr->tid), NULL, meta_heartbeat, (void *)rg_addr);
-}
-
-static int
-meta_transfer_target(char *target_ip, int * target_port)
-{
-	RANGE_PROF *rg_prof;
-	int i, j;
-	int min_tablet;
-	int 	min_rg;
-	SVR_IDX_FILE *temp_store;
-	
-	temp_store = &(Master_infor->rg_list);
-	rg_prof = (RANGE_PROF *)(temp_store->data);
-
-	for(i = 0; i < temp_store->nextrno; i++)
-	{
-		if(rg_prof[i].rg_stat == RANGER_IS_ONLINE)
-		{
-			min_tablet = rg_prof[i].rg_tablet_num;
-			min_rg = i;
-			break;
-		}
-	}
-	
-	if(i == temp_store->nextrno)
-	{
-		traceprint("No available rg server exist!\n");
-		return -1;
-	}
-	
-	for(j = i + 1; j < temp_store->nextrno; j++)
-	{
-		if((rg_prof[j].rg_tablet_num < min_tablet)&&(rg_prof[j].rg_stat == RANGER_IS_ONLINE))
-		{
-			min_tablet = rg_prof[j].rg_tablet_num;
-			min_rg = j;
-		}			
-	}
-
-	MEMCPY(target_ip, rg_prof[min_rg].rg_addr, STRLEN(rg_prof[min_rg].rg_addr));
-	*target_port = rg_prof[min_rg].rg_port;
-
-	return min_rg;
-}
-
-int meta_transfer_notify(char * rg_addr, int rg_port)
-{
-	int hb_conn;
-	char	send_buf[256];
-	int idx;
-	RPCRESP * resp;
-	int rtn_stat = TRUE;
-		
-	if((hb_conn = conn_open(rg_addr, rg_port)) < 0)
-	{
-		perror("error in create connection to rg server on meta server: ");
-		rtn_stat= FALSE;
-		goto finish;
-	
-	}
-	
-	MEMSET(send_buf, 256);
-			
-	idx = 0;
-	PUT_TO_BUFFER(send_buf, idx, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
-	PUT_TO_BUFFER(send_buf, idx, RPC_MASTER2RG_NOTIFY, RPC_MAGIC_MAX_LEN);
-				
-	write(hb_conn, send_buf, idx);
-	
-	resp = conn_recv_resp(hb_conn);
-	
-	if (resp->status_code != RPC_SUCCESS)
-	{
-		traceprint("\n ERROR when send rsync notify to client \n");
-		rtn_stat = FALSE;
-			
-	}
-		
-finish:
-	if(hb_conn > 0)
-		close(hb_conn);
-
-	return rtn_stat;
-}
-
-
-static void
-meta_tablet_update(char * table_name, char * rg_addr, int rg_port)
-{
-	char		tab_dir[256];
-	int 	fd;
-	char		tab_tabletschm_dir[TABLE_NAME_MAX_LEN];
-	char		*tablet_schm_bp;
-	char	target_ip[RANGE_ADDR_MAX_LEN];
-	int		target_port;
-	int		target_index;
-	
-	tablet_schm_bp = NULL;
-		
-	MEMSET(tab_dir, 256);
-	MEMCPY(tab_dir, MT_META_TABLE, STRLEN(MT_META_TABLE));
-	str1_to_str2(tab_dir, '/', table_name);
-	
-	if (STAT(tab_dir, &st) != 0)
-	{		
-		traceprint("Table %s is not exist!\n", table_name);
-		goto exit;
-	}
-	
-	target_index = meta_transfer_target(target_ip, &target_port);
-
-	int notify_ret = meta_transfer_notify(target_ip, target_port);
-	if(!notify_ret)
-	{		
-		traceprint("ERROR when send rsync notify to rg server!\n");
-		goto exit;
-	}
-	
-	if (target_index >= 0)
-	{		
-		MEMSET(tab_tabletschm_dir, TABLE_NAME_MAX_LEN);
-		MEMCPY(tab_tabletschm_dir, tab_dir, STRLEN(tab_dir));
-		str1_to_str2(tab_tabletschm_dir, '/', "tabletscheme");	
-	
-		OPEN(fd, tab_tabletschm_dir, (O_RDWR));
-		
-		if (fd < 0)
-		{
-			traceprint("Table %s tabletscheme hit error! \n", table_name);
-			goto exit;
-		}
-	
-		tablet_schm_bp = (char *)MEMALLOCHEAP(SSTABLE_SIZE);
-		MEMSET(tablet_schm_bp, SSTABLE_SIZE);
-			
-		READ(fd, tablet_schm_bp, SSTABLE_SIZE); 
-	
-			
-		BLOCK *blk;
-	
-		int i, rowno;
-		int *offset;
-		char	*rp;
-		char	*addr_in_blk;
-		int addrlen_in_blk;
-		int port_in_blk;
-		int portlen_in_blk;
-		RANGE_PROF *rg_prof = (RANGE_PROF *)(Master_infor->rg_list.data);
-			
-		for(i = 0; i < BLK_CNT_IN_SSTABLE; i ++)
-		{
-			blk = (BLOCK *)(tablet_schm_bp + i * BLOCKSIZE);	
-				
-			for(rowno = 0, offset = ROW_OFFSET_PTR(blk); 
-				rowno < blk->bnextrno; rowno++, offset--)
-			{
-				rp = (char *)blk + *offset;
-				
-				Assert(*offset < blk->bfreeoff);
-				
-				addr_in_blk = row_locate_col(rp, TABLETSCHM_RGADDR_COLOFF_INROW, 
-								ROW_MINLEN_IN_TABLETSCHM, &addrlen_in_blk);
-				
-				port_in_blk = *(int *)row_locate_col(rp, TABLETSCHM_RGPORT_COLOFF_INROW, 
-								ROW_MINLEN_IN_TABLETSCHM, &portlen_in_blk);
-
-				if(!strncasecmp(rg_addr, addr_in_blk, RANGE_ADDR_MAX_LEN) && (rg_port == port_in_blk))
-				{
-					MEMCPY(addr_in_blk, target_ip, RANGE_ADDR_MAX_LEN);
-					int *tmp_addr = (int *)row_locate_col(rp, TABLETSCHM_RGPORT_COLOFF_INROW, ROW_MINLEN_IN_TABLETSCHM, &portlen_in_blk);
-					*tmp_addr = target_port;
-					
-					rg_prof[target_index].rg_tablet_num ++;
-				}
-					
-					
-			}
-			
-		}
-	
-		WRITE(fd, tablet_schm_bp, SSTABLE_SIZE);
-	
-		CLOSE(fd);
-
-		meta_save_rginfo();
-	}
-		
-exit:
-	
-	if (tablet_schm_bp)
-	{
-		MEMFREEHEAP(tablet_schm_bp);
-	}
-}
-
-
-static void
-meta_update(char * rg_addr, int rg_port)
-{
-	char tab_name[256];
-	char tab_dir[256];
-
-	DIR *pDir ;
-	struct dirent *ent ;
-	
-	MEMSET(tab_dir, 256);
-	MEMCPY(tab_dir, MT_META_TABLE, STRLEN(MT_META_TABLE));
-	
-	if (STAT(tab_dir, &st) != 0)
-	{		
-		traceprint("Table dir %s is not exist!\n", tab_dir);
-		goto exit;
-	}
-
-	pDir=opendir(tab_dir);
-	while((ent=readdir(pDir))!=NULL)
-	{
-		if(ent->d_type & DT_DIR)
-		{
-			if(strcmp(ent->d_name,".")==0 || strcmp(ent->d_name,"..")==0)
-				continue;
-			MEMSET(tab_name, 256);
-			sprintf(tab_name, "%s", ent->d_name);
-			meta_tablet_update(tab_name, rg_addr, rg_port);
-		}
-	}
-
-exit:
-	return;
-}
-
-
-
-static int
-meta_recovery_rg(char * req_buf)
-{
-	char		*str;
-	int		i;
-	SVR_IDX_FILE	*rglist;
-	int		found;
-	RANGE_PROF	*rg_addr;
-
-	
-	if (!strncasecmp(RPC_RECOVERY, req_buf, STRLEN(RPC_RECOVERY)))
-	{
-		str = req_buf + RPC_MAGIC_MAX_LEN;
-
-		rglist = &(Master_infor->rg_list);
-		found = FALSE;
-		rg_addr = (RANGE_PROF *)(rglist->data);
-
-		for(i = 0; i < rglist->nextrno; i++)
-		{
-			if (   !strncasecmp(str, rg_addr[i].rg_addr, RANGE_ADDR_MAX_LEN)
-			    && (rg_addr[i].rg_port == *(int *)(str + RANGE_ADDR_MAX_LEN))
-			    )
-			{
-				if(rg_addr[i].rg_stat == RANGER_IS_ONLINE)
-				{
-					found = TRUE;
-					rg_addr[i].rg_stat = RANGER_IS_OFFLINE;
-					
-					//update tablet
-					meta_update(rg_addr[i].rg_addr, rg_addr[i].rg_port);
-					
-					//update rg list
-					rg_addr[i].rg_tablet_num = 0;
-					//(rglist->nextrno)++;//do not modify this!
-					meta_save_rginfo();
-					break;
-				}
-				else
-				{
-					traceprint("\n error, rg server to be off-line is already off line \n");
-					Assert(1);
-				}
-			}
-		}
-
-		if (!found)
-		{
-			traceprint("\n error, rg server to be off_line is not exist in rg list \n");
-			Assert(1);
-		}
-
-		
-	}
-	else
-	{
-		return FALSE;
-	}
-
-	return TRUE;
-}
-
-
 
 static int
 meta_collect_rg(char * req_buf)
@@ -2747,6 +2358,397 @@ meta_bld_sysrow(char *rp, int rlen, int tabletid, int sstabnum)
 
 	Assert(rowidx == rlen);
 }
+
+void * meta_heartbeat(void *args)
+{
+	RANGE_PROF * rg_addr = (RANGE_PROF *)args;
+	int hb_conn;
+	char	send_buf[256];
+	int idx;
+	RPCRESP * resp;
+
+	//wait 5s to make sure rg server's network service is ready
+	sleep(5);
+
+	//need to be fixed. in this case(hb_conn<0), need to tell rg server register is failed
+	if((hb_conn = conn_open(rg_addr->rg_addr, rg_addr->rg_port)) < 0)
+	{
+		perror("error in create connection to rg server on meta server: ");
+		goto finish;
+
+	}
+
+	while(TRUE)
+	{
+		sleep(HEARTBEAT_INTERVAL);
+		MEMSET(send_buf, 256);
+		
+		idx = 0;
+		PUT_TO_BUFFER(send_buf, idx, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
+		PUT_TO_BUFFER(send_buf, idx, RPC_MASTER2RG_HEARTBEAT, RPC_MAGIC_MAX_LEN);
+			
+		write(hb_conn, send_buf, idx);
+
+		resp = conn_recv_resp_abt(hb_conn);
+
+		if (resp->status_code == RPC_UNAVAIL)
+		{
+			traceprint("\n rg server is un-available \n");
+			conn_destroy_resp(resp);
+			goto finish;
+
+		}
+		
+		//to be fix here
+		//maybe more info will be added in hearbeat msg,  such as overload monitor
+		//so need to add some process routine on resp here in the future
+	}
+
+finish:
+	
+	if(hb_conn > 0)
+	{
+		//update meta and rg_list here, put update task to msg list
+		msg_data * new_msg;
+		int idx = 0;
+		new_msg = malloc(sizeof(msg_data));
+		MEMSET(new_msg, sizeof(msg_data));
+		
+		PUT_TO_BUFFER(new_msg->data, idx, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
+		PUT_TO_BUFFER(new_msg->data, idx, RPC_RECOVERY, RPC_MAGIC_MAX_LEN);
+		PUT_TO_BUFFER(new_msg->data, idx, rg_addr->rg_addr, RANGE_ADDR_MAX_LEN);
+		PUT_TO_BUFFER(new_msg->data, idx, &(rg_addr->rg_port), RANGE_PORT_MAX_LEN);
+		new_msg->fd = -1;
+		new_msg->n_size = idx;
+		new_msg->block_buffer = NULL;
+		new_msg->next = NULL;
+		
+		pthread_mutex_lock(&mutex);
+		if (msg_list_head == NULL)
+		{
+			msg_list_head = new_msg;
+			msg_list_tail = new_msg;
+		} 
+		else
+		{
+			msg_list_tail->next = new_msg;
+			msg_list_tail = new_msg;
+		}
+		msg_list_len++;
+		
+		pthread_cond_signal(&cond);
+		pthread_mutex_unlock(&mutex);
+
+		close(hb_conn);
+	}
+
+	pthread_detach(pthread_self());
+
+	return NULL;
+	
+}
+
+
+static void
+meta_heartbeat_setup(RANGE_PROF * rg_addr)
+{
+	
+	pthread_create(&(rg_addr->tid), NULL, meta_heartbeat, (void *)rg_addr);
+}
+
+static int
+meta_transfer_target(char *target_ip, int * target_port)
+{
+	RANGE_PROF *rg_prof;
+	int i, j;
+	int min_tablet;
+	int 	min_rg;
+	SVR_IDX_FILE *temp_store;
+	
+	temp_store = &(Master_infor->rg_list);
+	rg_prof = (RANGE_PROF *)(temp_store->data);
+
+	for(i = 0; i < temp_store->nextrno; i++)
+	{
+		if(rg_prof[i].rg_stat == RANGER_IS_ONLINE)
+		{
+			min_tablet = rg_prof[i].rg_tablet_num;
+			min_rg = i;
+			break;
+		}
+	}
+	
+	if(i == temp_store->nextrno)
+	{
+		traceprint("No available rg server exist!\n");
+		return -1;
+	}
+	
+	for(j = i + 1; j < temp_store->nextrno; j++)
+	{
+		if((rg_prof[j].rg_tablet_num < min_tablet)&&(rg_prof[j].rg_stat == RANGER_IS_ONLINE))
+		{
+			min_tablet = rg_prof[j].rg_tablet_num;
+			min_rg = j;
+		}			
+	}
+
+	MEMCPY(target_ip, rg_prof[min_rg].rg_addr, STRLEN(rg_prof[min_rg].rg_addr));
+	*target_port = rg_prof[min_rg].rg_port;
+
+	return min_rg;
+}
+
+int meta_transfer_notify(char * rg_addr, int rg_port)
+{
+	int hb_conn;
+	char	send_buf[256];
+	int idx;
+	RPCRESP * resp;
+	int rtn_stat = TRUE;
+		
+	if((hb_conn = conn_open(rg_addr, rg_port)) < 0)
+	{
+		perror("error in create connection to rg server on meta server: ");
+		rtn_stat= FALSE;
+		goto finish;
+	
+	}
+	
+	MEMSET(send_buf, 256);
+			
+	idx = 0;
+	PUT_TO_BUFFER(send_buf, idx, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
+	PUT_TO_BUFFER(send_buf, idx, RPC_MASTER2RG_NOTIFY, RPC_MAGIC_MAX_LEN);
+				
+	write(hb_conn, send_buf, idx);
+	
+	resp = conn_recv_resp(hb_conn);
+	
+	if (resp->status_code != RPC_SUCCESS)
+	{
+		traceprint("\n ERROR when send rsync notify to client \n");
+		rtn_stat = FALSE;
+			
+	}
+		
+finish:
+	if(hb_conn > 0)
+		close(hb_conn);
+
+	return rtn_stat;
+}
+
+
+static void
+meta_tablet_update(char * table_name, char * rg_addr, int rg_port)
+{
+	char		tab_dir[256];
+	int 	fd;
+	char		tab_tabletschm_dir[TABLE_NAME_MAX_LEN];
+	char		*tablet_schm_bp;
+	char	target_ip[RANGE_ADDR_MAX_LEN];
+	int		target_port;
+	int		target_index;
+	
+	tablet_schm_bp = NULL;
+		
+	MEMSET(tab_dir, 256);
+	MEMCPY(tab_dir, MT_META_TABLE, STRLEN(MT_META_TABLE));
+	str1_to_str2(tab_dir, '/', table_name);
+	
+	if (STAT(tab_dir, &st) != 0)
+	{		
+		traceprint("Table %s is not exist!\n", table_name);
+		goto exit;
+	}
+	
+	target_index = meta_transfer_target(target_ip, &target_port);
+
+	int notify_ret = meta_transfer_notify(target_ip, target_port);
+	if(!notify_ret)
+	{		
+		traceprint("ERROR when send rsync notify to rg server!\n");
+		goto exit;
+	}
+	
+	if (target_index >= 0)
+	{		
+		MEMSET(tab_tabletschm_dir, TABLE_NAME_MAX_LEN);
+		MEMCPY(tab_tabletschm_dir, tab_dir, STRLEN(tab_dir));
+		str1_to_str2(tab_tabletschm_dir, '/', "tabletscheme");	
+	
+		OPEN(fd, tab_tabletschm_dir, (O_RDWR));
+		
+		if (fd < 0)
+		{
+			traceprint("Table %s tabletscheme hit error! \n", table_name);
+			goto exit;
+		}
+	
+		tablet_schm_bp = (char *)MEMALLOCHEAP(SSTABLE_SIZE);
+		MEMSET(tablet_schm_bp, SSTABLE_SIZE);
+			
+		READ(fd, tablet_schm_bp, SSTABLE_SIZE); 
+	
+			
+		BLOCK *blk;
+	
+		int i, rowno;
+		int *offset;
+		char	*rp;
+		char	*addr_in_blk;
+		int addrlen_in_blk;
+		int port_in_blk;
+		int portlen_in_blk;
+		RANGE_PROF *rg_prof = (RANGE_PROF *)(Master_infor->rg_list.data);
+			
+		for(i = 0; i < BLK_CNT_IN_SSTABLE; i ++)
+		{
+			blk = (BLOCK *)(tablet_schm_bp + i * BLOCKSIZE);	
+				
+			for(rowno = 0, offset = ROW_OFFSET_PTR(blk); 
+				rowno < blk->bnextrno; rowno++, offset--)
+			{
+				rp = (char *)blk + *offset;
+				
+				Assert(*offset < blk->bfreeoff);
+				
+				addr_in_blk = row_locate_col(rp, TABLETSCHM_RGADDR_COLOFF_INROW, 
+								ROW_MINLEN_IN_TABLETSCHM, &addrlen_in_blk);
+				
+				port_in_blk = *(int *)row_locate_col(rp, TABLETSCHM_RGPORT_COLOFF_INROW, 
+								ROW_MINLEN_IN_TABLETSCHM, &portlen_in_blk);
+
+				if(!strncasecmp(rg_addr, addr_in_blk, RANGE_ADDR_MAX_LEN) && (rg_port == port_in_blk))
+				{
+					MEMCPY(addr_in_blk, target_ip, RANGE_ADDR_MAX_LEN);
+					int *tmp_addr = (int *)row_locate_col(rp, TABLETSCHM_RGPORT_COLOFF_INROW, ROW_MINLEN_IN_TABLETSCHM, &portlen_in_blk);
+					*tmp_addr = target_port;
+					
+					rg_prof[target_index].rg_tablet_num ++;
+				}
+					
+					
+			}
+			
+		}
+	
+		WRITE(fd, tablet_schm_bp, SSTABLE_SIZE);
+	
+		CLOSE(fd);
+
+		meta_save_rginfo();
+	}
+		
+exit:
+	
+	if (tablet_schm_bp)
+	{
+		MEMFREEHEAP(tablet_schm_bp);
+	}
+}
+
+
+static void
+meta_update(char * rg_addr, int rg_port)
+{
+	char tab_name[256];
+	char tab_dir[256];
+
+	DIR *pDir ;
+	struct dirent *ent ;
+	
+	MEMSET(tab_dir, 256);
+	MEMCPY(tab_dir, MT_META_TABLE, STRLEN(MT_META_TABLE));
+	
+	if (STAT(tab_dir, &st) != 0)
+	{		
+		traceprint("Table dir %s is not exist!\n", tab_dir);
+		goto exit;
+	}
+
+	pDir=opendir(tab_dir);
+	while((ent=readdir(pDir))!=NULL)
+	{
+		if(ent->d_type & DT_DIR)
+		{
+			if(strcmp(ent->d_name,".")==0 || strcmp(ent->d_name,"..")==0)
+				continue;
+			MEMSET(tab_name, 256);
+			sprintf(tab_name, "%s", ent->d_name);
+			meta_tablet_update(tab_name, rg_addr, rg_port);
+		}
+	}
+
+exit:
+	return;
+}
+
+
+
+static int
+meta_recovery_rg(char * req_buf)
+{
+	char		*str;
+	int		i;
+	SVR_IDX_FILE	*rglist;
+	int		found;
+	RANGE_PROF	*rg_addr;
+
+	
+	if (!strncasecmp(RPC_RECOVERY, req_buf, STRLEN(RPC_RECOVERY)))
+	{
+		str = req_buf + RPC_MAGIC_MAX_LEN;
+
+		rglist = &(Master_infor->rg_list);
+		found = FALSE;
+		rg_addr = (RANGE_PROF *)(rglist->data);
+
+		for(i = 0; i < rglist->nextrno; i++)
+		{
+			if (   !strncasecmp(str, rg_addr[i].rg_addr, RANGE_ADDR_MAX_LEN)
+			    && (rg_addr[i].rg_port == *(int *)(str + RANGE_ADDR_MAX_LEN))
+			    )
+			{
+				if(rg_addr[i].rg_stat == RANGER_IS_ONLINE)
+				{
+					found = TRUE;
+					rg_addr[i].rg_stat = RANGER_IS_OFFLINE;
+					
+					//update tablet
+					meta_update(rg_addr[i].rg_addr, rg_addr[i].rg_port);
+					
+					//update rg list
+					rg_addr[i].rg_tablet_num = 0;
+					//(rglist->nextrno)++;//do not modify this!
+					meta_save_rginfo();
+					break;
+				}
+				else
+				{
+					traceprint("\n error, rg server to be off-line is already off line \n");
+					Assert(1);
+				}
+			}
+		}
+
+		if (!found)
+		{
+			traceprint("\n error, rg server to be off_line is not exist in rg list \n");
+			Assert(1);
+		}
+
+		
+	}
+	else
+	{
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
 
 int main(int argc, char *argv[])
 {
