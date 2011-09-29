@@ -184,9 +184,9 @@ meta_server_setup(char *conf_path)
 		
 //		WRITE(fd, rang_server, STRLEN(rang_server));
 
-		MEMSET(&(Master_infor->rg_list), SVR_IDX_FILE_BLK);
+		MEMSET(&(Master_infor->rg_list), SVR_IDX_FILE_SIZE);
 
-		READ(fd, &(Master_infor->rg_list), SVR_IDX_FILE_BLK);
+		READ(fd, &(Master_infor->rg_list), SVR_IDX_FILE_SIZE);
 
 		
 		CLOSE(fd);		
@@ -222,7 +222,7 @@ meta_save_rginfo()
 
 	OPEN(fd, rang_server, (O_RDWR));
 
-	WRITE(fd, &(Master_infor->rg_list), SVR_IDX_FILE_BLK);
+	WRITE(fd, &(Master_infor->rg_list), SVR_IDX_FILE_SIZE);
 
 	CLOSE(fd);
 	}
@@ -239,11 +239,11 @@ meta_add_server(TREE *command)
 	MEMCPY(rang_server, MT_META_REGION, STRLEN(MT_META_REGION));
 	str1_to_str2(rang_server, '/', "rangeserverlist");
 
-	filebuf = (SVR_IDX_FILE *)MEMALLOCHEAP(SVR_IDX_FILE_BLK);
+	filebuf = (SVR_IDX_FILE *)MEMALLOCHEAP(SVR_IDX_FILE_SIZE);
 	
 	OPEN(fd, rang_server, (O_CREAT|O_WRONLY|O_TRUNC));
 
-	READ(fd,filebuf,SVR_IDX_FILE_BLK);
+	READ(fd,filebuf,SVR_IDX_FILE_SIZE);
 	
 
 	PUT_TO_BUFFER(filebuf->data, filebuf->freeoff, command->sym.command.tabname,
@@ -251,7 +251,7 @@ meta_add_server(TREE *command)
 	PUT_TO_BUFFER(filebuf->data, filebuf->freeoff, command->left->right->sym.constant.value,
 					command->left->right->sym.constant.len);
 
-	WRITE(fd, filebuf, SVR_IDX_FILE_BLK);
+	WRITE(fd, filebuf, SVR_IDX_FILE_SIZE);
 
 	CLOSE(fd);	
 
@@ -2235,24 +2235,73 @@ meta_rebalancer(TREE *command)
 
 
 	if (transfer_tablet > 0)
-	{		
+	{	
+		
+		TABLEHDR	tab_hdr;
+		
+		MEMSET(tab_tabletschm_dir, TABLE_NAME_MAX_LEN);
+		MEMCPY(tab_tabletschm_dir, tab_dir, STRLEN(tab_dir));
+	
+		if (!(STAT(tab_dir, &st) == 0))
+		{
+			traceprint("Table %s is not exist.\n", tab_name);
+			goto exit;
+		}
+		
+		str1_to_str2(tab_tabletschm_dir, '/', "sysobjects");
+	
+		OPEN(fd, tab_tabletschm_dir, (O_RDONLY));
+		
+		if (fd < 0)
+		{
+			traceprint("Table is not exist! \n");
+			goto exit;
+		}
+	
+		
+		READ(fd, &tab_hdr, sizeof(TABLEHDR));	
+	
+		CLOSE(fd);
+		
+		
 		
 		MEMSET(tab_tabletschm_dir, TABLE_NAME_MAX_LEN);
 		MEMCPY(tab_tabletschm_dir, tab_dir, STRLEN(tab_dir));
 		str1_to_str2(tab_tabletschm_dir, '/', "tabletscheme");	
 
-		OPEN(fd, tab_tabletschm_dir, (O_RDWR));
-	
-		if (fd < 0)
-		{
-			traceprint("Table %s tabletscheme hit error! \n", tab_name);
-			goto exit;
-		}
 
-		tablet_schm_bp = (char *)MEMALLOCHEAP(SSTABLE_SIZE);
-		MEMSET(tablet_schm_bp, SSTABLE_SIZE);
+
+		TABINFO		*tabinfo;
+		int		minrowlen;
 		
-		READ(fd, tablet_schm_bp, SSTABLE_SIZE);	
+		BLK_ROWINFO	blk_rowinfo;
+		BUF		*bp;
+		
+		tabinfo = MEMALLOCHEAP(sizeof(TABINFO));
+		MEMSET(tabinfo, sizeof(TABINFO));
+
+		tabinfo->t_sinfo = (SINFO *)MEMALLOCHEAP(sizeof(SINFO));
+		MEMSET(tabinfo->t_sinfo, sizeof(SINFO));
+
+		tabinfo->t_rowinfo = &blk_rowinfo;
+		MEMSET(tabinfo->t_rowinfo, sizeof(BLK_ROWINFO));
+
+		tabinfo->t_dold = tabinfo->t_dnew = (BUF *) tabinfo;
+
+		tabinfo_push(tabinfo);
+
+		minrowlen = ROW_MINLEN_IN_TABLETSCHM;
+
+		
+		
+		TABINFO_INIT(tabinfo, tab_tabletschm_dir, tabinfo->t_sinfo, minrowlen, 
+				TAB_SCHM_INS, tab_hdr.tab_id, TABLETSCHM_ID);
+		SRCH_INFO_INIT(tabinfo->t_sinfo, NULL, 0, TABLETSCHM_KEY_COLID_INROW, 
+			       VARCHAR, -1);
+				
+		bp = blk_getsstable(tabinfo);
+	
+		tablet_schm_bp = (char *)(bp->bsstab->bblk);
 
 		
 		BLOCK *blk;
@@ -2357,9 +2406,19 @@ meta_rebalancer(TREE *command)
 		
 		}
 
-		WRITE(fd, tablet_schm_bp, SSTABLE_SIZE);
 
-		CLOSE(fd);
+		bufpredirty(bp->bsstab);
+		bufdirty(bp->bsstab);
+		
+		session_close(tabinfo);
+
+		MEMFREEHEAP(tabinfo->t_sinfo);
+		MEMFREEHEAP(tabinfo);
+
+		tabinfo_pop();
+
+		
+		
 	}
 
 	rtn_stat = TRUE;
