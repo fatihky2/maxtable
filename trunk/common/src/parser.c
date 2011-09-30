@@ -218,6 +218,11 @@ parser_open(char *s_str)
 	    	tss->topid |= TSS_OP_SELDELTAB;
 	    	rtn_stat = par_seldel_tab((s_str + s_idx), DELETE);
 	        break;
+
+	    case SELECTRANGE:
+	    	rtn_stat = par_selrange_tab((s_str + s_idx), SELECTRANGE);
+	    	break;
+		
 	    case ADDSSTAB:
 	    	rtn_stat = par_addsstab(s_str + s_idx, ADDSSTAB);
 	    	break;
@@ -626,6 +631,68 @@ par_seldel_tab(char *s_str, int querytype)
 
 
 
+
+int 
+par_selrange_tab(char *s_str, int querytype)
+{
+	LOCALTSS(tss);
+	int		len;
+	char		tab_name[64];
+	int		cmd_len;
+	char		tab_name_len;
+	int		start;
+	int		end;
+	char		*col_info;
+	
+
+	if (s_str == NULL || (STRLEN(s_str) == 0))
+	{
+		return FALSE;
+	}
+
+	len = 0;
+
+	cmd_len = STRLEN(s_str);
+
+	len = str1nstr(s_str, "(\0", cmd_len);
+
+	MEMSET(tab_name, 64);
+		
+	MEMCPY(tab_name, s_str, len - 1);
+
+	
+	str0n_trunc_0t(tab_name, len - 1, &start, &end);
+	tab_name_len = end - start;
+
+	
+	if (!par_name_check(&(tab_name[start]), tab_name_len))
+	{
+		return FALSE;
+	}
+
+	tss->tcmd_parser = par_bld_cmd(&(tab_name[start]), 
+					tab_name_len, querytype);
+	
+	start = len;
+	col_info = s_str + start;
+	len =  str1nstr(col_info, ")\0", cmd_len - len);
+
+	if (len != (cmd_len - start))
+	{
+		
+		return FALSE;
+	}
+
+	str0n_trunc_0t(col_info, len - 1, &start, &end);
+
+	
+	int		rtn_stat;
+	
+	rtn_stat = par_col_info((col_info + start), (end - start), querytype);
+
+	return TRUE;
+}
+
 int 
 par_dropremovrebalan_tab(char *s_str, int querytype)
 {
@@ -813,6 +880,23 @@ par_col_info(char *cmd, int cmd_len, int querytype)
 			command->left->right = par_bld_const(coldata, (end - start),
 							rg_insert ? colinfor->col_type 
 								      : INVALID_TYPE);
+		}
+		else if (querytype == SELECTRANGE)
+		{
+			command = tss->tcmd_parser;
+
+			while(command->left)
+			{
+				command = command->left;
+			}
+
+			/* Fake column id is just for the search in the par_get_colinfo_by_colid. */
+			colid++;
+			
+			command->left = par_bld_resdom(NULL, NULL, colid);
+
+			command->left->right = par_bld_const(coldata, (end - start),
+								INVALID_TYPE);
 		}
 		
 		
