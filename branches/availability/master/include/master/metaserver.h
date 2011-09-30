@@ -225,7 +225,7 @@ typedef struct tab_info
 
 
 #define SVR_IDX_FILE_HDR	16
-#define SVR_IDX_FILE_BLK	((sizeof(int)*3 + sizeof(pthread_t) + RANGE_PORT_MAX_LEN + RANGE_ADDR_MAX_LEN) * 1024)
+#define SVR_IDX_FILE_BLK	((sizeof(int)*2 + sizeof(pthread_t) + RANGE_PORT_MAX_LEN + RANGE_ADDR_MAX_LEN) * 1024)
 #define SVR_IDX_FILE_SIZE	(SVR_IDX_FILE_HDR + SVR_IDX_FILE_BLK)
 typedef	struct svr_idx_file
 {
