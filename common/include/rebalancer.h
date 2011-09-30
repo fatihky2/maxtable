@@ -32,7 +32,6 @@ typedef struct rebalance_data
 	char	rbd_max_tablet_rg[RANGE_ADDR_MAX_LEN];
 	char	rbd_min_tablet_rg[RANGE_ADDR_MAX_LEN];
 	int	rbd_min_tablet_rgport;
-	int rbd_max_tablet_rgport;
 	char	rbd_data[SSTABLE_SIZE];
 }REBALANCE_DATA;
 
@@ -40,7 +39,7 @@ typedef struct rebalance_data
 #define		RBD_FILE_RECVER		0x0002
 
 RANGE_PROF *
-rebalan_get_rg_prof_by_addr(char *rg_addr, int rg_port);
+rebalan_get_rg_prof_by_addr(char *rg_addr);
 
 
 #endif /* REBALANCER_H_ */

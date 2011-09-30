@@ -40,7 +40,7 @@ extern	TSS	*Tss;
 // char *rp - the row in the tablet (sstabid|sstable row | ranger |key col)
 // int minlen - min length of the row in the tablet
 void
-tablet_crt(TABLEHDR *tablehdr, char *tabledir, char *rg_addr, char *rp, int minlen, int port)
+tablet_crt(TABLEHDR *tablehdr, char *tabledir, char *rg_addr, char *rp, int minlen)
 {
 	char		tab_meta_dir[TABLE_NAME_MAX_LEN];
 	char		tablet_name[32];
@@ -92,7 +92,7 @@ tablet_crt(TABLEHDR *tablehdr, char *tabledir, char *rg_addr, char *rp, int minl
 	char *temprp = (char *)MEMALLOCHEAP(rlen);
 	
 	
-	tablet_schm_bld_row(temprp, rlen, tablehdr->tab_tablet, tablet_name, rg_addr, keycol, keycolen, port);
+	tablet_schm_bld_row(temprp, rlen, tablehdr->tab_tablet, tablet_name, rg_addr, keycol, keycolen);
 	
 	tablet_schm_ins_row(tablehdr->tab_id, TABLETSCHM_ID, tab_meta_dir, temprp, 0);
 
@@ -143,7 +143,7 @@ tablet_ins_row(TABLEHDR *tablehdr, int tabid, int sstabid, char *tablet_name, ch
 	if (tabinfo.t_stat & TAB_TABLET_CRT_NEW)
 	{
 		RANGE_PROF *rg_prof;
-		rg_prof = rebalan_get_rg_prof_by_addr(tss->tcur_rgprof->rg_addr, tss->tcur_rgprof->rg_port);
+		rg_prof = rebalan_get_rg_prof_by_addr(tss->tcur_rgprof->rg_addr);
 		(rg_prof->rg_tablet_num)++;
 		
 		(tablehdr->tab_tablet)++;
@@ -374,7 +374,7 @@ tablet_srch_row(TABINFO *usertabinfo, TABLEHDR *tablehdr, int tabid, int sstabid
 
 void 
 tablet_schm_bld_row(char *rp, int rlen, int tabletid, char *tabletname, 
-			char *rang_addr, char *keycol, int keycolen, int port)
+			char *rang_addr, char *keycol, int keycolen)
 {
 	int		rowidx;
 
@@ -389,8 +389,6 @@ tablet_schm_bld_row(char *rp, int rlen, int tabletid, char *tabletname,
 	
 	 	
 	PUT_TO_BUFFER(rp, rowidx, &tabletid, sizeof(int));
-
-	PUT_TO_BUFFER(rp, rowidx, &port, sizeof(int));
 	
 	 	
 	PUT_TO_BUFFER(rp, rowidx, tabletname, TABLET_NAME_MAX_LEN);
@@ -768,8 +766,7 @@ tablet_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 	table_nameidx = str01str(destbuf->bsstab_name, "tablet", STRLEN(destbuf->bsstab_name));
 	tablet_schm_bld_row(temprp, rlen, srctabinfo->t_split_tabletid,
 			    destbuf->bsstab_name + table_nameidx + 1, 
-			    tss->tcur_rgprof->rg_addr, tablet_key, tablet_keylen, 
-			    tss->tcur_rgprof->rg_port);
+			    tss->tcur_rgprof->rg_addr, tablet_key, tablet_keylen);
 
 	
 	tablet_schm_ins_row(srctabinfo->t_tabid, TABLETSCHM_ID, tab_meta_dir, temprp, 
