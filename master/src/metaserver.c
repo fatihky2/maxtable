@@ -2029,24 +2029,58 @@ meta_rebalancer(TREE *command)
 	transfer_tablet = meta_rebalan_svr_idx_file(tab_dir, rbd);
 
 	if (transfer_tablet > 0)
-	{		
+	{
+		TABLEHDR	tab_hdr;
 		
 		MEMSET(tab_tabletschm_dir, TABLE_NAME_MAX_LEN);
 		MEMCPY(tab_tabletschm_dir, tab_dir, STRLEN(tab_dir));
-		str1_to_str2(tab_tabletschm_dir, '/', "tabletscheme");	
 
-		OPEN(fd, tab_tabletschm_dir, (O_RDWR));
+		str1_to_str2(tab_tabletschm_dir, '/', "sysobjects");
+		
+		OPEN(fd, tab_tabletschm_dir, (O_RDONLY));
 	
 		if (fd < 0)
 		{
-			traceprint("Table %s tabletscheme hit error! \n", tab_name);
+			traceprint("Table is not exist! \n");
 			goto exit;
 		}
 
-		tablet_schm_bp = (char *)MEMALLOCHEAP(SSTABLE_SIZE);
-		MEMSET(tablet_schm_bp, SSTABLE_SIZE);
+		READ(fd, &tab_hdr, sizeof(TABLEHDR));				
+		CLOSE(fd);
+
+		MEMSET(tab_tabletschm_dir, TABLE_NAME_MAX_LEN);
+		MEMCPY(tab_tabletschm_dir, tab_dir, STRLEN(tab_dir));
+
+		str1_to_str2(tab_tabletschm_dir, '/', "tabletscheme");
+
+		TABINFO		*tabinfo;
+		int		minrowlen;
+		BLK_ROWINFO	blk_rowinfo;
+		BUF		*bp;
 		
-		READ(fd, tablet_schm_bp, SSTABLE_SIZE);	
+		tabinfo = MEMALLOCHEAP(sizeof(TABINFO));
+		MEMSET(tabinfo, sizeof(TABINFO));
+		tabinfo->t_sinfo = (SINFO *)MEMALLOCHEAP(sizeof(SINFO));
+		MEMSET(tabinfo->t_sinfo, sizeof(SINFO));
+
+		tabinfo->t_rowinfo = &blk_rowinfo;
+
+		MEMSET(tabinfo->t_rowinfo, sizeof(BLK_ROWINFO));
+		tabinfo->t_dold = tabinfo->t_dnew = (BUF *) tabinfo;
+
+		tabinfo_push(tabinfo);
+
+		minrowlen = ROW_MINLEN_IN_TABLETSCHM;
+		
+		TABINFO_INIT(tabinfo, tab_tabletschm_dir, tabinfo->t_sinfo, minrowlen,
+						TAB_SCHM_INS, tab_hdr.tab_id, TABLETSCHM_ID);
+
+		SRCH_INFO_INIT(tabinfo->t_sinfo, NULL, 0, TABLETSCHM_KEY_COLID_INROW,
+						VARCHAR, -1);
+
+		bp = blk_getsstable(tabinfo);
+
+		tablet_schm_bp = (char *)(bp->bsstab->bblk);
 
 		
 		BLOCK *blk;
@@ -2146,9 +2180,15 @@ meta_rebalancer(TREE *command)
 		
 		}
 
-		WRITE(fd, tablet_schm_bp, SSTABLE_SIZE);
+		bufpredirty(bp->bsstab);
+		bufdirty(bp->bsstab);
 
-		CLOSE(fd);
+		session_close(tabinfo);
+
+		MEMFREEHEAP(tabinfo->t_sinfo);
+		MEMFREEHEAP(tabinfo);
+
+		tabinfo_pop();
 	}
 
 	rtn_stat = TRUE;
@@ -2573,24 +2613,58 @@ meta_tablet_update(char * table_name, char * rg_addr, int rg_port)
 	}
 	
 	if (target_index >= 0)
-	{		
+	{
+		TABLEHDR	tab_hdr;
+		
 		MEMSET(tab_tabletschm_dir, TABLE_NAME_MAX_LEN);
 		MEMCPY(tab_tabletschm_dir, tab_dir, STRLEN(tab_dir));
-		str1_to_str2(tab_tabletschm_dir, '/', "tabletscheme");	
-	
-		OPEN(fd, tab_tabletschm_dir, (O_RDWR));
-		
+
+		str1_to_str2(tab_tabletschm_dir, '/', "sysobjects");
+
+		OPEN(fd, tab_tabletschm_dir, (O_RDONLY));
 		if (fd < 0)
 		{
-			traceprint("Table %s tabletscheme hit error! \n", table_name);
+			traceprint("Table is not exist! \n");
 			goto exit;
 		}
-	
-		tablet_schm_bp = (char *)MEMALLOCHEAP(SSTABLE_SIZE);
-		MEMSET(tablet_schm_bp, SSTABLE_SIZE);
-			
-		READ(fd, tablet_schm_bp, SSTABLE_SIZE); 
-	
+
+		READ(fd, &tab_hdr, sizeof(TABLEHDR));
+		CLOSE(fd);
+
+		MEMSET(tab_tabletschm_dir, TABLE_NAME_MAX_LEN);
+		MEMCPY(tab_tabletschm_dir, tab_dir, STRLEN(tab_dir));
+		
+		str1_to_str2(tab_tabletschm_dir, '/', "tabletscheme");
+
+		TABINFO		*tabinfo;
+		int		minrowlen;
+		BLK_ROWINFO	blk_rowinfo;
+		BUF		*bp;
+
+		tabinfo = MEMALLOCHEAP(sizeof(TABINFO));
+		MEMSET(tabinfo, sizeof(TABINFO));
+
+		tabinfo->t_sinfo = (SINFO *)MEMALLOCHEAP(sizeof(SINFO));
+		MEMSET(tabinfo->t_sinfo, sizeof(SINFO));
+
+		tabinfo->t_rowinfo = &blk_rowinfo;
+		MEMSET(tabinfo->t_rowinfo, sizeof(BLK_ROWINFO));
+
+		tabinfo->t_dold = tabinfo->t_dnew = (BUF *) tabinfo;
+
+		tabinfo_push(tabinfo);
+
+		minrowlen = ROW_MINLEN_IN_TABLETSCHM;
+
+		TABINFO_INIT(tabinfo, tab_tabletschm_dir, tabinfo->t_sinfo, minrowlen,
+						TAB_SCHM_INS, tab_hdr.tab_id, TABLETSCHM_ID);
+
+		SRCH_INFO_INIT(tabinfo->t_sinfo, NULL, 0, TABLETSCHM_KEY_COLID_INROW, 
+						VARCHAR, -1);
+
+		bp = blk_getsstable(tabinfo);
+
+		tablet_schm_bp = (char *)(bp->bsstab->bblk);
 			
 		BLOCK *blk;
 	
@@ -2634,9 +2708,15 @@ meta_tablet_update(char * table_name, char * rg_addr, int rg_port)
 			
 		}
 	
-		WRITE(fd, tablet_schm_bp, SSTABLE_SIZE);
-	
-		CLOSE(fd);
+		bufpredirty(bp->bsstab);
+		bufdirty(bp->bsstab);
+
+		session_close(tabinfo);
+
+		MEMFREEHEAP(tabinfo->t_sinfo);
+		MEMFREEHEAP(tabinfo);
+
+		tabinfo_pop();
 
 		meta_save_rginfo();
 	}
