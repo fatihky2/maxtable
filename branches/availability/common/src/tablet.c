@@ -768,7 +768,8 @@ tablet_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 	table_nameidx = str01str(destbuf->bsstab_name, "tablet", STRLEN(destbuf->bsstab_name));
 	tablet_schm_bld_row(temprp, rlen, srctabinfo->t_split_tabletid,
 			    destbuf->bsstab_name + table_nameidx + 1, 
-			    tss->tcur_rgprof->rg_addr, tablet_key, tablet_keylen, tss->tcur_rgprof->rg_port);
+			    tss->tcur_rgprof->rg_addr, tablet_key, tablet_keylen, 
+			    tss->tcur_rgprof->rg_port);
 
 	
 	tablet_schm_ins_row(srctabinfo->t_tabid, TABLETSCHM_ID, tab_meta_dir, temprp, 

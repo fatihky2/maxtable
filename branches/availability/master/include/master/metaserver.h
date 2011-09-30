@@ -103,11 +103,11 @@ typedef struct sstable
 
 typedef struct rg_prof
 {
-	char	rg_addr[RANGE_ADDR_MAX_LEN];
-	int	rg_port;
-	int	rg_stat;
-	int	rg_tablet_num;	
-	pthread_t tid;
+	char		rg_addr[RANGE_ADDR_MAX_LEN];
+	int		rg_port;
+	int		rg_stat;
+	int		rg_tablet_num;	
+	pthread_t	tid;
 } RANGE_PROF;
 
 

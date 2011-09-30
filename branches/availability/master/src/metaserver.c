@@ -199,9 +199,9 @@ meta_server_setup(char *conf_path)
 		
 //		WRITE(fd, rang_server, STRLEN(rang_server));
 
-		MEMSET(&(Master_infor->rg_list), SVR_IDX_FILE_BLK);
+		MEMSET(&(Master_infor->rg_list), SVR_IDX_FILE_SIZE);
 
-		READ(fd, &(Master_infor->rg_list), SVR_IDX_FILE_BLK);
+		READ(fd, &(Master_infor->rg_list), SVR_IDX_FILE_SIZE);
 
 		
 		CLOSE(fd);
@@ -263,11 +263,11 @@ meta_add_server(TREE *command)
 	MEMCPY(rang_server, MT_META_REGION, STRLEN(MT_META_REGION));
 	str1_to_str2(rang_server, '/', "rangeserverlist");
 
-	filebuf = (SVR_IDX_FILE *)MEMALLOCHEAP(SVR_IDX_FILE_BLK);
+	filebuf = (SVR_IDX_FILE *)MEMALLOCHEAP(SVR_IDX_FILE_SIZE);
 	
 	OPEN(fd, rang_server, (O_CREAT|O_WRONLY|O_TRUNC));
 
-	READ(fd,filebuf,SVR_IDX_FILE_BLK);
+	READ(fd,filebuf,SVR_IDX_FILE_SIZE);
 	
 
 	PUT_TO_BUFFER(filebuf->data, filebuf->freeoff, command->sym.command.tabname,
@@ -275,7 +275,7 @@ meta_add_server(TREE *command)
 	PUT_TO_BUFFER(filebuf->data, filebuf->freeoff, command->left->right->sym.constant.value,
 					command->left->right->sym.constant.len);
 
-	WRITE(fd, filebuf, SVR_IDX_FILE_BLK);
+	WRITE(fd, filebuf, SVR_IDX_FILE_SIZE);
 
 	CLOSE(fd);	
 
