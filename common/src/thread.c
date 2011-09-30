@@ -324,6 +324,12 @@ void msg_process(char * (*handler_request)(char *req_buf))
 		{	resp = conn_build_resp_byte(RPC_FAIL, 0, NULL);
 		}
 
+		if(fd < 0)
+		{
+			//local msg, such as recovery task msg, so no need to response
+			goto finish;
+		}
+
 		resp_size = conn_get_resp_size((RPCRESP *)resp);
 
 		resp_msg = NULL;
@@ -335,13 +341,6 @@ void msg_process(char * (*handler_request)(char *req_buf))
 		Assert(resp_size < MAXLINE);
 		MEMCPY(resp_msg->data, resp, resp_size);
 		resp_msg->fd = fd;	
-
-		if (req_msg->block_buffer != NULL)
-		{
-			free(req_msg->block_buffer);
-		}
-		
-		free(req_msg);
 		
 		struct epoll_event ev;
 		ev.data.ptr = resp_msg;
@@ -349,6 +348,15 @@ void msg_process(char * (*handler_request)(char *req_buf))
 		ev.events = EPOLLOUT | EPOLLET;
 
 		epoll_ctl(epfd, EPOLL_CTL_MOD, fd, &ev);
+
+finish:
+
+		if (req_msg->block_buffer != NULL)
+		{
+			free(req_msg->block_buffer);
+		}
+		
+		free(req_msg);
   
 		conn_destroy_req(req);
 		conn_destroy_resp_byte(resp);		

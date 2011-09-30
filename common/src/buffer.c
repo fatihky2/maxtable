@@ -151,11 +151,11 @@ bufawrite(BUF *bp)
 		traceprint(" Enter into the buffer writting.\n");
 	}
 	
-//	P_SPINLOCK(BUF_SPIN);
+	P_SPINLOCK(BUF_SPIN);
 
 	if (!(SSTABLE_STATE(bp) & BUF_DIRTY))
 	{
-//		V_SPINLOCK(BUF_SPIN);
+		V_SPINLOCK(BUF_SPIN);
 		return;
 	}
 	
@@ -180,7 +180,7 @@ bufawrite(BUF *bp)
 
 	SSTABLE_STATE(bp) &= ~(BUF_DIRTY|BUF_WRITING);
 
-//	V_SPINLOCK(BUF_SPIN);
+	V_SPINLOCK(BUF_SPIN);
 
 	
 	
@@ -215,7 +215,7 @@ bufsearch(TABINFO *tabinfo)
 		if (   (bufptr->bsstabid == sstabno) 
 		    && (bufptr->btabid = tabid))
 		{			
-//			V_SPINLOCK(BUF_SPIN);
+			V_SPINLOCK(BUF_SPIN);
 			
 			bufwait(bufptr);
 
@@ -259,7 +259,7 @@ bufhash(BUF *bp)
 			    && (bufptr->bsstabid == bp->bsstabid)
 			    && (bufptr->btabid == bp->btabid))
 			{				
-//				V_SPINLOCK(BUF_SPIN);
+				V_SPINLOCK(BUF_SPIN);
 
 				
 				Assert(0);
@@ -318,7 +318,7 @@ bufunhash(BUF *bp)
 			*lastptr = bufptr->bhash;
 			bufptr->bhash = NULL;
 			bufptr->bstat &= ~BUF_HASHED;
-//			V_SPINLOCK(BUF_SPIN);
+			V_SPINLOCK(BUF_SPIN);
 			return;
 		}		
 		
@@ -372,11 +372,11 @@ bufdestroy(BUF *bp)
 		SSTABLE_STATE(bp) &= ~BUF_DIRTY;
 	}
 
-//	P_SPINLOCK(BUF_SPIN);
+	P_SPINLOCK(BUF_SPIN);
 
 	buffree(bp);
 
-//	V_SPINLOCK(BUF_SPIN);
+	V_SPINLOCK(BUF_SPIN);
 }
 
 
@@ -386,7 +386,7 @@ bufpredirty(BUF *bp)
 retry:	
 	bufwait(bp);
 	
-//	P_SPINLOCK(BUF_SPIN);
+	P_SPINLOCK(BUF_SPIN);
 
 	if (!(SSTABLE_STATE(bp) & BUF_DIRTY))
 	{
@@ -394,11 +394,11 @@ retry:
 	}
 	else
 	{
-//		V_SPINLOCK(BUF_SPIN);
+		V_SPINLOCK(BUF_SPIN);
 		goto retry;
 	}
 
-//	V_SPINLOCK(BUF_SPIN);
+	V_SPINLOCK(BUF_SPIN);
 
 	return;
 }
@@ -409,14 +409,14 @@ bufdirty(BUF *bp)
 {	
 	Assert(SSTABLE_STATE(bp) & BUF_DIRTY);
 	
-//	P_SPINLOCK(BUF_SPIN);
+	P_SPINLOCK(BUF_SPIN);
 
 	if (SSTABLE_STATE(bp) & BUF_DIRTY)
 	{
 		bufdlink(BUF_GET_SSTAB(bp));
 	}
 
-//	V_SPINLOCK(BUF_SPIN);
+	V_SPINLOCK(BUF_SPIN);
 
 	return;
 }
