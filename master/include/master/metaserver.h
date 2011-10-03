@@ -21,7 +21,7 @@
 
 #ifndef METASERVER_H_
 #define METASERVER_H_
-
+#include <pthread.h>
 #include "global.h"
 #include "conf.h"
 #include "netconn.h"
@@ -103,14 +103,18 @@ typedef struct sstable
 
 typedef struct rg_prof
 {
-	char	rg_addr[RANGE_ADDR_MAX_LEN];
-	int	rg_port;
-	int	rg_stat;
-	int	rg_tablet_num;	
+	char		rg_addr[RANGE_ADDR_MAX_LEN];
+	int		rg_port;
+	int		rg_stat;
+	int		rg_tablet_num;	
+	int		pad;
+	pthread_t	tid;
 } RANGE_PROF;
 
 
 #define RANGER_IS_ONLINE	0x0001
+#define RANGER_IS_OFFLINE	0x0002
+
 
 typedef union infor_hdr
 {
@@ -155,6 +159,7 @@ typedef struct insert_meta
 	int		col_num;	
 	int		varcol_num;	
 	int		row_minlen;
+	int		pad;
 	
 } INSMETA;
 
@@ -230,7 +235,7 @@ typedef struct tab_info
 
 
 #define SVR_IDX_FILE_HDR	16
-#define SVR_IDX_FILE_BLK	(((sizeof(int)*2) + RANGE_PORT_MAX_LEN + RANGE_ADDR_MAX_LEN) * 1024)
+#define SVR_IDX_FILE_BLK	((sizeof(int)*2 + sizeof(pthread_t) + RANGE_PORT_MAX_LEN + RANGE_ADDR_MAX_LEN) * 1024)
 #define SVR_IDX_FILE_SIZE	(SVR_IDX_FILE_HDR + SVR_IDX_FILE_BLK)
 typedef	struct svr_idx_file
 {

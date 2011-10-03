@@ -212,7 +212,17 @@ retry:
 		write(rg_connection->connection_fd, send_rg_buf, 
 		        (resp->result_length + send_buf_size + RPC_MAGIC_MAX_LEN));
 
-		rg_resp = conn_recv_resp(rg_connection->connection_fd);
+		rg_resp = conn_recv_resp_abt(rg_connection->connection_fd);
+
+		if (rg_resp->status_code == RPC_UNAVAIL)
+		{
+			traceprint("\n need to re-get rg meta \n");
+			conn_destroy_resp(resp);
+			conn_destroy_resp(rg_resp);
+			rg_connection->status = CLOSED;
+			goto retry;
+
+		}
 
 		if (rg_resp->status_code == RPC_RETRY)
                 {

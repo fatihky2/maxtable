@@ -36,7 +36,7 @@ if(0)
 
 if (1)
 {
-		for(i = 6; i < 10; i++)
+		for(i = 6; i < 50000; i++)
 		{
 			memset(resp, 0, 256);
 			memset(cmd, 0, 256);
@@ -48,7 +48,7 @@ if (1)
 
 }
 
-if (1)
+if (0)
 {		
 		memset(resp, 0, 256);
 		memset(cmd, 0, 256);

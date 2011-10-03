@@ -538,8 +538,6 @@ exit:
 }
 
 
-
-
 char *
 rg_selrangetab(TREE *command, TABINFO *tabinfo)
 {
@@ -824,6 +822,39 @@ rg_fill_resd(TREE *command, COLINFO *colinfor, int totcol)
 
 }
 
+static int
+rg_heartbeat(char * req_buf)
+{
+	if (!strncasecmp(RPC_MASTER2RG_HEARTBEAT, req_buf, STRLEN(RPC_MASTER2RG_HEARTBEAT)))
+	{
+		//this is heart beat msg from meta server, just response.........
+		return TRUE;
+	}
+	else
+	{
+		return FALSE;
+	}
+
+}
+
+static int
+rg_rsync(char * req_buf)
+{
+	if (!strncasecmp(RPC_MASTER2RG_NOTIFY, req_buf, STRLEN(RPC_MASTER2RG_NOTIFY)))
+	{
+		//do ceph sync
+		//to be fixed here!!
+		return TRUE;
+	}
+	else
+	{
+		return FALSE;
+	}
+
+}
+
+
+
 char *
 rg_handler(char *req_buf)
 {
@@ -876,6 +907,24 @@ rg_handler(char *req_buf)
 		return rg_rebalancer((REBALANCE_DATA *)(req_buf - RPC_MAGIC_MAX_LEN));
 	}
 
+
+	//process with heart beat
+	if (rg_heartbeat(req_buf))
+	{		
+		//to be fixed here
+		//maybe more info will be added here in the future
+		resp = conn_build_resp_byte(RPC_SUCCESS, 0, NULL);
+
+		return resp;
+	}
+
+	//process with rsync notify
+	if (rg_rsync(req_buf))
+	{		
+		resp = conn_build_resp_byte(RPC_SUCCESS, 0, NULL);
+
+		return resp;
+	}
 	
 	volatile struct
 	{
