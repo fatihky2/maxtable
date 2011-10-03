@@ -2313,10 +2313,6 @@ meta_rebalancer(TREE *command)
 		MEMSET(tab_tabletschm_dir, TABLE_NAME_MAX_LEN);
 		MEMCPY(tab_tabletschm_dir, tab_dir, STRLEN(tab_dir));
 
-		str1_to_str2(tab_tabletschm_dir, '/', "sysobjects");
-		
-		OPEN(fd, tab_tabletschm_dir, (O_RDONLY));
-	
 		if (!(STAT(tab_dir, &st) == 0))
 		{
 			traceprint("Table %s is not exist.\n", tab_name);
