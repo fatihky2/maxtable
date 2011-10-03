@@ -46,21 +46,23 @@ struct table_hdr;
 
 
 
-#define ROW_MINLEN_IN_TABLETSCHM	(sizeof(ROWFMT) + sizeof(int) + TABLET_NAME_MAX_LEN + RANGE_ADDR_MAX_LEN)
+#define ROW_MINLEN_IN_TABLETSCHM	(sizeof(ROWFMT) + sizeof(int) + sizeof(int) + TABLET_NAME_MAX_LEN + RANGE_ADDR_MAX_LEN)
 
 #define TABLETSCHM_TABLETID_COLID_INROW		1
-#define TABLETSCHM_TABLETNAME_COLID_INROW	2
-#define TABLETSCHM_RGADDR_COLID_INROW		3
-#define TABLETSCHM_KEY_COLID_INROW		4
+#define	TABLETSCHM_RGPORT_COLID_INROW		2
+#define TABLETSCHM_TABLETNAME_COLID_INROW	3
+#define TABLETSCHM_RGADDR_COLID_INROW		4
+#define TABLETSCHM_KEY_COLID_INROW		5
 
 #define TABLETSCHM_TABLETID_COLOFF_INROW	(sizeof(ROWFMT))
-#define TABLETSCHM_TABLETNAME_COLOFF_INROW	(sizeof(ROWFMT) + sizeof(int))
-#define TABLETSCHM_RGADDR_COLOFF_INROW		(sizeof(ROWFMT) + sizeof(int) + TABLET_NAME_MAX_LEN)
+#define TABLETSCHM_RGPORT_COLOFF_INROW		(sizeof(ROWFMT) + sizeof(int))
+#define TABLETSCHM_TABLETNAME_COLOFF_INROW	(sizeof(ROWFMT) + sizeof(int) + sizeof(int)) 
+#define TABLETSCHM_RGADDR_COLOFF_INROW		(sizeof(ROWFMT) + sizeof(int) + sizeof(int) + TABLET_NAME_MAX_LEN)
 #define TABLETSCHM_KEY_COLOFF_INROW		(ROW_MINLEN_IN_TABLETSCHM + sizeof(int))
 
 
 void
-tablet_crt(TABLEHDR *tablehdr, char *tabledir, char *rg_addr, char *rp, int minlen);
+tablet_crt(TABLEHDR *tablehdr, char *tabledir, char *rg_addr, char *rp, int minlen, int port);
 
 int
 tablet_bld_row(char *sstab_rp, int sstab_rlen, char *tab_name, int tab_name_len,
@@ -78,7 +80,7 @@ tablet_del_row(TABLEHDR *tablehdr, int tabid, int sstabid, char *tablet_name, ch
 
 void 
 tablet_schm_bld_row(char *rp, int rlen, int tabletid, char *tabletname, char *rang_addr, 
-			char *keycol, int keycolen);
+			char *keycol, int keycolen, int port);
 
 void
 tablet_schm_ins_row(int tabid, int sstabid, char *systab, char *row, int tabletnum);
