@@ -41,7 +41,7 @@
 #define RPC_RBD_MAGIC		"rebalan"
 #define RPC_SELECTRANGE_MAGIC	"sel_rg"
 #define RPC_MASTER2RG_HEARTBEAT	"hb_rqst"
-#define RPC_RECOVERY 			"re_cov"
+#define RPC_RECOVERY 		"re_cov"
 #define RPC_MASTER2RG_NOTIFY	"rsync"
 
 
@@ -93,6 +93,8 @@ typedef struct rpcresp
 #define RPC_REQ_DROP_OP		0x0002
 #define RPC_REQ_REBALANCE_OP	0x0004
 #define RPC_REQ_SELECTRANGE_OP	0x0008
+#define RPC_REQ_M2RNOTIFY_OP	0x0010
+#define RPC_REQ_M2RHEARTBEAT_OP	0x0020
 
 
 char *

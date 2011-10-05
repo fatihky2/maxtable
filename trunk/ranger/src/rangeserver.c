@@ -909,8 +909,9 @@ rg_handler(char *req_buf)
 
 
 	//process with heart beat
-	if (rg_heartbeat(req_buf))
-	{		
+	if (req_op & RPC_REQ_M2RHEARTBEAT_OP)
+	{
+		Assert(rg_heartbeat(req_buf));
 		//to be fixed here
 		//maybe more info will be added here in the future
 		resp = conn_build_resp_byte(RPC_SUCCESS, 0, NULL);
@@ -919,8 +920,10 @@ rg_handler(char *req_buf)
 	}
 
 	//process with rsync notify
-	if (rg_rsync(req_buf))
-	{		
+	if (req_op & RPC_REQ_M2RNOTIFY_OP)
+	{
+		Assert(rg_rsync(req_buf));
+
 		resp = conn_build_resp_byte(RPC_SUCCESS, 0, NULL);
 
 		return resp;

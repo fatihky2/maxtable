@@ -328,7 +328,7 @@ conn_recv_resp(int sockfd)
 	int 		n;
 	RPCRESP		*resp;
 
-	buf = MEMALLOCHEAP(CONN_BUF_SIZE);
+	buf = malloc(CONN_BUF_SIZE);
 
 //	MEMSET(buf, CONN_BUF_SIZE);
 
@@ -346,7 +346,7 @@ conn_recv_resp(int sockfd)
 		resp = conn_build_resp(buf);
 	}
     
-	MEMFREEHEAP(buf);
+	free(buf);
 	return resp;
 }
 
@@ -432,6 +432,14 @@ conn_chk_reqmagic(char *str)
 	else if (!strncasecmp(RPC_SELECTRANGE_MAGIC, str, STRLEN(RPC_RBD_MAGIC)))
 	{
 		return RPC_REQ_SELECTRANGE_OP;
+	}
+	else if (!strncasecmp(RPC_MASTER2RG_NOTIFY, str, STRLEN(RPC_MASTER2RG_NOTIFY)))
+	{
+		return RPC_REQ_M2RNOTIFY_OP;
+	}
+	else if (!strncasecmp(RPC_MASTER2RG_HEARTBEAT, str, STRLEN(RPC_MASTER2RG_HEARTBEAT)))
+	{
+		return RPC_REQ_M2RHEARTBEAT_OP;
 	}
 		
 
