@@ -106,7 +106,7 @@ tablet_crt(TABLEHDR *tablehdr, char *tabledir, char *rg_addr, char *rp, int minl
 
 }
 
-void
+int
 tablet_ins_row(TABLEHDR *tablehdr, int tabid, int sstabid, char *tablet_name, char *rp, int minlen)
 {
 	LOCALTSS(tss);
@@ -115,8 +115,10 @@ tablet_ins_row(TABLEHDR *tablehdr, int tabid, int sstabid, char *tablet_name, ch
 	TABINFO 	tabinfo;
 	SINFO		sinfo;
 	BLK_ROWINFO	blk_rowinfo;
+	int		tablet_crt_new;
 
 
+	tablet_crt_new = FALSE;
 	MEMSET(&tabinfo, sizeof(TABINFO));
 	MEMSET(&sinfo, sizeof(SINFO));
 	MEMSET(&blk_rowinfo, sizeof(BLK_ROWINFO));
@@ -145,11 +147,14 @@ tablet_ins_row(TABLEHDR *tablehdr, int tabid, int sstabid, char *tablet_name, ch
 		RANGE_PROF *rg_prof;
 		rg_prof = rebalan_get_rg_prof_by_addr(tss->tcur_rgprof->rg_addr, tss->tcur_rgprof->rg_port);
 		(rg_prof->rg_tablet_num)++;
+		tablet_crt_new = TRUE;
 		
 		(tablehdr->tab_tablet)++;
 	}
 
 	tabinfo_pop();
+
+	return tablet_crt_new;
 }
 
 

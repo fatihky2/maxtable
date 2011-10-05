@@ -15,14 +15,14 @@ int main()
 	{
 		char resp[256], cmd[256];
 		int i, len;
-if(1)
+if(0)
 {
 		memset(resp, 0, 256);
 		sprintf(cmd, "create table gu(id1 varchar, id2 int, id3 varchar)");
 		cli_commit(connection, cmd, resp, &len);
 		printf("ret: %s\n", resp);
 		
-		for(i = 1; i < 20000; i++)
+		for(i = 1; i < 10000; i++)
 		{
 //			i += 2;
 			memset(resp, 0, 256);
@@ -34,9 +34,9 @@ if(1)
 
 }
 
-if (0)
+if (1)
 {
-		for(i = 6; i < 20000; i++)
+		for(i = 1; i < 10000; i++)
 		{
 			memset(resp, 0, 256);
 			memset(cmd, 0, 256);

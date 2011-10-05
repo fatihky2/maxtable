@@ -895,6 +895,8 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 
 		(rg_prof->rg_tablet_num)++;
 
+		meta_save_rginfo();
+
 		MEMFREEHEAP(sstab_rp);
 	}
 
@@ -1965,8 +1967,11 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 	tabletid = *(int *)row_locate_col(rp, TABLETSCHM_TABLETID_COLOFF_INROW, 
 					  ROW_MINLEN_IN_TABLETSCHM, &namelen);
 
-	tablet_ins_row(&tab_hdr, tab_hdr.tab_id, tabletid, tab_meta_dir, sstab_rp, 
-		       ROW_MINLEN_IN_TABLET);
+	if (tablet_ins_row(&tab_hdr, tab_hdr.tab_id, tabletid, tab_meta_dir, 
+			   sstab_rp, ROW_MINLEN_IN_TABLET))
+	{
+		meta_save_rginfo();
+	}
 
 	MEMFREEHEAP(sstab_rp);
 
@@ -2103,7 +2108,7 @@ meta_collect_rg(char * req_buf)
 
 		if(start_heartbeat)
 		{
-		//	meta_heartbeat_setup(rg_addr + i);
+			meta_heartbeat_setup(rg_addr + i);
 		}
 	}
 	else
@@ -2482,11 +2487,6 @@ meta_rebalancer(TREE *command)
 	
 exit:
 
-	if (tablet_schm_bp)
-	{
-		MEMFREEHEAP(tablet_schm_bp);
-	}
-
 	if (rbd)
 	{
 		MEMFREEHEAP(rbd);
@@ -2735,6 +2735,12 @@ void * meta_heartbeat(void *args)
 			goto finish;
 
 		}
+		else if (resp->status_code != RPC_SUCCESS)
+		{
+			traceprint("\n We got a non-success response. \n");
+                        conn_destroy_resp(resp);
+                        goto finish;
+		}
 		
 		//to be fix here
 		//maybe more info will be added in hearbeat msg,  such as overload monitor
@@ -2821,7 +2827,7 @@ meta_transfer_target(char *target_ip, int * target_port)
 		return -1;
 	}
 	
-	for(j = i + 1; j < temp_store->nextrno; j++)
+	for(j = i; j < temp_store->nextrno; j++)
 	{
 		if((rg_prof[j].rg_tablet_num < min_tablet)&&(rg_prof[j].rg_stat == RANGER_IS_ONLINE))
 		{
@@ -2881,10 +2887,10 @@ static void
 meta_tablet_update(char * table_name, char * rg_addr, int rg_port)
 {
 	char		tab_dir[256];
-	int 	fd;
+	int 		fd;
 	char		tab_tabletschm_dir[TABLE_NAME_MAX_LEN];
 	char		*tablet_schm_bp;
-	char	target_ip[RANGE_ADDR_MAX_LEN];
+	char		target_ip[RANGE_ADDR_MAX_LEN];
 	int		target_port;
 	int		target_index;
 	
@@ -2899,7 +2905,8 @@ meta_tablet_update(char * table_name, char * rg_addr, int rg_port)
 		traceprint("Table %s is not exist!\n", table_name);
 		goto exit;
 	}
-	
+
+	MEMSET(target_ip, RANGE_ADDR_MAX_LEN);	
 	target_index = meta_transfer_target(target_ip, &target_port);
 
 	int notify_ret = meta_transfer_notify(target_ip, target_port);
@@ -3019,11 +3026,9 @@ meta_tablet_update(char * table_name, char * rg_addr, int rg_port)
 	}
 		
 exit:
+
+	return;
 	
-	if (tablet_schm_bp)
-	{
-		MEMFREEHEAP(tablet_schm_bp);
-	}
 }
 
 
