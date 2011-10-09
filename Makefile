@@ -4,6 +4,8 @@ CPP		= g++ -g -Wall
 #CPP		= g++ -Wall
 AR		= ar cr
 CFLAGS		= -I./common/include/ -I./client/include -I./master/include -I./ranger/include -I./interface/include -I./service/include -lpthread
+KFSFLAG		= -I/home/tnsoft/source/googlecode/kosmosfs/trunk/src/cc/ -L/home/tnsoft/source/googlecode/kosmosfs/trunk/src/cc -L/home/tnsoft/source/googlecode/kosmosfs/trunk/build/src/cc/libkfsClient -lkfsClient -lboost_regex
+
 COMMON_SRC	= common/src/*.c
 REGION_SRC	= ranger/src/*.c
 MASTER_SRC	= master/src/*.c
@@ -25,15 +27,21 @@ all: client master ranger memTest benchmark sample client_lib
 %.o : %.cpp
 	$(CPP) -o $@ -c $< $(CFLAGS)
 
-client: ${COMMON_SRC} ${CLI_SRC}
-	$(CC) $(CFLAGS) ${COMMON_SRC} ${CLI_SRC} -D MEMMGR_TEST -D MAXTABLE_UNIT_TEST -o startClient
-	$(CC) $(CFLAGS) ${COMMON_SRC} ${CLI_SRC} -D MEMMGR_TEST -o imql
+kfsfacer_o: dfsfacer/src/kfsfacer.cc 
+	$(CPP) -I./dfsfacer/include/ $(KFSFLAG) -c dfsfacer/src/kfsfacer.cc
 
+kfsfacer_a: kfsfacer.o
+	$(AR) kfsfacer.a kfsfacer.o 
+	
 master: ${COMMON_SRC} ${MASTER_SRC}
-	$(CC) $(CFLAGS) ${COMMON_SRC} ${MASTER_SRC} -D MEMMGR_TEST -D MAXTABLE_BENCH_TEST -o startMaster
+	$(CC) $(CFLAGS) $(KFSFLAG) ${COMMON_SRC} ${MASTER_SRC} -L. kfsfacer.a -lstdc++ -D MEMMGR_TEST -D MAXTABLE_BENCH_TEST -o startMaster
 
 ranger: ${COMMON_SRC} ${REGION_SRC}
-	$(CC) $(CFLAGS) ${COMMON_SRC} ${REGION_SRC} -D MEMMGR_TEST -D MAXTABLE_BENCH_TEST -o startRanger
+	$(CC) $(CFLAGS) $(KFSFLAG) ${COMMON_SRC} ${REGION_SRC} -L. kfsfacer.a -lstdc++ -D MEMMGR_TEST -D MAXTABLE_BENCH_TEST -o startRanger
+
+client: ${COMMON_SRC} ${CLI_SRC}
+	$(CC) $(CFLAGS) $(KFSFLAG) ${COMMON_SRC} ${CLI_SRC} -L. kfsfacer.a -lstdc++ -D MEMMGR_TEST -D MAXTABLE_UNIT_TEST -o startClient
+	$(CC) $(CFLAGS) $(KFSFLAG) ${COMMON_SRC} ${CLI_SRC} -L. kfsfacer.a -lstdc++ -D MEMMGR_TEST -o imql
 	
 memTest: ${COMMON_SRC}
 	$(CC) $(CFLAGS) ${COMMON_SRC} -D MEMMGR_UNIT_TEST -o memTest
@@ -42,7 +50,7 @@ benchmark: ${COMMON_SRC} ${INTERFACE_SRC}
 	$(CC) $(CFLAGS) ${COMMON_SRC} ${INTERFACE_SRC} -D MAXTABLE_BENCH_TEST -o benchmark 
 	
 sample: ${COMMON_SRC} ${INTERFACE_SRC}
-	$(CC) $(CFLAGS) ${COMMON_SRC} ${INTERFACE_SRC} -D MAXTABLE_SAMPLE_TEST -o sample
+	$(CC) $(CFLAGS) $(KFSFLAG) ${COMMON_SRC} ${INTERFACE_SRC} -L. kfsfacer.a -lstdc++ -D MAXTABLE_SAMPLE_TEST -o sample
         
 service: ${LIB_OBJS_C} ${LIB_OBJS_CPP}
 	$(AR) libservice.a ${LIB_OBJS_C} ${LIB_OBJS_CPP}
@@ -54,4 +62,4 @@ client_lib: ${LIB_OBJS_C}
 	$(CC) -shared -fPIC -o libclient.so ${LIB_OBJS_C}
 
 clean: 
-	rm -rf startClient startMaster startRanger imql memTest benchmark sample libservice.a ${LIB_OBJS_C} ${LIB_OBJS_CPP} libclient.so
+	rm -rf startClient startMaster startRanger imql memTest benchmark sample libservice.a ${LIB_OBJS_C} ${LIB_OBJS_CPP} libclient.so kfsfacer.o kfsfacer.a

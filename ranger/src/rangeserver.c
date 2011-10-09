@@ -51,12 +51,13 @@
 
 extern TSS	*Tss;
 extern KERNEL	*Kernel;
+extern	char	Kfsserver[32];
+extern	int	Kfsport;
 
-#define DEFAULT_REGION_FLUSH_CHECK_INTERVAL 600 //10min
 
 #ifdef MAXTABLE_BENCH_TEST
 
-#define MT_RANGE_TABLE   "./rg_table"
+#define MT_RANGE_TABLE   "/rg_table"
 
 #else
 
@@ -115,7 +116,7 @@ rg_droptab(TREE *command)
 	
 	str1_to_str2(tab_dir, '/', tab_name);
 
-	if (STAT(tab_dir, &st) != 0)
+	if (!EXIST(tab_dir))
 	{
 		goto exit;		
 	}
@@ -186,7 +187,7 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 	
 	str1_to_str2(tab_dir, '/', tab_name);
 
-	if (STAT(tab_dir, &st) != 0)
+	if (!EXIST(tab_dir))
 	{
 		MKDIR(status, tab_dir, 0755);
 
@@ -208,7 +209,7 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 	MEMCPY(ins_meta->sstab_name, tab_dir, STRLEN(tab_dir));
 
 		
-	if (STAT(tab_dir, &st) != 0)
+	if (!EXIST(tab_dir))
 	{
 		ins_meta->status |= INS_META_1ST;
 	}
@@ -405,7 +406,7 @@ rg_seldeltab(TREE *command, TABINFO *tabinfo)
 	
 	str1_to_str2(tab_dir, '/', tab_name);
 
-	if (STAT(tab_dir, &st) != 0)
+	if (!EXIST(tab_dir))
 	{
 		MKDIR(status, tab_dir, 0755);
 
@@ -426,7 +427,7 @@ rg_seldeltab(TREE *command, TABINFO *tabinfo)
 	MEMSET(ins_meta->sstab_name, SSTABLE_NAME_MAX_LEN);
 	MEMCPY(ins_meta->sstab_name, tab_dir, STRLEN(tab_dir));
 
-	if (STAT(tab_dir, &st) != 0)
+	if (!EXIST(tab_dir))
 	{
 		goto exit; 
 	}
@@ -579,7 +580,7 @@ rg_selrangetab(TREE *command, TABINFO *tabinfo)
 	
 	str1_to_str2(tab_dir, '/', tab_name);
 
-	if (STAT(tab_dir, &st) != 0)
+	if (!EXIST(tab_dir))
 	{
 		MKDIR(status, tab_dir, 0755);
 
@@ -600,7 +601,7 @@ rg_selrangetab(TREE *command, TABINFO *tabinfo)
 	MEMSET(ins_meta->sstab_name, SSTABLE_NAME_MAX_LEN);
 	MEMCPY(ins_meta->sstab_name, tab_dir, STRLEN(tab_dir));
 
-	if (STAT(tab_dir, &st) != 0)
+	if (!EXIST(tab_dir))
 	{
 		goto exit; 
 	}
@@ -1124,6 +1125,7 @@ rg_setup(char *conf_path)
 	
 	conf_get_value_by_key(Range_infor->rg_meta_ip, conf_path, CONF_META_IP);
 	conf_get_value_by_key(metaport, conf_path, CONF_META_PORT);
+
 	Range_infor->rg_meta_port = m_atoi(metaport, STRLEN(metaport));
 
 	rg_port = m_atoi(port, STRLEN(port));
@@ -1135,11 +1137,18 @@ rg_setup(char *conf_path)
 	{
 		Range_infor->port = RANGE_DEFAULT_PORT;
 	}
+
+	MEMSET(Kfsserver, 32);
+	conf_get_value_by_key(Kfsserver, conf_path, CONF_KFS_IP);
+	conf_get_value_by_key(port, conf_path, CONF_KFS_PORT);
+
+	Kfsport = m_atoi(port, STRLEN(port));
 	
-	if (STAT(MT_RANGE_TABLE, &st) != 0)
+	if (!EXIST(MT_RANGE_TABLE))
 	{
 		MKDIR(status, MT_RANGE_TABLE, 0755);
-	}	
+	}
+	
 
 	rg_regist();
 	
@@ -1200,7 +1209,7 @@ rg_rebalan_process_sender(REBALANCE_DATA * rbd, char *rg_addr, int port)
 	
 	sockfd = conn_open(rg_addr, port);
 
-	status = WRITE(sockfd, rbd, sizeof(REBALANCE_DATA));
+	status = write(sockfd, rbd, sizeof(REBALANCE_DATA));
 
 	Assert (status == sizeof(REBALANCE_DATA));
 
@@ -1239,7 +1248,7 @@ rg_rebalancer(REBALANCE_DATA * rbd)
 	
 	str1_to_str2(tab_dir, '/', rbd->rbd_tabname);
 
-	if (STAT(tab_dir, &st) != 0)
+	if (!EXIST(tab_dir))
 	{
 		MKDIR(status, tab_dir, 0755);
 
@@ -1348,7 +1357,7 @@ rg_rebalancer(REBALANCE_DATA * rbd)
 		MEMCPY(tab_sstab_dir, tab_dir, STRLEN(tab_dir));
 		str1_to_str2(tab_sstab_dir, '/', rbd->rbd_sstabname);	
 
-		Assert(STAT(tab_sstab_dir, &st) != 0);
+		Assert(!EXIST(tab_sstab_dir));
 		
 		OPEN(fd1, tab_sstab_dir, (O_CREAT|O_WRONLY|O_TRUNC));
 		

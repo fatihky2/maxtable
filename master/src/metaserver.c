@@ -47,6 +47,8 @@
 #include "thread.h"
 
 extern	TSS	*Tss;
+extern	char	Kfsserver[32];
+extern	int	Kfsport;
 
 #define SSTAB_FREE	0
 #define SSTAB_USED	1
@@ -84,9 +86,9 @@ struct stat st;
 
 #ifdef MAXTABLE_BENCH_TEST
 
-#define MT_META_TABLE   "./meta_table"
-#define MT_META_REGION  "./rg_server"
-#define MT_META_INDEX   "./index"	
+#define MT_META_TABLE   "/meta_table"
+#define MT_META_REGION  "/rg_server"
+#define MT_META_INDEX   "/index"	
 
 #else
 
@@ -146,7 +148,14 @@ meta_server_setup(char *conf_path)
 		Master_infor->port = META_DEFAULT_PORT;
 	}
 
-	if (STAT(MT_META_TABLE, &st) != 0)
+	
+	MEMSET(Kfsserver, 32);
+	conf_get_value_by_key(Kfsserver, conf_path, CONF_KFS_IP);
+	conf_get_value_by_key(port, conf_path, CONF_KFS_PORT);
+
+	Kfsport = m_atoi(port, STRLEN(port));
+
+	if (!EXIST(MT_META_TABLE))
 	{
 		MKDIR(status, MT_META_TABLE, 0755);
 	}
@@ -156,7 +165,7 @@ meta_server_setup(char *conf_path)
 		;
 	}
 
-	if (STAT(MT_META_REGION, &st) != 0)
+	if (!EXIST(MT_META_REGION))
 	{
 		MKDIR(status, MT_META_REGION, 0755); 
 
@@ -219,7 +228,7 @@ meta_server_setup(char *conf_path)
 		
 	}
 
-	if (STAT(MT_META_INDEX, &st) != 0)
+	if (!EXIST(MT_META_INDEX))
 	{
 		MKDIR(status, MT_META_INDEX, 0755); 
 	}
@@ -308,6 +317,7 @@ meta_crtab(TREE *command)
 	COLINFO		col_info;
 	char 		*resp;
 	SVR_IDX_FILE	*tablet_store;
+	SSTAB_INFOR	*sstab_map_tmp;
 
 
 	Assert(command);
@@ -316,14 +326,16 @@ meta_crtab(TREE *command)
 	resp = NULL;
 	tab_name = command->sym.command.tabname;
 	tab_name_len = command->sym.command.tabname_len;
-
+	tablet_store = NULL;
+	sstab_map_tmp = NULL;
+	
 	
 	MEMSET(tab_dir, 256);
 	MEMSET(tab_dir1, 256);
 	MEMCPY(tab_dir, MT_META_TABLE, STRLEN(MT_META_TABLE));
 	str1_to_str2(tab_dir, '/', tab_name);
 
-	if (STAT(tab_dir, &st) != 0)
+	if (!EXIST(tab_dir))
 	{
 		MKDIR(status, tab_dir, 0755);        
 
@@ -454,10 +466,7 @@ meta_crtab(TREE *command)
 
 	MEMFREEHEAP(tab_hdr);
 
-	CLOSE(fd);
-	
-
-	SSTAB_INFOR	*sstab_map_tmp;
+	CLOSE(fd);	
 	
 	
 	sstab_map_tmp = (SSTAB_INFOR *)malloc(SSTAB_MAP_SIZE);
@@ -485,7 +494,7 @@ meta_crtab(TREE *command)
 
 	CLOSE(fd);
 
-	free(sstab_map_tmp);
+	
 
 	
 	tablet_store = (SVR_IDX_FILE *)MEMALLOCHEAP(sizeof(SVR_IDX_FILE));
@@ -512,11 +521,19 @@ meta_crtab(TREE *command)
 	CLOSE(fd);
 	
 
-	MEMFREEHEAP(tablet_store);
-	
 	rtn_stat = TRUE;
 	
 exit:
+	if (sstab_map_tmp != NULL)
+	{
+		free(sstab_map_tmp);
+	}
+	
+	if (tablet_store != NULL)
+	{
+		MEMFREEHEAP(tablet_store);
+	}
+	
 	if (rtn_stat)
 	{
 		resp = conn_build_resp_byte(RPC_SUCCESS, 0, NULL);
@@ -624,7 +641,7 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
 
-	if (STAT(tab_dir, &st) != 0)
+	if (!EXIST(tab_dir))
 	{
 		traceprint("Table %s is not exist!\n", tab_name);
 		goto exit;
@@ -900,7 +917,28 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 		MEMFREEHEAP(sstab_rp);
 	}
 
-	LSEEK(fd1, 0, SEEK_SET);
+//	LSEEK(fd1, 0);
+
+	CLOSE(fd1);
+
+	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
+	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
+
+	if (!EXIST(tab_dir))
+	{
+		traceprint("Table %s is not exist!\n", tab_name);
+		goto exit;
+	}
+	
+	str1_to_str2(tab_meta_dir, '/', "sysobjects");
+
+
+	OPEN(fd1, tab_meta_dir, (O_RDWR));
+	
+	if (fd1 < 0)
+	{
+		goto exit;
+	}
 	
 	status = WRITE(fd1, &tab_hdr, sizeof(TABLEHDR));
 
@@ -1054,9 +1092,9 @@ meta_droptab(TREE *command)
 	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
 
-	Assert(STAT(tab_dir, &st) == 0);
+	Assert(EXIST);
 
-	if (STAT(tab_dir, &st) != 0)
+	if (!EXIST(tab_dir))
 	{
 		traceprint("Table %s is not exist!\n", tab_name);
 		goto exit;
@@ -1092,7 +1130,30 @@ meta_droptab(TREE *command)
 		
 	tab_hdr.tab_stat |= TAB_DROPPED;
 	
-	LSEEK(fd1, 0, SEEK_SET);
+//	LSEEK(fd1, 0);
+
+	CLOSE(fd1);
+
+	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
+	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
+
+	Assert(EXIST);
+
+	if (!EXIST(tab_dir))
+	{
+		traceprint("Table %s is not exist!\n", tab_name);
+		goto exit;
+	}
+	
+	str1_to_str2(tab_meta_dir, '/', "sysobjects");
+
+
+	OPEN(fd1, tab_meta_dir, (O_RDWR));
+	
+	if (fd1 < 0)
+	{
+		goto exit;
+	}
 	
 	status = WRITE(fd1, &tab_hdr, sizeof(TABLEHDR));
 
@@ -1201,9 +1262,9 @@ meta_removtab(TREE *command)
 	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
 
-	Assert(STAT(tab_dir, &st) == 0);
+	Assert(EXIST(tab_dir));
 
-	if (STAT(tab_dir, &st) != 0)
+	if (!EXIST(tab_dir))
 	{
 		traceprint("Table %s is not exist!\n", tab_name);
 		goto exit;
@@ -1314,7 +1375,7 @@ meta_seldeltab(TREE *command, TABINFO *tabinfo)
 	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
 
-	if (!(STAT(tab_dir, &st) == 0))
+	if (!EXIST(tab_dir))
 	{
 		traceprint("Table %s is not exist.\n", tab_name);
 		goto exit;
@@ -1577,7 +1638,7 @@ meta_selrangetab(TREE *command, TABINFO *tabinfo)
 	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
 
-	if (!(STAT(tab_dir, &st) == 0))
+	if (!EXIST(tab_dir))
 	{
 		traceprint("Table %s is not exist.\n", tab_name);
 		goto exit;
@@ -1846,9 +1907,9 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
 
-	Assert(STAT(tab_dir, &st) == 0);
+	Assert(EXIST(tab_dir));
 
-	if (STAT(tab_dir, &st) != 0)
+	if (!EXIST(tab_dir))
 	{
 		traceprint("Table %s is not exist!\n", tab_name);
 		goto exit;
@@ -1978,8 +2039,29 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 	
 	(tab_hdr.tab_sstab)++;
 	
-	LSEEK(fd1, 0, SEEK_SET);
+//	LSEEK(fd1, 0);
+	CLOSE(fd1);
+
+	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
+	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
+
+	Assert(EXIST(tab_dir));
+
+	if (!EXIST(tab_dir))
+	{
+		traceprint("Table %s is not exist!\n", tab_name);
+		goto exit;
+	}
 	
+	str1_to_str2(tab_meta_dir, '/', "sysobjects");
+
+
+	OPEN(fd1, tab_meta_dir, (O_RDWR));
+	
+	if (fd1 < 0)
+	{
+		goto exit;
+	}	
 	
 	status = WRITE(fd1, &tab_hdr, sizeof(TABLEHDR));
 
@@ -2299,7 +2381,7 @@ meta_rebalancer(TREE *command)
 	MEMCPY(tab_dir, MT_META_TABLE, STRLEN(MT_META_TABLE));
 	str1_to_str2(tab_dir, '/', tab_name);
 
-	if (STAT(tab_dir, &st) != 0)
+	if (!EXIST(tab_dir))
 	{		
 		traceprint("Table %s is not exist!\n", tab_name);
 		goto exit;
@@ -2318,7 +2400,7 @@ meta_rebalancer(TREE *command)
 		MEMSET(tab_tabletschm_dir, TABLE_NAME_MAX_LEN);
 		MEMCPY(tab_tabletschm_dir, tab_dir, STRLEN(tab_dir));
 
-		if (!(STAT(tab_dir, &st) == 0))
+		if (!EXIST(tab_dir))
 		{
 			traceprint("Table %s is not exist.\n", tab_name);
 			goto exit;
@@ -2562,7 +2644,8 @@ parse_again:
 	if(ex_handle(EX_ANY, yxue_handler))
 	{
 		tabinfo = copy.tabinfo;
-		
+
+		resp = conn_build_resp_byte(RPC_FAIL, 0, NULL);
 		goto close;
 	}
 
@@ -2900,7 +2983,7 @@ meta_tablet_update(char * table_name, char * rg_addr, int rg_port)
 	MEMCPY(tab_dir, MT_META_TABLE, STRLEN(MT_META_TABLE));
 	str1_to_str2(tab_dir, '/', table_name);
 	
-	if (STAT(tab_dir, &st) != 0)
+	if (!EXIST(tab_dir))
 	{		
 		traceprint("Table %s is not exist!\n", table_name);
 		goto exit;
@@ -3044,7 +3127,7 @@ meta_update(char * rg_addr, int rg_port)
 	MEMSET(tab_dir, 256);
 	MEMCPY(tab_dir, MT_META_TABLE, STRLEN(MT_META_TABLE));
 	
-	if (STAT(tab_dir, &st) != 0)
+	if (!EXIST(tab_dir))
 	{		
 		traceprint("Table dir %s is not exist!\n", tab_dir);
 		goto exit;

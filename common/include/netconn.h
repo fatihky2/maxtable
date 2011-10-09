@@ -46,15 +46,8 @@
 
 
 
-#define RECVIO_TIMEOUT			5
-#define HEARTBEAT_INTERVAL		5
-
-
-#define CONF_META_IP    "metaserver"
-#define CONF_META_PORT  "metaport"
-#define	CONF_RG_IP	"rangerserver"
-#define CONF_RG_PORT	"rangerport"
-
+#define RECVIO_TIMEOUT			30
+#define HEARTBEAT_INTERVAL		30
 
 
 #define CONN_BUF_SIZE (1024 * 1024)
