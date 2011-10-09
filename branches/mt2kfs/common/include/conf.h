@@ -28,6 +28,13 @@
 
 #define CONF_REGION_LIST_KEY "rangers"
 
+#define CONF_META_IP    "metaserver"
+#define CONF_META_PORT  "metaport"
+#define	CONF_RG_IP	"rangerserver"
+#define CONF_RG_PORT	"rangerport"
+#define CONF_KFS_IP	"kfsserver"
+#define CONF_KFS_PORT	"kfsport"
+
 typedef struct reginfor
 {
 	char*		conn;
