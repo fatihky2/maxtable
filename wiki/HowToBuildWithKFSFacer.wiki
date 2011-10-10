@@ -4,6 +4,10 @@
 {{{
 svn checkout https://maxtable.googlecode.com/svn/branches/mt2kfs maxtable
 }}}
+2. Change the Makefile with your KFS's directory of include and library
+{{{
+KFSFLAG = -I{YOUR_KFS_INCLUDE} -L{YOUR_KFS_LIBRARY} -L{YOUR_KFS_LIBRARY} -lkfsClient -lboost_regex
+}}}
 2. BUild the library.
 {{{
 cd maxtable
