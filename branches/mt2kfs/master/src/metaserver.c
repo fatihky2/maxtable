@@ -2824,7 +2824,8 @@ void * meta_heartbeat(void *args)
                         conn_destroy_resp(resp);
                         goto finish;
 		}
-		
+
+		conn_destroy_resp(resp);		
 		//to be fix here
 		//maybe more info will be added in hearbeat msg,  such as overload monitor
 		//so need to add some process routine on resp here in the future
