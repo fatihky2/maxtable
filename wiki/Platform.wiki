@@ -1,0 +1,3 @@
+#summary List for the supported platforms
+
+  * Linux 2.6.38-8-generic x86_64 （Ubuntu 11.04）
