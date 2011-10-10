@@ -15,13 +15,15 @@ int main()
 	{
 		char resp[256], cmd[256];
 		int i, len;
-if(0)
+if(1)
 {
+		/* Create Table */
 		memset(resp, 0, 256);
 		sprintf(cmd, "create table gu(id1 varchar, id2 int, id3 varchar)");
 		cli_commit(connection, cmd, resp, &len);
 		printf("ret: %s\n", resp);
 		
+		/* Insert 10000 data rows into table */
 		for(i = 1; i < 10000; i++)
 		{
 //			i += 2;
@@ -36,6 +38,7 @@ if(0)
 
 if (1)
 {
+		/* Select datas from table */
 		for(i = 1; i < 10000; i++)
 		{
 			memset(resp, 0, 256);
@@ -60,6 +63,7 @@ if (0)
 	
 if (0)
 {
+		/* Delete data in the table */
 		for(i = 0; i < 10; i++)
 		{
 			memset(resp, 0, 256);
