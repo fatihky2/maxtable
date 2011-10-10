@@ -27,6 +27,10 @@ vim master.conf
 vim ranger.conf
 }}}
   * Boot KFS if you use the KFS as the back-end storage engine
+{{{
+./metaserver metaconfig
+./chunkserver chunkconfig
+}}}
   * Boot Master
 {{{
 ./starMaster
