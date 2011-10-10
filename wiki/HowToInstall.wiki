@@ -26,6 +26,7 @@ vim cli.conf
 vim master.conf
 vim ranger.conf
 }}}
+  * Boot KFS if you use the KFS as the back-end storage engine
   * Boot Master
 {{{
 ./starMaster
