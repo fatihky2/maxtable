@@ -1,24 +1,18 @@
 #summary How to deploy MaxTable servers on a cluster.
 
 ==Defining Machine Configuration for MaxTable==
-  * Mount the DFS to your local file system
+Maxtable can use the local system or Kosmos file system (KFS) as its back-end storage engine. If using the KFS as the back-end storage, you need to build the library for the KFS and link it into the binary (startMaster and startRanger).
+
+  * Build library including the client API of DFS 
 {{{
-mount /dev/rbd0 /mnt/metaserver
-mount /dev/rbd1 /mnt/ranger
+Please check the Wiki HowToBuildWithKFSFacer
 }}}
-  * Or mount the local FS to the directory /mnt
-{{{
-mount /dev/sda /mnt/metaserver
-mount /dev/sdb /mnt/ranger
-}}}
-  * Configure for the client in the file config/cli.conf
-{{{
-metaserver=192.168.171.152
-metaport=1959
-}}}
+
   * Configure for the Master server in the file config/master.conf
 {{{
 port=1959
+kfsserver=192.168.171.151
+kfsport=20000
 }}}
   * Configure for the Ranger server in the file config/region.conf
 {{{
@@ -26,4 +20,12 @@ metaserver=192.168.171.152
 metaport=1959
 rangerserver=192.168.171.153
 rangerport=1949
+kfsserver=192.168.171.151
+kfsport=20000
+}}}
+
+  * Configure for the client in the file config/cli.conf
+{{{
+metaserver=192.168.171.152
+metaport=1959
 }}}
