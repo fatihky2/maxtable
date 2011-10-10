@@ -308,12 +308,15 @@ meta_crtab(TREE *command)
 	COLINFO		col_info;
 	char 		*resp;
 	SVR_IDX_FILE	*tablet_store;
+	SSTAB_INFOR	*sstab_map_tmp;
 
 
 	Assert(command);
 	
 	rtn_stat = FALSE;
 	resp = NULL;
+	tablet_store = NULL;
+	sstab_map_tmp = NULL;
 	tab_name = command->sym.command.tabname;
 	tab_name_len = command->sym.command.tabname_len;
 
@@ -457,9 +460,6 @@ meta_crtab(TREE *command)
 	CLOSE(fd);
 	
 
-	SSTAB_INFOR	*sstab_map_tmp;
-	
-	
 	sstab_map_tmp = (SSTAB_INFOR *)malloc(SSTAB_MAP_SIZE);
 
 	
@@ -485,8 +485,6 @@ meta_crtab(TREE *command)
 
 	CLOSE(fd);
 
-	free(sstab_map_tmp);
-
 	
 	tablet_store = (SVR_IDX_FILE *)MEMALLOCHEAP(sizeof(SVR_IDX_FILE));
 
@@ -511,12 +509,19 @@ meta_crtab(TREE *command)
 
 	CLOSE(fd);
 	
-
-	MEMFREEHEAP(tablet_store);
-	
 	rtn_stat = TRUE;
 	
 exit:
+	if (sstab_map_tmp != NULL)
+	{
+		free(sstab_map_tmp);
+	}
+
+	if (tablet_store != NULL)
+	{
+		MEMFREEHEAP(tablet_store);
+	}
+
 	if (rtn_stat)
 	{
 		resp = conn_build_resp_byte(RPC_SUCCESS, 0, NULL);
@@ -2562,7 +2567,8 @@ parse_again:
 	if(ex_handle(EX_ANY, yxue_handler))
 	{
 		tabinfo = copy.tabinfo;
-		
+
+		resp = conn_build_resp_byte(RPC_FAIL, 0, NULL);	
 		goto close;
 	}
 
