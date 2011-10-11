@@ -77,6 +77,8 @@ void cli_exit(conn * connection)
 		MEMFREEHEAP(connection->rg_list[i]);
 	}
 	MEMFREEHEAP(connection);
+
+	mem_free_alloc_regions();
 }
 
 /*

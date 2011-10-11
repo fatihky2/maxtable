@@ -232,6 +232,9 @@ mem_os_malloc(unsigned long size);
 int
 mem_init_alloc_regions();
 
+int
+mem_free_alloc_regions();
+
 MEMPOOL *
 mp_frag_crt(size_t minsize, size_t maxsize);
 

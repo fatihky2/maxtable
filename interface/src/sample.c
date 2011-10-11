@@ -22,7 +22,7 @@ if(0)
 		cli_commit(connection, cmd, resp, &len);
 		printf("ret: %s\n", resp);
 		
-		for(i = 1; i < 10000; i++)
+		for(i = 1; i < 20000; i++)
 		{
 //			i += 2;
 			memset(resp, 0, 256);
@@ -34,9 +34,9 @@ if(0)
 
 }
 
-if (1)
+if (0)
 {
-		for(i = 1; i < 10000; i++)
+		for(i = 1; i < 20000; i++)
 		{
 			memset(resp, 0, 256);
 			memset(cmd, 0, 256);
