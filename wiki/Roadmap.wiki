@@ -1,0 +1,32 @@
+#summary Maxtable development roadmap and release schedule
+
+== 1.2 ==
+_Target Release Date: November 31st 2011_
+        
+        * Enhance network processing mechanism
+
+== 1.3.6 ==
+_Target Release Date: December 15th 2011_
+
+        * Metadata Consistency Checking (MCC)
+        * Enhance error handling mechanism
+
+== 1.6 ==
+_Target Release Date: January 31st 2012_
+
+        * Introduce the object mempool for the network processing
+
+This point is feature freeze with respect to 2.0 for this software. It will go into the bug fix and document writing for the release of 2.0.
+
+== 2.0 ==
+
+_Target Release Date: February 13 2012_
+
+First major release. 
+
+== 2.6 ==
+
+_Target Release Date: TBD_
+
+        * Compaction command      
+        * Data Compression 
