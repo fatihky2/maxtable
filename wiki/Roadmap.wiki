@@ -22,7 +22,7 @@ This point is feature freeze with respect to 2.0 for this software. It will go i
 
 _Target Release Date: February 13 2012_
 
-First major release. 
+Code freeze for 2.0 and first major release. 
 
 == 2.6 ==
 
