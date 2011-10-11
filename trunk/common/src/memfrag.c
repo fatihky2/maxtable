@@ -31,6 +31,7 @@ KERNEL *Kernel;
 MEMPOOL *Globle_mp;	
 
 
+#define	MEMFRAG_INIT_SIZE	(1024 * 1024)
 
 static int
 mp_frag_grow(MEMPOOL * mp, size_t grow_size);
@@ -65,7 +66,7 @@ mem_os_malloc(unsigned long size)
 	Assert(start_addr != NULL);
 
 	
-	if ((long) start_addr % MY_MEMPAGESIZE)
+	if (0 && ((long) start_addr % MY_MEMPAGESIZE))
 	{
 		start_addr = (start_addr + MY_MEMPAGESIZE) -
 			    ((long) start_addr % MY_MEMPAGESIZE);
@@ -114,7 +115,7 @@ mem_init_alloc_regions()
 	size -= sizeof(MEMPLIST);
 	
 	
-	Kernel->ke_mp_frag = mp_frag_crt(size, MAXSIZE_FRAGPOOL);
+	Kernel->ke_mp_frag = mp_frag_crt(MEMFRAG_INIT_SIZE, MAXSIZE_FRAGPOOL);
 
 	
 	mp_list_insert(Kernel->ke_mp_frag, MEMPOOL_FRAG);
@@ -128,6 +129,30 @@ mem_init_alloc_regions()
         Kernel->ke_buf_objpool = (void *)mp_obj_crt(sizeof(BUF), 
 						TSS_MIN_ITEMS, TSS_MAX_ITEMS);
 	mp_list_insert((MEMOBJECT *)Kernel->ke_buf_objpool, MEMPOOL_OBJECT);
+
+	return TRUE;
+}
+
+
+int
+mem_free_alloc_regions()
+{
+	if (Kernel->ke_mp_frag)
+	{
+		mp_frag_destroy(Kernel->ke_mp_frag);
+	}
+
+	if (Kernel->ke_tss_objpool)
+	{
+		mp_obj_destroy(Kernel->ke_tss_objpool);
+	}
+
+	if (Kernel->ke_buf_objpool)
+	{
+		mp_obj_destroy(Kernel->ke_buf_objpool);
+	}
+
+	free (Kernel);
 
 	return TRUE;
 }
@@ -168,8 +193,7 @@ mp_frag_crt(size_t min_size, size_t max_size)
 	
 	if ( Kernel && !Kernel->ke_mp_frag )
 	{
-		mp = (MEMPOOL *)((char *)Kernel + sizeof(KERNEL)
-					+ 2 * sizeof(MEMPLIST));
+		mp = mem_os_malloc(init_size);
 		Globle_mp = mp;
 	}
 	else
