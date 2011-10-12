@@ -90,9 +90,9 @@ struct stat st;
 
 #else
 
-#define MT_META_TABLE   "./availability_test/meta_table"
-#define MT_META_REGION  "./availability_test/rg_server"
-#define MT_META_INDEX   "./availability_test/index"	
+#define MT_META_TABLE   "/mnt/metaserver/meta_table"
+#define MT_META_REGION  "/mnt/metaserver/rg_server"
+#define MT_META_INDEX   "/mnt/metaserver/index"	
 
 #endif
 
