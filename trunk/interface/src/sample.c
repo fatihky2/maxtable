@@ -24,7 +24,7 @@ if(1)
 		printf("ret: %s\n", resp);
 		
 		/* Insert 10000 data rows into table */
-		for(i = 1; i < 50000; i++)
+		for(i = 1; i < 10000; i++)
 		{
 //			i += 2;
 			memset(resp, 0, 256);
@@ -86,6 +86,7 @@ if (0)
 			printf("cmd: %s, col_num: %d, ret(%d): %s, %d, %s\n", cmd, *((int *)(resp + len -4)), len, resp + *((int *)(resp + len -8)), *((int *)(resp + *((int *)(resp + len -12)))), resp + *((int *)(resp + len -16)));
 		}
 }
+
 		cli_exit(connection);
 	}
 	

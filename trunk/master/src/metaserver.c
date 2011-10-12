@@ -878,7 +878,7 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 
 			if (!rg_prof)
 			{
-				traceprint("Ranger server %s is un-available for insert\n");
+				traceprint("Ranger server is un-available for insert\n");
 				CLOSE(fd1);
 				goto exit;
 			}
@@ -1053,6 +1053,7 @@ meta_droptab(TREE *command)
 	Assert(command);
 
 	rtn_stat = FALSE;
+	col_buf = NULL;
 	tab_name = command->sym.command.tabname;
 	tab_name_len = command->sym.command.tabname_len;
 
@@ -1125,7 +1126,7 @@ meta_droptab(TREE *command)
 
 		if (!rg_prof)
 		{
-			traceprint("Ranger server %s is un-available for insert\n");
+			traceprint("Ranger server is un-available for insert\n");
 			CLOSE(fd1);
 			goto exit;
 		}
@@ -1134,7 +1135,7 @@ meta_droptab(TREE *command)
 			
 		if (!(rg_prof->rg_stat & RANGER_IS_ONLINE))
 		{
-			traceprint("Ranger server %s is off-line\n", rg_prof->rg_addr);
+			traceprint("Ranger server is off-line\n", rg_prof->rg_addr);
 			goto exit;
 		}
 	}
@@ -1251,20 +1252,13 @@ meta_removtab(TREE *command)
 		ex_raise(EX_ANY);
 	}
 	
-	if ((tab_hdr.tab_stat & TAB_DROPPED))
-	{
-		traceprint("Table %s should be dropped.\n", tab_name);
-		CLOSE(fd1);
-		goto exit;
-	}
-
 	CLOSE(fd1);
 
 	MEMSET(cmd_str, TABLE_NAME_MAX_LEN);
 	
 	sprintf(cmd_str, "rm -rf %s", tab_dir);
 	
-	if (system(cmd_str))
+	if (!system(cmd_str))
 	{
 		rtn_stat = TRUE;
 	}

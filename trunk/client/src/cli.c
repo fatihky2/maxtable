@@ -230,15 +230,16 @@ conn_again:
 			goto finish;
 		}
 
-		meta_again = FALSE;
-		
 		switch(querytype)
 		{
 		    case ADDSERVER:
+
+			meta_again = FALSE;			
 			meta_only = TRUE;
 			break;
 				
 		    case TABCREAT:
+			meta_again = FALSE;
 			meta_only = TRUE;
 			break;
 			
@@ -269,6 +270,7 @@ conn_again:
 					      cli_str, STRLEN(cli_str));
 
 				cli_str = send_rg_bp;
+				meta_again = FALSE;
 
 				meta_only = FALSE;
 			}
@@ -317,6 +319,7 @@ conn_again:
 			break;
 			
 		    case SELECTRANGE:
+			meta_again = FALSE;
 			if (CLI_IS_CONN2MASTER(Cli_infor))
 			{
 				resp_selrg = (SELRANGE *)resp->result;
@@ -424,6 +427,7 @@ conn_again:
 
 				cli_str = send_rg_bp;
 
+				meta_again = FALSE;
 				meta_only = FALSE;
 			}
 			else if (!meta_again)
@@ -443,6 +447,10 @@ conn_again:
 
 				meta_again = TRUE;
 
+			}
+			else
+			{
+				meta_again = FALSE;
 			}
 
 		    	break;

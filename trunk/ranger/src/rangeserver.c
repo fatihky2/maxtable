@@ -117,6 +117,7 @@ rg_droptab(TREE *command)
 
 	if (STAT(tab_dir, &st) != 0)
 	{
+		rtn_stat = TRUE;
 		goto exit;		
 	}
 
@@ -886,7 +887,7 @@ rg_handler(char *req_buf)
 	
 	if (req_op & RPC_REQ_DROP_OP)
 	{
-		if (!parser_open(req_buf))
+		if (!parser_open(req_buf + RPC_MAGIC_MAX_LEN))
 		{
 			parser_close();
 			tss->tstat |= TSS_PARSER_ERR;
