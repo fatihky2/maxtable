@@ -60,7 +60,7 @@ extern KERNEL	*Kernel;
 
 #else
 
-#define MT_RANGE_TABLE   "/mnt/ranger/rg_table"
+#define MT_RANGE_TABLE   "./availability_test/rg_table"
 
 #endif
 
@@ -911,10 +911,14 @@ rg_handler(char *req_buf)
 	//process with heart beat
 	if (req_op & RPC_REQ_M2RHEARTBEAT_OP)
 	{
+		traceprint("\n$$$$$$ rg recv heart beat. \n");
+	
 		Assert(rg_heartbeat(req_buf));
 		//to be fixed here
 		//maybe more info will be added here in the future
 		resp = conn_build_resp_byte(RPC_SUCCESS, 0, NULL);
+
+		traceprint("\n$$$$$$ rg sent heart beat. \n");
 
 		return resp;
 	}
@@ -1395,7 +1399,8 @@ main(int argc, char *argv[])
 
 	
 
-	conf_path = RANGE_DEFAULT_CONF_PATH;
+	//conf_path = RANGE_DEFAULT_CONF_PATH;
+	conf_path = argv[1];
 	conf_get_path(argc, argv, &conf_path);
 
 	rg_setup(conf_path);

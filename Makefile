@@ -18,7 +18,7 @@ LIB_OBJS_C	= $(patsubst %.c,%.o,$(LIB_SRCS_C))
 LIB_SRCS_CPP	= $(wildcard ${SERVICE_SRC})
 LIB_OBJS_CPP	= $(patsubst %.cpp,%.o,$(LIB_SRCS_CPP))
 
-all: client master ranger memTest benchmark sample client_lib
+all: client master ranger memTest sample client_lib
 
 %.o : %.c
 	$(CC) -o $@ -c $< $(CFLAGS) -fPIC
@@ -30,10 +30,10 @@ client: ${COMMON_SRC} ${CLI_SRC}
 	$(CC) $(CFLAGS) ${COMMON_SRC} ${CLI_SRC} -D MEMMGR_TEST -o imql
 
 master: ${COMMON_SRC} ${MASTER_SRC}
-	$(CC) $(CFLAGS) ${COMMON_SRC} ${MASTER_SRC} -D MEMMGR_TEST -D MAXTABLE_BENCH_TEST -o startMaster
+	$(CC) $(CFLAGS) ${COMMON_SRC} ${MASTER_SRC} -D MEMMGR_TEST -o startMaster
 
 ranger: ${COMMON_SRC} ${REGION_SRC}
-	$(CC) $(CFLAGS) ${COMMON_SRC} ${REGION_SRC} -D MEMMGR_TEST -D MAXTABLE_BENCH_TEST -o startRanger
+	$(CC) $(CFLAGS) ${COMMON_SRC} ${REGION_SRC} -D MEMMGR_TEST -o startRanger
 	
 memTest: ${COMMON_SRC}
 	$(CC) $(CFLAGS) ${COMMON_SRC} -D MEMMGR_UNIT_TEST -o memTest
