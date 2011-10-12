@@ -23,14 +23,6 @@
 #include "global.h"
 
 
-#define RPC_SUCCESS	0	
-#define RPC_CONN_FAIL	1	
-#define RPC_FAIL	2 	
-#define RPC_PARSER_ERR	3
-#define RPC_RETRY	4	
-#define RPC_UNAVAIL	5
-
-
 #define RPC_MAGIC_MAX_LEN	8
 #define RPC_REQUEST_MAGIC "rpcrqst"
 #define RPC_RESPONSE_MAGIC "rpcresp"
@@ -73,6 +65,14 @@ typedef struct rpcresp
 	int	result_length; 
 	char	*result;
 }RPCRESP;
+
+
+#define RPC_SUCCESS		0x0000	
+#define RPC_CONN_FAIL		0x0001	
+#define RPC_FAIL		0x0002 	
+#define RPC_PARSER_ERR		0x0004
+#define RPC_RETRY		0x0008	
+#define RPC_UNAVAIL		0x0010
 
 
  

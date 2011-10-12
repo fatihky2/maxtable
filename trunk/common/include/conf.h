@@ -22,7 +22,7 @@
 
 #include "global.h"
 
-#define CONF_OPTION_KEY "-conf"
+#define CONF_OPTION_KEY "-c"
 
 #define CONF_PORT_KEY "port"
 

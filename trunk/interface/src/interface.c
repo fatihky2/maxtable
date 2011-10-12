@@ -220,9 +220,10 @@ retry:
 		{
 			traceprint("\n need to re-get rg meta \n");
 			conn_destroy_resp(resp);
-			conn_destroy_resp(rg_resp);
+
 			rg_connection->status = CLOSED;
-			close(rg_connection->connection_fd);
+			conn_close(rg_connection->connection_fd, NULL, rg_resp);
+			
 			sleep(HEARTBEAT_INTERVAL + 1);
 			goto retry;
 
@@ -350,10 +351,9 @@ finish:
 
 	conn_destroy_resp(resp);
 	
-	if((querytype == INSERT) || (querytype == SELECT) ||(querytype == DELETE))
+	if(rg_resp && ((querytype == INSERT) || (querytype == SELECT) ||(querytype == DELETE)))
 	{
-		if(rg_resp)
-			conn_destroy_resp(rg_resp);
+		conn_destroy_resp(rg_resp);
 	}
 
 	if (sstab_split)

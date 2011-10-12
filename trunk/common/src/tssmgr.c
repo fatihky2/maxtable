@@ -65,6 +65,19 @@ tss_init(TSS *tss)
 	DEBUG_SET(tss);
 #endif
 
+	if (tss->topid & TSS_OP_METASERVER)
+	{
+		tss->topid = TSS_OP_METASERVER;
+	}
+	else if (tss->topid & TSS_OP_RANGESERVER)
+	{
+		tss->topid = TSS_OP_RANGESERVER;
+	}
+	else if (tss->topid & TSS_OP_CLIENT)
+	{
+		tss->topid = TSS_OP_CLIENT;
+	}
+
 	tss->ttabinfo = tss->toldtabinfo = NULL;
 	tss->tcmd_parser = NULL;
 	tss->tmeta_hdr = NULL;
