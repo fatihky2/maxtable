@@ -90,9 +90,9 @@ struct stat st;
 
 #else
 
-#define MT_META_TABLE   "/mnt/metaserver/meta_table"
-#define MT_META_REGION  "/mnt/metaserver/rg_server"
-#define MT_META_INDEX   "/mnt/metaserver/index"	
+#define MT_META_TABLE   "./availability_test/meta_table"
+#define MT_META_REGION  "./availability_test/rg_server"
+#define MT_META_INDEX   "./availability_test/index"	
 
 #endif
 
@@ -104,6 +104,12 @@ meta_recovery_rg(char * req_buf);
 
 static int
 meta_get_free_sstab();
+
+static void
+meta_update();
+
+static RANGE_PROF *
+meta_get_rg();
 
 static int
 meta_collect_rg(char * req_buf);
@@ -711,7 +717,7 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 		rg_port = *(int *)row_locate_col(tabletschm_rp, TABLETSCHM_RGPORT_COLOFF_INROW, 
 					 ROW_MINLEN_IN_TABLETSCHM, &ign);
 				
-		
+		traceprint("select ranger server %s/%d for insert\n", rg_addr, rg_port);		
 		tss->tcur_rgprof = rebalan_get_rg_prof_by_addr(rg_addr, rg_port);
 
 		Assert(tss->tcur_rgprof);
@@ -867,13 +873,12 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 		if(Master_infor->rg_list.nextrno > 0)
 		{
 			
-			rg_prof = (RANGE_PROF *)(Master_infor->rg_list.data);
+			//rg_prof = (RANGE_PROF *)(Master_infor->rg_list.data);
+			rg_prof = meta_get_rg();
 
-			Assert(rg_prof->rg_stat & RANGER_IS_ONLINE);
-
-			if (!(rg_prof->rg_stat & RANGER_IS_ONLINE))
+			if (!rg_prof)
 			{
-				traceprint("Ranger server %s is off-line\n", rg_prof->rg_addr);
+				traceprint("Ranger server %s is un-available for insert\n");
 				CLOSE(fd1);
 				goto exit;
 			}
@@ -2104,6 +2109,7 @@ meta_collect_rg(char * req_buf)
 			rg_addr[i].rg_port = *(int *)(str + RANGE_ADDR_MAX_LEN);
 			rg_addr[i].rg_stat = RANGER_IS_ONLINE;
 			rg_addr[i].rg_tablet_num = 0;
+			rg_addr[i].rg_index = i;
 
 			(rglist->nextrno)++;
 
@@ -2114,6 +2120,13 @@ meta_collect_rg(char * req_buf)
 		if(start_heartbeat)
 		{
 			meta_heartbeat_setup(rg_addr + i);
+		}
+
+		if(rglist->stat & SVR_STAT_NON_AVAIL_RG)
+		{
+			meta_update("", -1);//all tablet on all rg need to be update to new registered rg server
+			rglist->stat &= ~SVR_STAT_NON_AVAIL_RG;
+			meta_save_rginfo();
 		}
 	}
 	else
@@ -2140,7 +2153,7 @@ meta_rebalan_svr_idx_file(char *tab_dir, REBALANCE_DATA *rbd)
 	int		max_rg;
 	int		min_rg;
 	int		total_tablet;
-	int		transfer_tablet;
+	int		transfer_tablet = 0;
 	SVR_IDX_FILE	*temp_store;
 
 
@@ -2702,6 +2715,47 @@ meta_bld_sysrow(char *rp, int rlen, int tabletid, int sstabnum)
 	Assert(rowidx == rlen);
 }
 
+static RANGE_PROF *
+meta_get_rg()
+{
+	RANGE_PROF *rg_prof;
+	int i, j;
+	int min_tablet;
+	int 	min_rg;
+	SVR_IDX_FILE *temp_store;
+	
+	temp_store = &(Master_infor->rg_list);
+	rg_prof = (RANGE_PROF *)(temp_store->data);
+
+	for(i = 0; i < temp_store->nextrno; i++)
+	{
+		if(rg_prof[i].rg_stat == RANGER_IS_ONLINE)
+		{
+			min_tablet = rg_prof[i].rg_tablet_num;
+			min_rg = i;
+			break;
+		}
+	}
+	
+	if(i == temp_store->nextrno)
+	{
+		traceprint("No available rg server for insert!\n");
+		return NULL;
+	}
+	
+	for(j = i; j < temp_store->nextrno; j++)
+	{
+		if((rg_prof[j].rg_tablet_num < min_tablet)&&(rg_prof[j].rg_stat == RANGER_IS_ONLINE))
+		{
+			min_tablet = rg_prof[j].rg_tablet_num;
+			min_rg = j;
+		}			
+	}
+
+	return rg_prof + min_rg;
+}
+
+
 void * meta_heartbeat(void *args)
 {
 	RANGE_PROF * rg_addr = (RANGE_PROF *)args;
@@ -2709,6 +2763,10 @@ void * meta_heartbeat(void *args)
 	char	send_buf[256];
 	int idx;
 	RPCRESP * resp;
+	int rg_index = rg_addr->rg_index;
+	char * hb_recv_buf = Master_infor->heart_beat_data[rg_index].recv_data;
+
+	msg_data * new_msg;
 
 	//wait 5s to make sure rg server's network service is ready
 	sleep(5);
@@ -2716,7 +2774,7 @@ void * meta_heartbeat(void *args)
 	//need to be fixed. in this case(hb_conn<0), need to tell rg server register is failed
 	if((hb_conn = conn_open(rg_addr->rg_addr, rg_addr->rg_port)) < 0)
 	{
-		perror("error in create connection to rg server on meta server: ");
+		perror("error in create connection to rg server when meta server start heart beat: ");
 		goto finish;
 
 	}
@@ -2732,21 +2790,27 @@ void * meta_heartbeat(void *args)
 			
 		write(hb_conn, send_buf, idx);
 
-		resp = conn_recv_resp_abt(hb_conn);
+		traceprint("\n###### meta sent heart beat to %s/%d. \n", rg_addr->rg_addr, rg_addr->rg_port);
+
+		resp = conn_recv_resp_meta_hb(hb_conn, hb_recv_buf);
+
+		traceprint("\n###### meta recv heart beat from %s/%d. \n", rg_addr->rg_addr, rg_addr->rg_port);
 
 		if (resp->status_code == RPC_UNAVAIL)
 		{
 			traceprint("\n rg server is un-available \n");
-			conn_destroy_resp(resp);
+			//conn_destroy_resp(resp);
 			goto finish;
 
 		}
 		else if (resp->status_code != RPC_SUCCESS)
 		{
 			traceprint("\n We got a non-success response. \n");
-                        conn_destroy_resp(resp);
+                        //conn_destroy_resp(resp);
                         goto finish;
 		}
+
+		//conn_destroy_resp(resp);
 		
 		//to be fix here
 		//maybe more info will be added in hearbeat msg,  such as overload monitor
@@ -2755,13 +2819,11 @@ void * meta_heartbeat(void *args)
 
 finish:
 	
-	if(hb_conn > 0)
-	{
 		//update meta and rg_list here, put update task to msg list
-		msg_data * new_msg;
-		int idx = 0;
+	
 		new_msg = malloc(sizeof(msg_data));
 		MEMSET(new_msg, sizeof(msg_data));
+		idx = 0;
 		
 		PUT_TO_BUFFER(new_msg->data, idx, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
 		PUT_TO_BUFFER(new_msg->data, idx, RPC_RECOVERY, RPC_MAGIC_MAX_LEN);
@@ -2788,8 +2850,8 @@ finish:
 		pthread_cond_signal(&cond);
 		pthread_mutex_unlock(&mutex);
 
-		close(hb_conn);
-	}
+		if(hb_conn > 0)
+			close(hb_conn);
 
 	pthread_detach(pthread_self());
 
@@ -2889,7 +2951,7 @@ finish:
 }
 
 
-static void
+static int
 meta_tablet_update(char * table_name, char * rg_addr, int rg_port)
 {
 	char		tab_dir[256];
@@ -2915,15 +2977,25 @@ meta_tablet_update(char * table_name, char * rg_addr, int rg_port)
 	MEMSET(target_ip, RANGE_ADDR_MAX_LEN);	
 	target_index = meta_transfer_target(target_ip, &target_port);
 
-	int notify_ret = meta_transfer_notify(target_ip, target_port);
-	if(!notify_ret)
-	{		
-		traceprint("ERROR when send rsync notify to rg server!\n");
-		goto exit;
-	}
-	
-	if (target_index >= 0)
+	if(target_index < 0)
 	{
+		traceprint("No available rg server exist!\n");
+		return FALSE;
+	}
+	else
+	{
+		//for transfer to new registered rg, as rg's network is not ready, so can't send any request to rg
+		//new registered rg has to do sync to ceph by itself!
+		if(rg_port > 0)
+		{
+			int notify_ret = meta_transfer_notify(target_ip, target_port);
+			if(!notify_ret)
+			{		
+				traceprint("ERROR when send rsync notify to rg server!\n");
+				goto exit;
+			}
+		}
+	
 		TABLEHDR	tab_hdr;
 		
 		MEMSET(tab_tabletschm_dir, TABLE_NAME_MAX_LEN);
@@ -3004,13 +3076,15 @@ meta_tablet_update(char * table_name, char * rg_addr, int rg_port)
 				port_in_blk = *(int *)row_locate_col(rp, TABLETSCHM_RGPORT_COLOFF_INROW, 
 								ROW_MINLEN_IN_TABLETSCHM, &portlen_in_blk);
 
-				if(!strncasecmp(rg_addr, addr_in_blk, RANGE_ADDR_MAX_LEN) && (rg_port == port_in_blk))
+				if((!strncasecmp(rg_addr, addr_in_blk, RANGE_ADDR_MAX_LEN) && (rg_port == port_in_blk))
+						||(rg_port == -1))
 				{
 					MEMCPY(addr_in_blk, target_ip, RANGE_ADDR_MAX_LEN);
 					int *tmp_addr = (int *)row_locate_col(rp, TABLETSCHM_RGPORT_COLOFF_INROW, ROW_MINLEN_IN_TABLETSCHM, &portlen_in_blk);
 					*tmp_addr = target_port;
 					
 					rg_prof[target_index].rg_tablet_num ++;
+					traceprint("transfer meta to: %s/%d \n", target_ip, target_port);
 				}
 					
 					
@@ -3033,7 +3107,7 @@ meta_tablet_update(char * table_name, char * rg_addr, int rg_port)
 		
 exit:
 
-	return;
+	return TRUE;
 	
 }
 
@@ -3065,7 +3139,9 @@ meta_update(char * rg_addr, int rg_port)
 				continue;
 			MEMSET(tab_name, 256);
 			sprintf(tab_name, "%s", ent->d_name);
-			meta_tablet_update(tab_name, rg_addr, rg_port);
+			int ret = meta_tablet_update(tab_name, rg_addr, rg_port);
+			if(!ret)
+				break;
 		}
 	}
 
@@ -3105,7 +3181,9 @@ meta_recovery_rg(char * req_buf)
 					rg_addr[i].rg_stat = RANGER_IS_OFFLINE;
 					
 					//update tablet
-					meta_update(rg_addr[i].rg_addr, rg_addr[i].rg_port);
+					if(rg_addr[i].rg_tablet_num > 0)
+						//no need to update meta if this rg server service for no tablet
+						meta_update(rg_addr[i].rg_addr, rg_addr[i].rg_port);
 					
 					//update rg list
 					rg_addr[i].rg_tablet_num = 0;
@@ -3125,6 +3203,18 @@ meta_recovery_rg(char * req_buf)
 		{
 			traceprint("\n error, rg server to be off_line is not exist in rg list \n");
 			Assert(1);
+		}
+
+		for(i = 0; i < rglist->nextrno; i++)
+		{
+			if(rg_addr[i].rg_stat == RANGER_IS_ONLINE)
+				break;
+		}
+		if(i == rglist->nextrno)
+		{
+			//not any available rg server, all the tablet need to be transfered when next rg register
+			Master_infor->rg_list.stat |= SVR_STAT_NON_AVAIL_RG;
+			meta_save_rginfo();
 		}
 
 		

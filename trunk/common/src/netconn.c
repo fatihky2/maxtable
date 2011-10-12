@@ -119,6 +119,55 @@ conn_build_resp(char *resp_bp)
 	return resp;
 }
 
+RPCRESP *
+conn_build_resp_meta_hb(char *resp_bp, char * recv_buf)
+{    
+	int     	data_index;
+	RPCRESP		*resp;
+
+	resp = (RPCRESP *)recv_buf; //MEMALLOCHEAP(sizeof(RPCRESP));
+	MEMSET(resp, sizeof(RPCRESP));
+	
+	if (resp_bp == NULL)
+	{
+		strcpy(resp->magic, RPC_RESPONSE_MAGIC);
+		resp->status_code = RPC_FAIL;
+		resp->result_length = 0;
+		resp->result = NULL;
+
+		return resp;
+	}
+
+	data_index = 0;
+
+	if (!conn_chk_respmagic(resp_bp))
+	{
+		return NULL;
+	}
+	
+	
+	GET_FROM_BUFFER(resp_bp, data_index, resp->magic, sizeof(resp->magic));
+
+	resp->status_code = ((RPCRESP *)resp_bp)->status_code;
+	resp->result_length = ((RPCRESP *)resp_bp)->result_length;
+
+	data_index += 2 * sizeof(int);
+
+	if (resp->result_length)
+	{
+		
+	//	(resp->result_length)++;
+		
+		resp->result = recv_buf + sizeof(RPCRESP);//MEMALLOCHEAP(resp->result_length);
+		MEMSET(resp->result, resp->result_length);
+		GET_FROM_BUFFER(resp_bp, data_index, resp->result, 
+				(resp->result_length));
+	}
+	
+	return resp;
+}
+
+
 int
 conn_get_resp_size(RPCRESP *resp)
 {
@@ -295,6 +344,7 @@ conn_open(char* ip_address, int port)
 	if (ret < 0)
 	{
 		traceprint("Connection is failed \n");
+		return ret;
 	}
 
 cleanup:    
@@ -403,6 +453,62 @@ conn_recv_resp_abt(int sockfd)
 	free(buf);
 	return resp;
 }
+
+
+RPCRESP * 
+conn_recv_resp_meta_hb(int sockfd, char *recv_buf)
+{
+	char 		*buf;
+	int 		n;
+	RPCRESP		*resp;
+
+	buf = malloc(CONN_BUF_SIZE);
+
+//	MEMSET(buf, CONN_BUF_SIZE);
+	
+	struct timeval tv;
+	tv.tv_sec = RECVIO_TIMEOUT;
+	tv.tv_usec = 0;
+	setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+
+	n = read(sockfd, buf, CONN_BUF_SIZE);
+
+	if(n > 0)
+	{
+		resp = conn_build_resp_meta_hb(buf, recv_buf);
+	}
+	else
+	{
+		if(n == 0)
+		{
+			traceprint("Rg server is closed after client send request, before client receive response!\n");
+		}
+		else if(errno == ECONNRESET)
+		{
+			traceprint("Rg server is closed before client send request!\n");
+		}
+		else if((errno == ETIMEDOUT)||(errno == EHOSTUNREACH)||(errno == ENETUNREACH))
+		{
+			traceprint("Rg server is breakdown before client send request!\n");
+		}
+		else if(errno == EWOULDBLOCK)
+		{
+			traceprint("Rg server is breakdown after client send request, before client receive response!\n");
+		}
+		else
+		{
+			traceprint("Client receive response error for unknown reason!\n");
+			perror("Error in rg server response");
+		}
+		resp = conn_build_resp_meta_hb(NULL, recv_buf);
+		resp->status_code = RPC_UNAVAIL;
+	}
+	
+    
+	free(buf);
+	return resp;
+}
+
 
 
 void

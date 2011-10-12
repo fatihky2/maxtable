@@ -856,6 +856,8 @@ blk_get_location_sstab(TABINFO *tabinfo, BUF *bp)
 	int	result;
 	int	blkidx;
 
+	LOCALTSS(tss);
+
 	
 	blkidx		= -1;
 	
@@ -880,7 +882,7 @@ blk_get_location_sstab(TABINFO *tabinfo, BUF *bp)
 		result = row_col_compare(coltype, key, keylen, key_in_blk, keylen_in_blk);
 
 		
-		if (result == LE)
+		if ((result == LE) || ((result == EQ) && (tss->topid & TSS_OP_INSTAB)))
 		{
 			
 			if (bp->bblk->bblkno == 0)

@@ -136,6 +136,9 @@ conn_recv_resp(int sockfd);
 RPCRESP * 
 conn_recv_resp_abt(int sockfd);
 
+RPCRESP * 
+conn_recv_resp_meta_hb(int sockfd, char *recv_buf);
+
 
 void
 conn_close(int sockfd, RPCREQ* req, RPCRESP* resp);

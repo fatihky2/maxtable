@@ -162,7 +162,7 @@ retry:
 		
 		rg_conn * rg_connection;
 		int i;
-
+		printf("rg server: %s/%d\n", resp_ins->i_hdr.rg_info.rg_addr, resp_ins->i_hdr.rg_info.rg_port);
 		for(i = 0; i < connection->rg_list_len; i++)
 		{
 			if((resp_ins->i_hdr.rg_info.rg_port == connection->rg_list[i]->rg_server_port)
@@ -222,6 +222,8 @@ retry:
 			conn_destroy_resp(resp);
 			conn_destroy_resp(rg_resp);
 			rg_connection->status = CLOSED;
+			close(rg_connection->connection_fd);
+			sleep(HEARTBEAT_INTERVAL + 1);
 			goto retry;
 
 		}
@@ -350,7 +352,8 @@ finish:
 	
 	if((querytype == INSERT) || (querytype == SELECT) ||(querytype == DELETE))
 	{
-		conn_destroy_resp(rg_resp);
+		if(rg_resp)
+			conn_destroy_resp(rg_resp);
 	}
 
 	if (sstab_split)

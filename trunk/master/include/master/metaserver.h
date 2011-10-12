@@ -107,7 +107,7 @@ typedef struct rg_prof
 	int		rg_port;
 	int		rg_stat;
 	int		rg_tablet_num;	
-	int		pad;
+	int		rg_index;
 	pthread_t	tid;
 } RANGE_PROF;
 
@@ -246,6 +246,8 @@ typedef	struct svr_idx_file
 	char		data[SVR_IDX_FILE_BLK]; 
 }SVR_IDX_FILE;
 
+#define SVR_STAT_NON_AVAIL_RG 0x0001
+
 
 #define	SVR_IS_BAD	0x0001
 
@@ -255,12 +257,20 @@ typedef	struct svr_idx_file
 #define MIN_REGION_AVAILABLE_SIZE 100 //Unit is MB
 #define DEFAULT_MASTER_FLUSH_CHECK_INTERVAL 600 //10Min
 
+#define MAX_RANGER_NUM 1024
+#define HB_DATA_SIZE 1024
+
+typedef struct hb_data
+{
+	char recv_data[HB_DATA_SIZE];
+}HB_DATA;
 
 typedef struct master_infor
 {
 	char		conf_path[META_CONF_PATH_MAX_LEN];
 	int		port;
 	SVR_IDX_FILE	rg_list;
+	HB_DATA	heart_beat_data[MAX_RANGER_NUM];
 }MASTER_INFOR;
 
 
