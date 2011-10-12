@@ -60,7 +60,7 @@ extern KERNEL	*Kernel;
 
 #else
 
-#define MT_RANGE_TABLE   "./availability_test/rg_table"
+#define MT_RANGE_TABLE   "/mnt/ranger/rg_table"
 
 #endif
 
