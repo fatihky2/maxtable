@@ -845,6 +845,7 @@ blk_putrow()
 int
 blk_get_location_sstab(TABINFO *tabinfo, BUF *bp)
 {
+	LOCALTSS(tss);
 	char	*rp;
 	int	coloffset;
 	char	*key;
@@ -855,8 +856,6 @@ blk_get_location_sstab(TABINFO *tabinfo, BUF *bp)
 	int	keylen_in_blk;
 	int	result;
 	int	blkidx;
-
-	LOCALTSS(tss);
 
 	
 	blkidx		= -1;

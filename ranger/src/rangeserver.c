@@ -1398,9 +1398,8 @@ main(int argc, char *argv[])
 	mem_init_alloc_regions();
 
 	
-
-	//conf_path = RANGE_DEFAULT_CONF_PATH;
-	conf_path = argv[1];
+	conf_path = RANGE_DEFAULT_CONF_PATH;
+	
 	conf_get_path(argc, argv, &conf_path);
 
 	rg_setup(conf_path);

@@ -125,7 +125,7 @@ conn_build_resp_meta_hb(char *resp_bp, char * recv_buf)
 	int     	data_index;
 	RPCRESP		*resp;
 
-	resp = (RPCRESP *)recv_buf; //MEMALLOCHEAP(sizeof(RPCRESP));
+	resp = (RPCRESP *)recv_buf; 
 	MEMSET(resp, sizeof(RPCRESP));
 	
 	if (resp_bp == NULL)
@@ -155,10 +155,11 @@ conn_build_resp_meta_hb(char *resp_bp, char * recv_buf)
 
 	if (resp->result_length)
 	{
+		Assert((resp->result_length) < (HB_DATA_SIZE - sizeof(RPCRESP)));
 		
 	//	(resp->result_length)++;
 		
-		resp->result = recv_buf + sizeof(RPCRESP);//MEMALLOCHEAP(resp->result_length);
+		resp->result = recv_buf + sizeof(RPCRESP);
 		MEMSET(resp->result, resp->result_length);
 		GET_FROM_BUFFER(resp_bp, data_index, resp->result, 
 				(resp->result_length));
@@ -515,7 +516,9 @@ void
 conn_close(int sockfd, RPCREQ* req, RPCRESP* resp)
 {
 	conn_destroy_req(req);
+
 	conn_destroy_resp(resp);
+	
 	close(sockfd);
 }
 

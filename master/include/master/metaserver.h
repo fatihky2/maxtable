@@ -253,12 +253,9 @@ typedef	struct svr_idx_file
 
 
 #define META_CONF_PATH_MAX_LEN   64
-#define DEFAULT_DUPLICATE_NUM 1
-#define MIN_REGION_AVAILABLE_SIZE 100 //Unit is MB
-#define DEFAULT_MASTER_FLUSH_CHECK_INTERVAL 600 //10Min
 
-#define MAX_RANGER_NUM 1024
-#define HB_DATA_SIZE 1024
+#define MAX_RANGER_NUM	1024
+#define HB_DATA_SIZE	128
 
 typedef struct hb_data
 {
@@ -270,7 +267,7 @@ typedef struct master_infor
 	char		conf_path[META_CONF_PATH_MAX_LEN];
 	int		port;
 	SVR_IDX_FILE	rg_list;
-	HB_DATA	heart_beat_data[MAX_RANGER_NUM];
+	HB_DATA		heart_beat_data[MAX_RANGER_NUM];
 }MASTER_INFOR;
 
 

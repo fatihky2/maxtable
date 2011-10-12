@@ -882,6 +882,8 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 				CLOSE(fd1);
 				goto exit;
 			}
+
+			Assert(rg_prof->rg_stat & RANGER_IS_ONLINE);
 		}
 		else
 		{
@@ -2153,12 +2155,13 @@ meta_rebalan_svr_idx_file(char *tab_dir, REBALANCE_DATA *rbd)
 	int		max_rg;
 	int		min_rg;
 	int		total_tablet;
-	int		transfer_tablet = 0;
+	int		transfer_tablet;
 	SVR_IDX_FILE	*temp_store;
 
 
 	tablet_store = (SVR_IDX_FILE *)MEMALLOCHEAP(sizeof(SVR_IDX_FILE));
 	total_tablet = 0;
+	transfer_tablet = 0;
 	
 	MEMSET(tab_dir1, 256);
 
@@ -3139,9 +3142,10 @@ meta_update(char * rg_addr, int rg_port)
 				continue;
 			MEMSET(tab_name, 256);
 			sprintf(tab_name, "%s", ent->d_name);
-			int ret = meta_tablet_update(tab_name, rg_addr, rg_port);
-			if(!ret)
+			if (!meta_tablet_update(tab_name, rg_addr, rg_port))
+			{
 				break;
+			}
 		}
 	}
 
@@ -3182,9 +3186,10 @@ meta_recovery_rg(char * req_buf)
 					
 					//update tablet
 					if(rg_addr[i].rg_tablet_num > 0)
-						//no need to update meta if this rg server service for no tablet
+					{
+						/* no need to update meta if this rg server service for no tablet */
 						meta_update(rg_addr[i].rg_addr, rg_addr[i].rg_port);
-					
+					}
 					//update rg list
 					rg_addr[i].rg_tablet_num = 0;
 					//(rglist->nextrno)++;//do not modify this!
