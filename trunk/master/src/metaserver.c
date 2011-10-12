@@ -1121,11 +1121,17 @@ meta_droptab(TREE *command)
 
 	if(Master_infor->rg_list.nextrno > 0)
 	{
-		
-		rg_prof = (RANGE_PROF *)(Master_infor->rg_list.data);
+		rg_prof = meta_get_rg();
+
+		if (!rg_prof)
+		{
+			traceprint("Ranger server %s is un-available for insert\n");
+			CLOSE(fd1);
+			goto exit;
+		}
 
 		Assert(rg_prof->rg_stat & RANGER_IS_ONLINE);
-
+			
 		if (!(rg_prof->rg_stat & RANGER_IS_ONLINE))
 		{
 			traceprint("Ranger server %s is off-line\n", rg_prof->rg_addr);

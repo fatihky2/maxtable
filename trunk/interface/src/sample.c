@@ -15,7 +15,7 @@ int main()
 	{
 		char resp[256], cmd[256];
 		int i, len;
-if(0)
+if(1)
 {
 		/* Create Table */
 		memset(resp, 0, 256);
@@ -36,7 +36,7 @@ if(0)
 
 }
 
-if (1)
+if (0)
 {
 		/* Select datas from table */
 		for(i = 1; i < 50000; i++)
