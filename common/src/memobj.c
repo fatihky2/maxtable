@@ -50,9 +50,7 @@ mp_obj_crt(size_t itemsize, size_t minitems, size_t maxitems)
 //	memptr = memallocheap(B2P(seg_size));
 //	B2P(seg_size);
 	memptr = mem_os_malloc(seg_size);
-	free_memptr = memptr;
-
-	
+	free_memptr = memptr;	
 
 	fp = (MEMOBJECT *) free_memptr;
 	free_memptr += sizeof(MEMOBJECT);
@@ -98,15 +96,12 @@ mp_obj_crt(size_t itemsize, size_t minitems, size_t maxitems)
 		
 	
 		while (itemp <= (top - itemsize))
-		{
-			
+		{			
 			INSQTAIL(&(fp->f_free), itemp);
 			fp->f_count++;
 			MEMCOM_TOTAL(fp)++;
-	
-			
+				
 			itemp += itemsize;
-
 		}
 	}
 
@@ -163,10 +158,17 @@ mp_obj_grow(MEMOBJECT * fp)
 	char    *itemp;         
 	char    *last_one;      
 	MEMBLK  *mbp;           
-	size_t  itemsize;       
+	size_t  itemsize; 
+	int	grow_items;
 
-	
+
+	grow_items = MEMCOM_MAXITEMS(fp) - MEMCOM_TOTAL(fp);
+	itemsize = MOBJ_CALC_OBJECT_SIZE(fp->f_itemsize);
+
 	growsize = MEMCOM_GROWSIZE(fp) ? MEMCOM_GROWSIZE(fp) : MY_MEMPAGESIZE;
+
+
+	growsize = ((itemsize * grow_items) > growsize) ? growsize : (itemsize * grow_items);
 	
 //	space = (char *)memallocheap(B2P(growsize));
 	space = (char *)mem_os_malloc(B2P(growsize));
@@ -185,7 +187,7 @@ mp_obj_grow(MEMOBJECT * fp)
 	mbp->mb_end = (void *)top;
 
 	
-	itemsize = ROUNDSIZE(fp->f_itemsize, sizeof(ALIGNDATATYPE));
+	
 
 	
 	itemp = space + sizeof(MEMBLK);
@@ -206,7 +208,7 @@ mp_obj_grow(MEMOBJECT * fp)
 	}
 
 	n = 0;
-	while ( itemp < last_one )
+	while ( itemp <= last_one )
 	{
 	        
 	        INSQTAIL(&(fp->f_free), itemp);

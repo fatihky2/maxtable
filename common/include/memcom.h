@@ -189,6 +189,7 @@ typedef struct kernel
 	MEMPOOL 	*ke_mp_stack;
 	void		*ke_tss_objpool;
         void            *ke_buf_objpool;
+	void		*ke_msgdata_objpool;
 	SPINLOCK	ke_buf_spinlock;
 	struct buf	*ke_buflru;		
 	struct buf	**ke_bufhash;		
@@ -207,6 +208,10 @@ typedef struct kernel
 
 #define BUF_MIN_ITEMS   32
 #define BUF_MAX_ITEMS   256
+
+#define MSGDATA_MIN_ITEMS   128
+#define MSGDATA_MAX_ITEMS   256
+
 
 
 
