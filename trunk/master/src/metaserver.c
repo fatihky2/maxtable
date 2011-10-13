@@ -1135,7 +1135,7 @@ meta_droptab(TREE *command)
 			
 		if (!(rg_prof->rg_stat & RANGER_IS_ONLINE))
 		{
-			traceprint("Ranger server is off-line\n", rg_prof->rg_addr);
+			traceprint("Ranger server %s is off-line\n", rg_prof->rg_addr);
 			goto exit;
 		}
 	}

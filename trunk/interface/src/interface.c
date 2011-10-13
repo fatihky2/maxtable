@@ -88,17 +88,20 @@ int cli_commit(conn * connection, char * cmd, char * response, int * resp_len)
 {
 	LOCALTSS(tss);
 
-	char send_buf[LINE_BUF_SIZE];
-	char send_rg_buf[LINE_BUF_SIZE];
-	char tab_name[64];
-	int send_buf_size;
+	char		send_buf[LINE_BUF_SIZE];
+	char		send_rg_buf[LINE_BUF_SIZE];
+	char		tab_name[64];
+	int		send_buf_size;
 
-	RPCRESP	*resp;
-	RPCRESP *rg_resp;
-	RPCRESP *sstab_split_resp;
-	int querytype;
-	int rtn_stat;
-	int	sstab_split;
+	RPCRESP		*resp;
+	RPCRESP		*rg_resp;
+	RPCRESP		*sstab_split_resp;
+	RPCRESP		*remove_tab_resp;
+	int		querytype;
+	int		rtn_stat;
+	int		sstab_split;
+	int		remove_tab_hit;
+	
 
 	if(!validation_request(cmd))
 	{
@@ -112,6 +115,7 @@ int cli_commit(conn * connection, char * cmd, char * response, int * resp_len)
 
 	rtn_stat = TRUE;
 	sstab_split = FALSE;
+	remove_tab_hit = FALSE;
 
 	//querytype = par_get_query(cmd, &querytype_index);
 	if(!parser_open(cmd))
@@ -130,9 +134,9 @@ int cli_commit(conn * connection, char * cmd, char * response, int * resp_len)
 retry:
 
 	send_buf_size = strlen(cmd);
-	memset(send_buf, 0, LINE_BUF_SIZE);
-	memcpy(send_buf, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
-	memcpy(send_buf + RPC_MAGIC_MAX_LEN, cmd, send_buf_size);
+	MEMSET(send_buf, LINE_BUF_SIZE);
+	MEMCPY(send_buf, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
+	MEMCPY(send_buf + RPC_MAGIC_MAX_LEN, cmd, send_buf_size);
 			
 	write(connection->connection_fd, send_buf, (send_buf_size + RPC_MAGIC_MAX_LEN));
 
@@ -145,7 +149,8 @@ retry:
 
 	}
 
-	if((querytype == INSERT) || (querytype == SELECT) || (querytype == DELETE) || (querytype == SELECTRANGE))
+	if(   (querytype == INSERT) || (querytype == SELECT) || (querytype == DELETE) || (querytype == SELECTRANGE)
+	   || (querytype == DROP))
 	{
 		INSMETA		*resp_ins;
 		SELRANGE	*resp_selrg;
@@ -201,18 +206,36 @@ retry:
 		{
 			MEMCPY(resp->result, RPC_SELECTRANGE_MAGIC, RPC_MAGIC_MAX_LEN);
 		}
+		else if (querytype == DROP)
+		{
+			MEMCPY(resp->result, RPC_DROP_TABLE_MAGIC, RPC_MAGIC_MAX_LEN);
+		}
 		else
 		{
-			memcpy(resp->result, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
+			MEMCPY(resp->result, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
 		}
 		
-		memset(send_rg_buf, 0, LINE_BUF_SIZE);
-		memcpy(send_rg_buf, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
-		memcpy(send_rg_buf + RPC_MAGIC_MAX_LEN, resp->result, resp->result_length);
-		memcpy(send_rg_buf + RPC_MAGIC_MAX_LEN + resp->result_length, cmd, send_buf_size);
+		MEMSET(send_rg_buf, LINE_BUF_SIZE);
+		MEMCPY(send_rg_buf, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
 
-		write(rg_connection->connection_fd, send_rg_buf, 
-		        (resp->result_length + send_buf_size + RPC_MAGIC_MAX_LEN));
+		if (querytype == DROP)
+		{
+			MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN, resp->result, RPC_MAGIC_MAX_LEN);
+			MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN + RPC_MAGIC_MAX_LEN, cmd, send_buf_size);
+
+			write(rg_connection->connection_fd, send_rg_buf, 
+		        		(RPC_MAGIC_MAX_LEN + send_buf_size + RPC_MAGIC_MAX_LEN));
+		}
+		else
+		{
+		
+			MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN, resp->result, resp->result_length);
+			MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN + resp->result_length, cmd, send_buf_size);
+
+			write(rg_connection->connection_fd, send_rg_buf, 
+					(resp->result_length + send_buf_size + RPC_MAGIC_MAX_LEN));
+		}
+		
 
 		rg_resp = conn_recv_resp_abt(rg_connection->connection_fd);
 
@@ -299,6 +322,43 @@ retry:
 			MEMFREEHEAP(new_buf);
 
 		}
+
+
+
+		if (querytype == DROP)
+		{	
+			Assert(rg_resp->result_length);
+			
+			char *cli_remove_tab = "remove ";				    
+
+			int new_size = TABLE_NAME_MAX_LEN + STRLEN(cli_remove_tab);
+			char *new_buf = MEMALLOCHEAP(new_size);				    
+
+			MEMSET(new_buf, new_size);
+
+			sprintf(new_buf, "remove %s", tab_name);
+
+			MEMSET(send_buf, LINE_BUF_SIZE);
+			MEMCPY(send_buf, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
+			MEMCPY(send_buf + RPC_MAGIC_MAX_LEN, new_buf, new_size);
+
+			write(connection->connection_fd, send_buf, 
+						(new_size + RPC_MAGIC_MAX_LEN));
+
+
+			remove_tab_resp = conn_recv_resp(connection->connection_fd);
+			remove_tab_hit = TRUE;
+			if (remove_tab_resp->status_code != RPC_SUCCESS)
+			{
+				traceprint("\n ERROR in meta_server response \n");
+				rtn_stat = FALSE;
+				MEMFREEHEAP(new_buf);
+				goto finish;
+
+			}
+
+			MEMFREEHEAP(new_buf);
+		}
 			
 	}
 
@@ -361,6 +421,14 @@ finish:
 		Assert(querytype == INSERT);
 		conn_destroy_resp(sstab_split_resp);
 	}
+
+	
+	if (remove_tab_hit)
+	{
+		Assert(querytype == DROP);
+		conn_destroy_resp(remove_tab_resp);
+	}
+		
 
 	parser_close();    
 
