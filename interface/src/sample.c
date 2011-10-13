@@ -78,7 +78,8 @@ int main(int argc, char *argv[])
 	                                continue;
 				}
 				resp[len] = '\0';
-				printf("cmd: %s, col_num: %d, ret(%d): %s, %d, %s\n", cmd, *((int *)(resp + len -4)), len, resp + *((int *)(resp + len -8)), *((int *)(resp + *((int *)(resp + len -12)))), resp + *((int *)(resp + len -16)));
+				printf("cmd: %s, ret:  len = %d, %s\n", cmd, len, resp);
+				//printf("cmd: %s, col_num: %d, ret(%d): %s, %d, %s\n", cmd, *((int *)(resp + len -4)), len, resp + *((int *)(resp + len -8)), *((int *)(resp + *((int *)(resp + len -12)))), resp + *((int *)(resp + len -16)));
 			}
 		}
 

@@ -149,8 +149,8 @@ retry:
 
 	}
 
-	if(   (querytype == INSERT) || (querytype == SELECT) || (querytype == DELETE) || (querytype == SELECTRANGE)
-	   || (querytype == DROP))
+	if(   (querytype == INSERT) || (querytype == SELECT) || (querytype == DELETE) 
+	   || (querytype == SELECTRANGE) || (querytype == DROP))
 	{
 		INSMETA		*resp_ins;
 		SELRANGE	*resp_selrg;
@@ -364,8 +364,9 @@ retry:
 
 	if(querytype == SELECT)
 	{
-		sel_resp_rejoin(rg_resp->result, response, rg_resp->result_length, resp_len, resp->result, querytype);
-		//strcpy(response, rg_resp->result);
+		//sel_resp_rejoin(rg_resp->result, response, rg_resp->result_length, resp_len, resp->result, querytype);
+		*resp_len = rg_resp->result_length;
+		strcpy(response, rg_resp->result);
 	}
 	else if (querytype == SELECTRANGE)
 	{
