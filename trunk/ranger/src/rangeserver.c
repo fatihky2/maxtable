@@ -489,16 +489,17 @@ rg_seldeltab(TREE *command, TABINFO *tabinfo)
 	{
 		
 		char *rp = (char *)(bp->bblk) + offset;
+		char *value;
 		
-		rlen = ROW_GET_LENGTH(rp, bp->bblk->bminlen);
+		// char	*filename = meta_get_coldata(bp, offset, sizeof(ROWFMT));
 
-		
+		value = row_locate_col(rp, -2, bp->bblk->bminlen, &rlen);
+
 		col_buf = MEMALLOCHEAP(rlen);
 		MEMSET(col_buf, rlen);
 
+		MEMCPY(col_buf, value, rlen);
 		
-		char	*filename = meta_get_coldata(bp, offset, sizeof(ROWFMT));
-		MEMCPY(col_buf, filename, rlen - sizeof(ROWFMT));
 	}
 	
 	rtn_stat = TRUE;
@@ -514,7 +515,7 @@ exit:
 		else
 		{
 			
-			resp = conn_build_resp_byte(RPC_SUCCESS, rlen - sizeof(ROWFMT), col_buf);
+			resp = conn_build_resp_byte(RPC_SUCCESS, rlen, col_buf);
 		}
 	}
 	else
