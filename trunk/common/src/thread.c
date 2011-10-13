@@ -20,6 +20,7 @@
 #include "tss.h"
 #include "parser.h"
 #include "memcom.h"
+#include "memobj.h"
 #include "strings.h"
 #include "trace.h"
 #include "buffer.h"
@@ -28,14 +29,14 @@
 #include "thread.h"
 #include "m_socket.h"
 
+
 extern	TSS	*Tss;
-
-
+KERNEL *Kernel;
 
 struct epoll_event events[20];
 
-msg_data * msg_list_head = NULL;
-msg_data * msg_list_tail = NULL;
+MSG_DATA * msg_list_head = NULL;
+MSG_DATA * msg_list_tail = NULL;
 
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
@@ -75,7 +76,7 @@ void * msg_recv(void *args)
 
 	struct sockaddr_in servaddr, cliaddr;
 
-	msg_data *new_msg;
+	MSG_DATA *new_msg;
 	
 
 	//socket
@@ -197,8 +198,8 @@ void * msg_recv(void *args)
 							read_cnt++;
 						}
 
-						new_msg = malloc(sizeof(msg_data));
-						MEMSET(new_msg, sizeof(msg_data));
+						new_msg = malloc(sizeof(MSG_DATA));
+						MEMSET(new_msg, sizeof(MSG_DATA));
 						MEMCPY(new_msg->data, buf, STRLEN(RPC_RBD_MAGIC));
 						new_msg->fd = sockfd;
 						new_msg->n_size = sizeof(REBALANCE_DATA);
@@ -208,8 +209,8 @@ void * msg_recv(void *args)
 
 					else
 					{
-						new_msg = malloc(sizeof(msg_data));
-						MEMSET(new_msg, sizeof(msg_data));
+						new_msg = malloc(sizeof(MSG_DATA));
+						MEMSET(new_msg, sizeof(MSG_DATA));
 						MEMCPY(new_msg->data, buf, n);
 						new_msg->fd = sockfd;
 						new_msg->n_size = n;
@@ -241,7 +242,7 @@ void * msg_recv(void *args)
 
 			else if(events[i].events & EPOLLOUT)
 			{
-				msg_data * resp_msg = (msg_data *)events[i].data.ptr;
+				MSG_DATA * resp_msg = (MSG_DATA *)events[i].data.ptr;
 
 				events[i].data.ptr = NULL;
 				
@@ -275,8 +276,8 @@ void msg_process(char * (*handler_request)(char *req_buf))
 	char* resp;
 
 	int fd;
-	msg_data *req_msg;
-	msg_data *resp_msg;
+	MSG_DATA *req_msg;
+	MSG_DATA *resp_msg;
 
 
 	while(TRUE)
@@ -333,9 +334,9 @@ void msg_process(char * (*handler_request)(char *req_buf))
 		resp_size = conn_get_resp_size((RPCRESP *)resp);
 
 		resp_msg = NULL;
-		resp_msg = (msg_data *)malloc(sizeof(msg_data));
+		resp_msg = (MSG_DATA *)malloc(sizeof(MSG_DATA));
 		Assert(resp_msg);
-		MEMSET(resp_msg, sizeof(msg_data));
+		MEMSET(resp_msg, sizeof(MSG_DATA));
 		resp_msg->n_size = resp_size;
 		resp_msg->block_buffer = NULL;
 		Assert(resp_size < MAXLINE);
@@ -366,3 +367,89 @@ finish:
 }
 
 
+MSG_DATA *
+msg_mem_alloc(void)
+{
+	register MSG_DATA	*msg_data;
+	MSG_DATA_OBJ		*msg_data_obj;
+
+	msg_data_obj = (MSG_DATA_OBJ *) mp_obj_alloc(Kernel->ke_msgdata_objpool);
+
+	if (msg_data_obj == NULL)
+	{
+	        return NULL;
+	}
+
+	msg_data = &(msg_data_obj->to_msg_datap);
+
+	MEMSET(msg_data, sizeof(MSG_DATA));
+
+	msg_data->msg_datap = msg_data_obj;
+
+	return msg_data;
+}
+
+
+void
+msg_mem_free(MSG_DATA *msg_data)
+{
+	int ret;
+
+	ret = mp_obj_free(Kernel->ke_msgdata_objpool, (void *)msg_data->msg_datap);
+	Assert(ret == MEMPOOL_SUCCESS);
+
+	return;
+}
+
+
+static void
+prLINK(LINK *link)
+{
+	traceprint("\n LinkAddr = 0x%p \n", link);
+	traceprint("\t prev=0x%p \t next=0x%p \n", link->prev, link->next);
+}
+
+
+void
+msg_mem_prt()
+{
+	void		*item;		
+	LINK		*tmplink;
+	MEMOBJECT 	*fp = Kernel->ke_msgdata_objpool;
+
+	
+	item = NULL;
+	tmplink = &fp->f_free;
+
+	while (!(tmplink->next == &fp->f_free))
+	{
+
+		item = tmplink->next;
+		
+		tmplink = tmplink->next;
+
+		prLINK(tmplink);
+	}
+
+	return;
+}
+
+
+
+void
+msg_mem_test()
+{
+	MSG_DATA	*msg_data[100];
+	int		i;
+
+
+	msg_mem_prt();
+
+	printf("\n ==========================================\n");
+	for (i= 0; i< 20; i++)
+	{
+		msg_data[i] = msg_mem_alloc();
+	}
+	
+	msg_mem_prt();
+}

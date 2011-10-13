@@ -76,8 +76,8 @@ extern pthread_mutex_t mutex;
 extern pthread_cond_t cond;
 
 extern int msg_list_len;
-extern msg_data * msg_list_head;
-extern msg_data * msg_list_tail;
+extern MSG_DATA * msg_list_head;
+extern MSG_DATA * msg_list_tail;
 
 
 struct stat st;
@@ -2769,7 +2769,7 @@ void * meta_heartbeat(void *args)
 	int rg_index = rg_addr->rg_index;
 	char * hb_recv_buf = Master_infor->heart_beat_data[rg_index].recv_data;
 
-	msg_data * new_msg;
+	MSG_DATA * new_msg;
 
 	//wait 5s to make sure rg server's network service is ready
 	sleep(5);
@@ -2824,8 +2824,8 @@ finish:
 	
 		//update meta and rg_list here, put update task to msg list
 	
-		new_msg = malloc(sizeof(msg_data));
-		MEMSET(new_msg, sizeof(msg_data));
+		new_msg = malloc(sizeof(MSG_DATA));
+		MEMSET(new_msg, sizeof(MSG_DATA));
 		idx = 0;
 		
 		PUT_TO_BUFFER(new_msg->data, idx, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);

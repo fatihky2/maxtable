@@ -16,21 +16,34 @@ typedef struct _msg_recv_args
     int port;
 }msg_recv_args;
 
-typedef struct _msg_data
+typedef struct msg_data
 {
-	int fd;
-	char data[MAXLINE];
-	int n_size;
-	struct _msg_data * next;
-	char * block_buffer;
-}msg_data;
+	struct msg_data_obj	*msg_datap;
+	int			fd;
+	char			data[MAXLINE];
+	int			n_size;
+	struct msg_data		*next;
+	char 			*block_buffer;
+}MSG_DATA;
 
-
+typedef struct msg_data_obj
+{
+	LINK		to_link;	
+	MSG_DATA	to_msg_datap;	
+} MSG_DATA_OBJ;
 
 void * msg_recv(void *args);
 
 void msg_process(char * (*handler_request)(char *req_buf));
 
+MSG_DATA *
+msg_mem_alloc(void);
+
+void
+msg_mem_free(MSG_DATA *msg_data);
+
+void
+msg_mem_test();
 
 
 #endif

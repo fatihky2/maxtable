@@ -25,6 +25,7 @@
 #include "buffer.h"
 #include "utils.h"
 #include "trace.h"
+#include "thread.h"
 
 KERNEL *Kernel;
 
@@ -130,6 +131,10 @@ mem_init_alloc_regions()
 						TSS_MIN_ITEMS, TSS_MAX_ITEMS);
 	mp_list_insert((MEMOBJECT *)Kernel->ke_buf_objpool, MEMPOOL_OBJECT);
 
+	Kernel->ke_msgdata_objpool = (void *)mp_obj_crt(sizeof(MSG_DATA),
+						MSGDATA_MIN_ITEMS, MSGDATA_MAX_ITEMS);
+	mp_list_insert((MEMOBJECT *)Kernel->ke_msgdata_objpool, MEMPOOL_OBJECT);
+
 	return TRUE;
 }
 
@@ -150,6 +155,11 @@ mem_free_alloc_regions()
 	if (Kernel->ke_buf_objpool)
 	{
 		mp_obj_destroy(Kernel->ke_buf_objpool);
+	}
+
+	if(Kernel->ke_msgdata_objpool)
+	{
+		mp_obj_destroy(Kernel->ke_msgdata_objpool);
 	}
 
 	free (Kernel);
