@@ -117,6 +117,9 @@ meta_collect_rg(char * req_buf);
 static void
 meta_save_rginfo();
 
+char *
+meta_checkdata(TREE *command);
+
 void
 meta_bld_rglist(char *filepath)
 {
@@ -2668,6 +2671,8 @@ parse_again:
 	    case REMOVE:
 	    	resp = meta_removtab(command);
 	    	break;
+	    case MCC:
+	    	resp = meta_checkdata(command);
 	    case REBALANCE:
 	    	resp = meta_rebalancer(command);
 	    	break;
@@ -3230,6 +3235,336 @@ meta_recovery_rg(char * req_buf)
 	}
 
 	return TRUE;
+}
+
+
+int
+meta_ranger_is_online(char *rg_ip, int rg_port)
+{
+	int		i;
+	SVR_IDX_FILE 	*rglist = &(Master_infor->rg_list);			
+	RANGE_PROF 	*rg_addr = (RANGE_PROF *)(rglist->data);
+
+
+	for(i = 0; i < rglist->nextrno; i++)
+	{
+		if (   !strncasecmp(rg_ip, rg_addr[i].rg_addr, RANGE_ADDR_MAX_LEN)
+		    && (rg_addr[i].rg_port == rg_port)
+		    )
+		{
+			if(rg_addr[i].rg_stat == RANGER_IS_ONLINE)
+			{
+				return TRUE;
+			}
+		}
+	}
+
+	return FALSE;
+}
+
+void
+meta_check_tablet(char *tabdir, int tabid, char *tabletname, int tabletid)
+{
+	char		tab_tabletschm_dir[TABLE_NAME_MAX_LEN];
+	char		*tablet_schm_bp;
+	TABINFO		*tabinfo;
+	int		minrowlen;
+	BLK_ROWINFO	blk_rowinfo;
+	BUF		*bp;
+
+
+	MEMSET(tab_tabletschm_dir, TABLE_NAME_MAX_LEN);
+	MEMCPY(tab_tabletschm_dir, tabdir, STRLEN(tabdir));
+	
+	str1_to_str2(tab_tabletschm_dir, '/', tabletname);
+	
+
+	tabinfo = MEMALLOCHEAP(sizeof(TABINFO));
+	MEMSET(tabinfo, sizeof(TABINFO));
+
+	tabinfo->t_sinfo = (SINFO *)MEMALLOCHEAP(sizeof(SINFO));
+	MEMSET(tabinfo->t_sinfo, sizeof(SINFO));
+
+	tabinfo->t_rowinfo = &blk_rowinfo;
+	MEMSET(tabinfo->t_rowinfo, sizeof(BLK_ROWINFO));
+
+	tabinfo->t_dold = tabinfo->t_dnew = (BUF *) tabinfo;
+
+	tabinfo_push(tabinfo);
+
+	minrowlen = ROW_MINLEN_IN_TABLET;
+
+	TABINFO_INIT(tabinfo, tab_tabletschm_dir, tabinfo->t_sinfo, minrowlen, TAB_SCHM_SRCH, 
+		     tabid, tabletid);
+	SRCH_INFO_INIT(tabinfo->t_sinfo, NULL, 0, TABLET_KEY_COLID_INROW, 
+		       VARCHAR, -1);
+
+	bp = blk_getsstable(tabinfo);
+
+	tablet_schm_bp = (char *)(bp->bsstab->bblk);
+		
+	BLOCK 		*blk;
+
+	int		i, rowno;
+	int 		*offset;
+	char		*rp;
+	char 		*key_in_blk;
+	int		keylen_in_blk;
+	char		*lastkey_in_blk;
+	int		lastkeylen_in_blk;
+	int 		result;
+	
+	for(i = 0; i < BLK_CNT_IN_SSTABLE; i ++)
+	{
+		blk = (BLOCK *)(tablet_schm_bp + i * BLOCKSIZE);	
+			
+		for(rowno = 0, offset = ROW_OFFSET_PTR(blk); 
+			rowno < blk->bnextrno; rowno++, offset--)
+		{
+			rp = (char *)blk + *offset;
+
+			/* TODO: row header checking. */
+			if(*offset > blk->bfreeoff)
+			{
+				traceprint("%s(%d): %dth block contains invalid %dth offset\n",tabletname, tabletid, blk->bblkno, rowno);
+			}
+
+			key_in_blk = row_locate_col(rp, TABLE_KEY_FAKE_COLOFF_INROW, minrowlen, &keylen_in_blk);
+
+			if (rowno > 0)
+			{
+				result = row_col_compare(VARCHAR, key_in_blk, keylen_in_blk, lastkey_in_blk, lastkeylen_in_blk);
+				
+				if (result != GR)
+				{
+					traceprint("%s(%d): the %dth block hit index issue\n",tabletname, tabletid, blk->bblkno);
+				}
+			}
+			
+			lastkey_in_blk = key_in_blk;
+			lastkeylen_in_blk = keylen_in_blk; 
+		}
+		
+	}
+
+	
+	session_close(tabinfo);
+
+	MEMFREEHEAP(tabinfo->t_sinfo);
+	MEMFREEHEAP(tabinfo);
+
+	tabinfo_pop();
+}
+
+
+void
+meta_check_tabletschme(char *tabdir, int tabid)
+{
+	char		tab_tabletschm_dir[TABLE_NAME_MAX_LEN];
+	char		*tablet_schm_bp;
+	TABINFO		*tabinfo;
+	int		minrowlen;
+	BLK_ROWINFO	blk_rowinfo;
+	BUF		*bp;
+
+
+	MEMSET(tab_tabletschm_dir, TABLE_NAME_MAX_LEN);
+	MEMCPY(tab_tabletschm_dir, tabdir, STRLEN(tabdir));
+	
+	str1_to_str2(tab_tabletschm_dir, '/', "tabletscheme");
+	
+
+	tabinfo = MEMALLOCHEAP(sizeof(TABINFO));
+	MEMSET(tabinfo, sizeof(TABINFO));
+
+	tabinfo->t_sinfo = (SINFO *)MEMALLOCHEAP(sizeof(SINFO));
+	MEMSET(tabinfo->t_sinfo, sizeof(SINFO));
+
+	tabinfo->t_rowinfo = &blk_rowinfo;
+	MEMSET(tabinfo->t_rowinfo, sizeof(BLK_ROWINFO));
+
+	tabinfo->t_dold = tabinfo->t_dnew = (BUF *) tabinfo;
+
+	tabinfo_push(tabinfo);
+
+	minrowlen = ROW_MINLEN_IN_TABLETSCHM;
+
+	TABINFO_INIT(tabinfo, tab_tabletschm_dir, tabinfo->t_sinfo, minrowlen,
+					(TAB_RESERV_BUF | TAB_SCHM_SRCH), tabid, TABLETSCHM_ID);
+
+	SRCH_INFO_INIT(tabinfo->t_sinfo, NULL, 0, TABLETSCHM_KEY_COLID_INROW, 
+					VARCHAR, -1);
+
+	
+	bp = blk_getsstable(tabinfo);
+
+	tablet_schm_bp = (char *)(bp->bsstab->bblk);
+		
+	BLOCK 		*blk;
+
+	int		i, rowno;
+	int 		*offset;
+	char		*rp;
+	char		*addr_in_blk;
+	int 		port_in_blk;
+	char 		*key_in_blk;
+	int		keylen_in_blk;
+	char		*lastkey_in_blk;
+	int		lastkeylen_in_blk;
+	int		ign;
+	int 		result;
+	char		*tabletname;
+	int		tabletid;
+
+		
+	for(i = 0; i < BLK_CNT_IN_SSTABLE; i ++)
+	{
+		blk = (BLOCK *)(tablet_schm_bp + i * BLOCKSIZE);	
+			
+		for(rowno = 0, offset = ROW_OFFSET_PTR(blk); 
+			rowno < blk->bnextrno; rowno++, offset--)
+		{
+			rp = (char *)blk + *offset;
+
+			/* TODO: row header checking. */
+			if(*offset > blk->bfreeoff)
+			{
+				traceprint("tabletscheme: %dth block contains invalid %dth offset\n", blk->bblkno, rowno);
+			}
+
+			key_in_blk = row_locate_col(rp, TABLETSCHM_KEY_FAKE_COLOFF_INROW, minrowlen, &keylen_in_blk);
+
+			if (rowno > 0)
+			{
+				result = row_col_compare(VARCHAR, key_in_blk, keylen_in_blk, lastkey_in_blk, lastkeylen_in_blk);
+				
+				if (result != GR)
+				{
+					traceprint("tabletscheme: the %dth block hit index issue\n", blk->bblkno);
+				}
+			}
+			
+			lastkey_in_blk = key_in_blk;
+			lastkeylen_in_blk = keylen_in_blk; 
+			
+			addr_in_blk = row_locate_col(rp, TABLETSCHM_RGADDR_COLOFF_INROW, 
+							ROW_MINLEN_IN_TABLETSCHM, &ign);
+			
+			port_in_blk = *(int *)row_locate_col(rp, TABLETSCHM_RGPORT_COLOFF_INROW, 
+							ROW_MINLEN_IN_TABLETSCHM, &ign);
+
+			if (!meta_ranger_is_online(addr_in_blk, port_in_blk))
+			{
+				traceprint("tabletscheme: ranger server %s:%d is NOT online\n", addr_in_blk, port_in_blk);
+			}
+
+
+			tabletname = row_locate_col(rp, TABLETSCHM_TABLETNAME_COLOFF_INROW, minrowlen, &ign);
+			tabletid = *(int *)row_locate_col(rp, TABLETSCHM_TABLETID_COLOFF_INROW, minrowlen, &ign);
+
+			meta_check_tablet(tabdir, tabid, tabletname, tabletid);
+				
+		}
+		
+	}
+
+
+	session_close(tabinfo);
+
+	MEMFREEHEAP(tabinfo->t_sinfo);
+	MEMFREEHEAP(tabinfo);
+
+	tabinfo_pop();
+
+}
+
+
+
+char *
+meta_checkdata(TREE *command)
+{
+	char		*tab_name;
+	int		tab_name_len;
+	char		tab_dir[TABLE_NAME_MAX_LEN];
+	char		tab_meta_dir[TABLE_NAME_MAX_LEN];
+	char   		*col_buf;
+	int		fd1;
+	int		rtn_stat;
+	TABLEHDR	tab_hdr;
+	int		sstab_rlen;
+	int		sstab_idx;
+	char		*resp;
+
+
+
+	Assert(command);
+
+	rtn_stat = FALSE;
+	col_buf= NULL;
+	sstab_rlen = 0;
+	sstab_idx = 0;
+	tab_name = command->sym.command.tabname;
+	tab_name_len = command->sym.command.tabname_len;
+
+	MEMSET(tab_dir, TABLE_NAME_MAX_LEN);
+	MEMCPY(tab_dir, MT_META_TABLE, STRLEN(MT_META_TABLE));
+
+	
+	str1_to_str2(tab_dir, '/', tab_name);
+
+	
+	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
+	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
+
+	if (!(STAT(tab_dir, &st) == 0))
+	{
+		traceprint("Table %s is not exist.\n", tab_name);
+		goto exit;
+	}
+	
+	str1_to_str2(tab_meta_dir, '/', "sysobjects");
+
+	OPEN(fd1, tab_meta_dir, (O_RDONLY));
+	
+	if (fd1 < 0)
+	{
+		traceprint("Table is not exist! \n");
+		goto exit;
+	}
+
+	
+	READ(fd1, &tab_hdr, sizeof(TABLEHDR));	
+
+	CLOSE(fd1);
+
+	if (tab_hdr.tab_tablet == 0)
+	{
+		traceprint("Table %s has no data.\n", tab_name);
+		goto exit;
+	}
+
+	if (tab_hdr.tab_stat & TAB_DROPPED)
+	{
+		traceprint("This table has been dropped.\n");
+		goto exit;
+	}
+
+	meta_check_tabletschme(tab_dir, tab_hdr.tab_id);
+	
+	rtn_stat = TRUE;
+
+exit:
+	if (rtn_stat)
+	{
+		
+		resp = conn_build_resp_byte(RPC_SUCCESS, 0, NULL);
+	}
+	else
+	{
+		resp = conn_build_resp_byte(RPC_FAIL, 0, NULL);
+	}
+
+	return resp;
 }
 
 

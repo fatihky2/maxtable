@@ -207,27 +207,29 @@ typedef struct tab_info
 	struct srch_info	
 			*t_sinfo;
 	struct buf	*t_keptbuf;
+	struct buf	*t_resbuf;
 	INSRG		*t_insrg;
 } TABINFO;
 
 
 
-#define TAB_META_SYSTAB		0x0001
-#define TAB_SCHM_SRCH		0x0002	
-#define TAB_CRT_NEW_FILE	0x0004
-#define	TAB_SRCH_DATA		0x0008	
-#define TAB_SSTAB_SPLIT		0x0010  
-#define TAB_SSTAB_1ST_ROW_CHG	0x0020
-#define TAB_KEPT_BUF_VALID	0x0040	
-#define TAB_INS_DATA		0x0080
-#define TAB_SCHM_INS		0x0100	
-#define TAB_GET_RES_SSTAB	0x0200	
-#define TAB_TABLET_SPLIT	0x0400
-#define TAB_TABLET_CRT_NEW	0x0800	
-#define TAB_TABLET_KEYROW_CHG	0x1000	
-#define TAB_DEL_DATA		0x2000	
-#define	TAB_RETRY_LOOKUP	0x4000	/* Retry to lookup the metadata. */
-#define	TAB_DO_SPLIT		0x8000
+#define TAB_META_SYSTAB		0x00000001
+#define TAB_SCHM_SRCH		0x00000002	
+#define TAB_CRT_NEW_FILE	0x00000004
+#define	TAB_SRCH_DATA		0x00000008	
+#define TAB_SSTAB_SPLIT		0x00000010  
+#define TAB_SSTAB_1ST_ROW_CHG	0x00000020
+#define TAB_KEPT_BUF_VALID	0x00000040	
+#define TAB_INS_DATA		0x00000080
+#define TAB_SCHM_INS		0x00000100	
+#define TAB_GET_RES_SSTAB	0x00000200	
+#define TAB_TABLET_SPLIT	0x00000400
+#define TAB_TABLET_CRT_NEW	0x00000800	
+#define TAB_TABLET_KEYROW_CHG	0x00001000	
+#define TAB_DEL_DATA		0x00002000	
+#define	TAB_RETRY_LOOKUP	0x00004000	/* Retry to lookup the metadata. */
+#define	TAB_DO_SPLIT		0x00008000
+#define TAB_RESERV_BUF		0x00010000
 
 
 #define TAB_IS_SYSTAB(tabinfo)	(tabinfo->t_stat & TAB_META_SYSTAB)

@@ -227,13 +227,16 @@ parser_open(char *s_str)
 	    	rtn_stat = par_addsstab(s_str + s_idx, ADDSSTAB);
 	    	break;
 	    case DROP:
-	    	rtn_stat = par_dropremovrebalan_tab(s_str + s_idx, DROP);
+	    	rtn_stat = par_dropremovrebalanmcc_tab(s_str + s_idx, DROP);
 	    	break;
 	    case REMOVE:
-	    	rtn_stat = par_dropremovrebalan_tab(s_str + s_idx, REMOVE);
+	    	rtn_stat = par_dropremovrebalanmcc_tab(s_str + s_idx, REMOVE);
+	    	break;
+	    case MCC:
+	    	rtn_stat = par_dropremovrebalanmcc_tab(s_str + s_idx, MCC);
 	    	break;
 	    case REBALANCE:
-	    	rtn_stat = par_dropremovrebalan_tab(s_str + s_idx, REBALANCE);
+	    	rtn_stat = par_dropremovrebalanmcc_tab(s_str + s_idx, REBALANCE);
 	    	break;
 
 	    default:
@@ -694,7 +697,7 @@ par_selrange_tab(char *s_str, int querytype)
 }
 
 int 
-par_dropremovrebalan_tab(char *s_str, int querytype)
+par_dropremovrebalanmcc_tab(char *s_str, int querytype)
 {
 	LOCALTSS(tss);
 	char		tab_name[64];

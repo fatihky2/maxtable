@@ -41,14 +41,15 @@ typedef struct buf
 
 
 
-#define	BUF_WRITING	0x1	
-#define	BUF_KEPT	0x2	
-#define	BUF_IOERR	0x4	
-#define	BUF_NOTHASHED	0x8	
-#define	BUF_HASHED	0x10	
-#define	BUF_DIRTY	0x20
-#define	BUF_DESTROY	0x40
-#define BUF_READ_EMPTY	0x80	
+#define	BUF_WRITING	0x0001	
+#define	BUF_KEPT	0x0002	
+#define	BUF_IOERR	0x0004	
+#define	BUF_NOTHASHED	0x0008	
+#define	BUF_HASHED	0x0010	
+#define	BUF_DIRTY	0x0020
+#define	BUF_DESTROY	0x0040
+#define BUF_READ_EMPTY	0x0080
+#define BUF_RESERVED	0x0100
 
 
 #define SSTABLE_STATE(bp)	(bp->bsstab->bstat)

@@ -48,7 +48,7 @@ int main(int argc, char *argv[])
 		if (match(argv[1], "insert"))
 		{
 			/* Insert 10000 data rows into table */
-			for(i = 1; i < 10000; i++)
+			for(i = 1; i < 50000; i++)
 			{
 				memset(resp, 0, 256);
 				memset(cmd, 0, 256);
@@ -66,7 +66,7 @@ int main(int argc, char *argv[])
 		if (match(argv[1], "select"))
 		{
 			/* Select datas from table */
-			for(i = 1; i < 10000; i++)
+			for(i = 1; i < 50000; i++)
 			{
 				memset(resp, 0, 256);
 				memset(cmd, 0, 256);
