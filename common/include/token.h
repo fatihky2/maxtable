@@ -48,9 +48,10 @@ typedef struct tokens
 #define REMOVE		9	/* Remove the whole table file in the metadata server. */
 #define REBALANCE	10
 #define SELECTRANGE	11
+#define	MCC		12
 	
 
-#define MAXSI_FIXED_TOKENS	11
+#define MAXSI_FIXED_TOKENS	12
 
 int
 token_validate(char *token);

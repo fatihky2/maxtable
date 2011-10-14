@@ -36,6 +36,7 @@ TOKENS  MT_Tokens[] =
 	{REMOVE,	"remove"},
 	{REBALANCE,	"rebalance"},
 	{SELECTRANGE,	"selectrange"},
+	{MCC,		"mcc"},
 };
 
 int

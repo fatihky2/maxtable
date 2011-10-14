@@ -43,10 +43,6 @@ bufread(BUF *bp)
 	BLKIO	*blkioptr;
 
 
-	
-	bufwait(bp);
-
-	
 	blkioptr = MEMALLOCHEAP(sizeof(BLKIO));
 
 	
@@ -91,18 +87,39 @@ bufwait(BUF *bp)
 	{
 		traceprint("IO error\n");
 	}
+
 }
 
 
 BUF *
 bufgrab(TABINFO *tabinfo)
 {
-	BUF	*bp;		
-	
+	BUF	*bp;
+	int	bp_res_cnt;
 
+
+	bp_res_cnt = 0;
+retry:
 	bp = Kernel->ke_buflru->bsstabold;
 
 	bufwait(bp);
+
+	if (SSTABLE_STATE(bp) & BUF_RESERVED)
+	{
+		LRUUNLINK(bp);
+
+		MRULINK(bp, Kernel->ke_buflru);
+
+		bp_res_cnt++;
+
+		/* Simple checking */
+		if (bp_res_cnt > 6)
+		{
+			traceprint("buffer pool must not exceed 6 reserved buffer\n ");
+		}
+		
+		goto retry;
+	}
 
 	bufkeep(bp);
 
@@ -134,8 +151,6 @@ bufwrite(BUF *bp)
 	{
 		bufawrite(bp);
 	}
-
-	bufwait(bp);
 }
 
 
@@ -384,7 +399,6 @@ void
 bufpredirty(BUF *bp)
 {
 retry:	
-	bufwait(bp);
 	
 //	P_SPINLOCK(BUF_SPIN);
 

@@ -41,7 +41,7 @@ struct table_hdr;
 #define	TABLET_RESSSTABID_COLOFF_INROW	(sizeof(ROWFMT) + sizeof(int) + SSTABLE_NAME_MAX_LEN)
 #define TABLET_KEY_COLOFF_INROW		(ROW_MINLEN_IN_TABLET + sizeof(int))
 
-
+#define TABLE_KEY_FAKE_COLOFF_INROW	-1
 
 
 
@@ -59,6 +59,8 @@ struct table_hdr;
 #define TABLETSCHM_TABLETNAME_COLOFF_INROW	(sizeof(ROWFMT) + sizeof(int) + sizeof(int)) 
 #define TABLETSCHM_RGADDR_COLOFF_INROW		(sizeof(ROWFMT) + sizeof(int) + sizeof(int) + TABLET_NAME_MAX_LEN)
 #define TABLETSCHM_KEY_COLOFF_INROW		(ROW_MINLEN_IN_TABLETSCHM + sizeof(int))
+
+#define TABLETSCHM_KEY_FAKE_COLOFF_INROW	-1
 
 
 void

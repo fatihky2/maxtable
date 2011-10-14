@@ -43,6 +43,11 @@ session_close(TABINFO *tabinfo)
 		traceprint("Enter into close table\n");
 	}
 
+	if ((tabinfo->t_stat & TAB_RESERV_BUF)&& (tabinfo->t_resbuf))
+	{
+		tabinfo->t_resbuf->bstat &= ~BUF_RESERVED;
+	}
+
 	for (bp = tabinfo->t_dnew; bp != (BUF *)tabinfo;)
 	{
 		Assert(bp->bstat & BUF_DIRTY);

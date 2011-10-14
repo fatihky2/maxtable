@@ -338,8 +338,10 @@ blk_getsstable(TABINFO *tabinfo)
 	{
 		bp = bufgrab(tabinfo);
 
-		bufhash(bp);
-
+		if (!(tabinfo->t_stat & TAB_RESERV_BUF))
+		{
+			bufhash(bp);
+		}
 		
 		blk_init(bp->bblk);
 	
@@ -362,7 +364,14 @@ blk_getsstable(TABINFO *tabinfo)
 
 	}
 
+	if (tabinfo->t_stat & TAB_RESERV_BUF)
+	{
+		bufunhash(bp);
 
+		bp->bstat |= BUF_RESERVED;
+		tabinfo->t_resbuf = bp;
+	}
+	
 	
 	if (   (tss->topid & TSS_OP_RANGESERVER) 
 	    && (tabinfo->t_insmeta->status & INS_META_1ST))

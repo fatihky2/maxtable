@@ -455,6 +455,10 @@ conn_again:
 
 		    	break;
 
+		    case MCC:
+			meta_again = FALSE;
+			meta_only = TRUE;
+		    	break;
 		    case REBALANCE:
 		    	break;
 		
@@ -821,6 +825,11 @@ conn_again:
 		}
 	    	break;
 
+	    case MCC:
+		meta_again = FALSE;
+		meta_only = TRUE;
+		break;
+		
 	    case REBALANCE:
 	    	meta_only = TRUE;
 	    	break;
