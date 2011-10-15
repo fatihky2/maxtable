@@ -18,8 +18,8 @@ http://m1.img.libdd.com/farm2/84/1CA3A734F40A28C9759FA33A6366E054_421_156.jpg
   * MCC will check the following area for metadata.
     ** tabletscheme table.
     ** tablet files.
-    ** table index.
-    ** ranger server.
+    ** table index consistency.
+    ** Checking if ranger server is on-line or off-line.
     ** data row formate and block management data.
 
 3. Future
