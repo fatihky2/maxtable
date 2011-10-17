@@ -34,6 +34,9 @@ typedef pthread_cond_t	SIGNAL;
 
 #define	V_SPINLOCK(lock)	pthread_mutex_unlock(&lock)
 
+#define SPINLOCK_DESTROY(lock)	pthread_mutex_destroy(&lock)
+
+
 
 
 

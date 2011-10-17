@@ -147,7 +147,7 @@ typedef struct memfrag
 #define MAX_FRAG_ALLOCSIZE 	(MAX_FRAG_SIZE - sizeof(MEMFRAG) - sizeof(MEMBLK))
 
 
-#define MAXSIZE_BLKPOOL		MY_MEMPAGESIZE * 1024
+#define MAXSIZE_BLKPOOL		(MY_MEMPAGESIZE * 1024)
 
 
 #define B2P(size)	((size) % MY_MEMPAGESIZE			\
@@ -191,13 +191,15 @@ typedef struct kernel
         void            *ke_buf_objpool;
 	void		*ke_msgdata_objpool;
 	SPINLOCK	ke_buf_spinlock;
+	SPINLOCK	ke_msg_obj_lock;
 	struct buf	*ke_buflru;		
 	struct buf	**ke_bufhash;		
 	struct buf	*ke_bufwash;		
 //	struct hkgc_info hkgc_info;
 } KERNEL;
 
-# define	BUF_SPIN	(Kernel->ke_buf_spinlock)
+#define	BUF_SPIN	(Kernel->ke_buf_spinlock)
+#define MSG_OBJ_SPIN	(Kernel->ke_msg_obj_lock)
 
 
 
@@ -209,8 +211,8 @@ typedef struct kernel
 #define BUF_MIN_ITEMS   32
 #define BUF_MAX_ITEMS   256
 
-#define MSGDATA_MIN_ITEMS   128
-#define MSGDATA_MAX_ITEMS   256
+#define MSGDATA_MIN_ITEMS   256
+#define MSGDATA_MAX_ITEMS   1024
 
 
 

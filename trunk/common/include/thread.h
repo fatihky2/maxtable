@@ -1,13 +1,13 @@
 #ifndef	__THREAD_H
 #define __THREAD_H
 
-#define MAXLINE 1024
+#define MSG_SIZE (128 * 1024)
 
 #define EPOLL_SIZE 256
 
 #define LISTENQ 20
 
-#define MAX_MSG_LIST 4096
+#define MAX_MSG_LIST 1024
 
 #define MSG_MAX_SIZE	(2 * SSTABLE_SIZE)
 
@@ -20,7 +20,7 @@ typedef struct msg_data
 {
 	struct msg_data_obj	*msg_datap;
 	int			fd;
-	char			data[MAXLINE];
+	char			data[MSG_SIZE];
 	int			n_size;
 	struct msg_data		*next;
 	char 			*block_buffer;

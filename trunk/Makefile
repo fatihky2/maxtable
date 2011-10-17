@@ -26,14 +26,14 @@ all: client master ranger memTest sample client_lib
 	$(CPP) -o $@ -c $< $(CFLAGS)
 
 client: ${COMMON_SRC} ${CLI_SRC}
-	$(CC) $(CFLAGS) ${COMMON_SRC} ${CLI_SRC} -D MEMMGR_TEST -D MAXTABLE_UNIT_TEST -o startClient
+	$(CC) $(CFLAGS) ${COMMON_SRC} ${CLI_SRC} -D DEBUG -D MEMMGR_TEST -D MAXTABLE_UNIT_TEST -o startClient
 	$(CC) $(CFLAGS) ${COMMON_SRC} ${CLI_SRC} -D MEMMGR_TEST -o imql
 
 master: ${COMMON_SRC} ${MASTER_SRC}
-	$(CC) $(CFLAGS) ${COMMON_SRC} ${MASTER_SRC} -D MEMMGR_TEST -D MAXTABLE_BENCH_TEST -o startMaster
+	$(CC) $(CFLAGS) ${COMMON_SRC} ${MASTER_SRC} -D DEBUG -D MEMMGR_TEST -D MAXTABLE_BENCH_TEST -o startMaster
 
 ranger: ${COMMON_SRC} ${REGION_SRC}
-	$(CC) $(CFLAGS) ${COMMON_SRC} ${REGION_SRC} -D MEMMGR_TEST -D MAXTABLE_BENCH_TEST -o startRanger
+	$(CC) $(CFLAGS) ${COMMON_SRC} ${REGION_SRC} -D DEBUG -D MEMMGR_TEST -D MAXTABLE_BENCH_TEST -o startRanger
 	
 memTest: ${COMMON_SRC}
 	$(CC) $(CFLAGS) ${COMMON_SRC} -D MEMMGR_UNIT_TEST -o memTest
