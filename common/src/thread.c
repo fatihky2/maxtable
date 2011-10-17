@@ -67,12 +67,12 @@ void msg_write(int fd, char * buf, int size)
 void * msg_recv(void *args)
 
 {
-    msg_recv_args * input = (msg_recv_args *)args;
+    	msg_recv_args * input = (msg_recv_args *)args;
 	int i, n;
 	int listenfd, nfds, connfd, sockfd;
 	socklen_t clilen;
 	char cliip[24];
-	char buf[MAXLINE];
+	char buf[MSG_SIZE];
 
 	struct sockaddr_in servaddr, cliaddr;
 
@@ -156,8 +156,8 @@ void * msg_recv(void *args)
 			{
 				if((sockfd = events[i].data.fd)<0)	
 				  continue;
-				MEMSET(buf, MAXLINE);
-				if((n = read(sockfd, buf, MAXLINE))==-1)
+				MEMSET(buf, MSG_SIZE);
+				if((n = read(sockfd, buf, MSG_SIZE))==-1)
 				{
 					if(errno==ECONNRESET)
 					  close(sockfd);
@@ -183,7 +183,7 @@ void * msg_recv(void *args)
 						int read_cnt = 0;
 						while(block_left)
 						{
-							n = m_recvdata(sockfd, block_buffer, MAXLINE);
+							n = m_recvdata(sockfd, block_buffer, MSG_SIZE);
 
 							if (   (n == MT_READERROR) || (n == MT_READDISCONNECT)
 							    || (n == MT_READQUIT))
@@ -198,8 +198,7 @@ void * msg_recv(void *args)
 							read_cnt++;
 						}
 
-						new_msg = malloc(sizeof(MSG_DATA));
-						MEMSET(new_msg, sizeof(MSG_DATA));
+						new_msg = msg_mem_alloc();
 						MEMCPY(new_msg->data, buf, STRLEN(RPC_RBD_MAGIC));
 						new_msg->fd = sockfd;
 						new_msg->n_size = sizeof(REBALANCE_DATA);
@@ -209,8 +208,7 @@ void * msg_recv(void *args)
 
 					else
 					{
-						new_msg = malloc(sizeof(MSG_DATA));
-						MEMSET(new_msg, sizeof(MSG_DATA));
+						new_msg = msg_mem_alloc();
 						MEMCPY(new_msg->data, buf, n);
 						new_msg->fd = sockfd;
 						new_msg->n_size = n;
@@ -255,7 +253,7 @@ void * msg_recv(void *args)
 					free(resp_msg->block_buffer);
 				}
 				
-				free(resp_msg);
+				msg_mem_free(resp_msg);
 
 				
 				struct epoll_event ev;
@@ -334,12 +332,10 @@ void msg_process(char * (*handler_request)(char *req_buf))
 		resp_size = conn_get_resp_size((RPCRESP *)resp);
 
 		resp_msg = NULL;
-		resp_msg = (MSG_DATA *)malloc(sizeof(MSG_DATA));
-		Assert(resp_msg);
-		MEMSET(resp_msg, sizeof(MSG_DATA));
+		resp_msg = (MSG_DATA *)msg_mem_alloc();
 		resp_msg->n_size = resp_size;
 		resp_msg->block_buffer = NULL;
-		Assert(resp_size < MAXLINE);
+		Assert(resp_size < MSG_SIZE);
 		MEMCPY(resp_msg->data, resp, resp_size);
 		resp_msg->fd = fd;	
 		
@@ -357,7 +353,7 @@ finish:
 			free(req_msg->block_buffer);
 		}
 		
-		free(req_msg);
+		msg_mem_free(req_msg);
   
 		conn_destroy_req(req);
 		conn_destroy_resp_byte(resp);		
@@ -373,11 +369,16 @@ msg_mem_alloc(void)
 	register MSG_DATA	*msg_data;
 	MSG_DATA_OBJ		*msg_data_obj;
 
+	P_SPINLOCK(MSG_OBJ_SPIN);
+	
 	msg_data_obj = (MSG_DATA_OBJ *) mp_obj_alloc(Kernel->ke_msgdata_objpool);
 
+	V_SPINLOCK(MSG_OBJ_SPIN);
+	
 	if (msg_data_obj == NULL)
 	{
-	        return NULL;
+		Assert(NULL);
+		return NULL;
 	}
 
 	msg_data = &(msg_data_obj->to_msg_datap);
@@ -395,7 +396,12 @@ msg_mem_free(MSG_DATA *msg_data)
 {
 	int ret;
 
+	P_SPINLOCK(MSG_OBJ_SPIN);
+	
 	ret = mp_obj_free(Kernel->ke_msgdata_objpool, (void *)msg_data->msg_datap);
+
+	V_SPINLOCK(MSG_OBJ_SPIN);
+	
 	Assert(ret == MEMPOOL_SUCCESS);
 
 	return;

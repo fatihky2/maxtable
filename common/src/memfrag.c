@@ -135,6 +135,8 @@ mem_init_alloc_regions()
 						MSGDATA_MIN_ITEMS, MSGDATA_MAX_ITEMS);
 	mp_list_insert((MEMOBJECT *)Kernel->ke_msgdata_objpool, MEMPOOL_OBJECT);
 
+	SPINLOCK_INIT(MSG_OBJ_SPIN);
+
 	return TRUE;
 }
 
