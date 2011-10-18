@@ -205,8 +205,12 @@ void * msg_recv(void *args)
 						new_msg->block_buffer = buffer;
 						new_msg->next = NULL;
 					}
-
-					else
+					else if (n > MSG_SIZE)
+					{
+						/* TODO : for the big data transferring. */
+						Assert(0);
+					}
+					else						
 					{
 						new_msg = msg_mem_alloc();
 						MEMCPY(new_msg->data, buf, n);

@@ -46,6 +46,8 @@
 #include "tablet.h"
 #include "rebalancer.h"
 #include "sstab.h"
+#include "checktable.h"
+#include "compact.h"
 
 
 
@@ -87,6 +89,12 @@ static void rg_regist();
 
 static char *
 rg_rebalancer(REBALANCE_DATA * rbd);
+
+static char *
+rg_compact_sstab_by_tablet(COMPACT_DATA *cpctdata);
+
+static char *
+rg_check_sstab_by_tablet(CHECKTABLE_DATA *chkdata);
 
 
 
@@ -1389,6 +1397,405 @@ exit:
 	return resp;
 
 }
+
+
+
+static char *
+rg_check_sstab_by_tablet(CHECKTABLE_DATA *chkdata)
+{
+	int		rtn_stat;
+	char		*resp;	
+	char		tab_dir[TABLE_NAME_MAX_LEN];
+	int		status;
+	int		namelen;
+	char		tab_sstab_dir[TABLE_NAME_MAX_LEN];
+	
+
+	rtn_stat = FALSE;
+	
+	MEMSET(tab_dir, TABLE_NAME_MAX_LEN);
+	MEMCPY(tab_dir, MT_RANGE_TABLE, STRLEN(MT_RANGE_TABLE));
+
+	
+	str1_to_str2(tab_dir, '/', chkdata->chktab_tabname);
+
+	if (STAT(tab_dir, &st) != 0)
+	{
+		MKDIR(status, tab_dir, 0755);
+
+		if (status < 0)
+		{
+			goto exit;
+		}
+	}
+
+		
+	BLOCK *blk;
+
+	int	i = 0, rowno;
+	int	*offset;
+	char 	*rp;
+	char	*sstabname;
+	int	sstabid;
+	char	*sstab_bp;
+
+	int	ign;
+	
+	while (TRUE)
+	{
+		blk = (BLOCK *)(chkdata->chktab_data + i * BLOCKSIZE);
+
+		
+		for(rowno = 0, offset = ROW_OFFSET_PTR(blk); 
+				rowno < blk->bnextrno; rowno++, offset--)
+		{
+			rp = (char *)blk + *offset;
+		
+			Assert(*offset < blk->bfreeoff);
+		
+			sstabname = row_locate_col(rp, TABLET_SSTABNAME_COLOFF_INROW, 
+						ROW_MINLEN_IN_TABLET, &namelen);
+
+			sstabid = *(int *)row_locate_col(rp, TABLET_SSTABID_COLID_INROW,
+						ROW_MINLEN_IN_TABLET, &ign);
+
+			
+			MEMSET(tab_sstab_dir, TABLE_NAME_MAX_LEN);
+			MEMCPY(tab_sstab_dir, tab_dir, STRLEN(tab_dir));
+			str1_to_str2(tab_sstab_dir, '/', sstabname);	
+
+			TABINFO		*tabinfo;
+			int		minrowlen;
+			BLK_ROWINFO	blk_rowinfo;
+			BUF		*bp;
+			
+			tabinfo = MEMALLOCHEAP(sizeof(TABINFO));
+			MEMSET(tabinfo, sizeof(TABINFO));
+			tabinfo->t_sinfo = (SINFO *)MEMALLOCHEAP(sizeof(SINFO));
+			MEMSET(tabinfo->t_sinfo, sizeof(SINFO));
+
+			tabinfo->t_rowinfo = &blk_rowinfo;
+			MEMSET(tabinfo->t_rowinfo, sizeof(BLK_ROWINFO));
+
+			tabinfo->t_dold = tabinfo->t_dnew = (BUF *) tabinfo;
+
+			tabinfo_push(tabinfo);
+
+			minrowlen = chkdata->chktab_row_minlen;
+
+			
+			TABINFO_INIT(tabinfo, tab_sstab_dir, tabinfo->t_sinfo, minrowlen, 
+					0, chkdata->chktab_tabid, sstabid);
+			SRCH_INFO_INIT(tabinfo->t_sinfo, NULL, 0, chkdata->chktab_key_colid, 
+				       VARCHAR, -1);
+					
+			bp = blk_getsstable(tabinfo);
+
+			sstab_bp = (char *)(bp->bsstab->bblk);
+
+			BLOCK 	*sstab_blk;
+
+			int	i = 0, rowno;
+			int	result;
+			int	*offset;
+			char 	*rp;
+			char	*key_in_blk;
+			int	keylen_in_blk;
+			char	*lastkey_in_blk;
+			int	lastkeylen_in_blk;
+			
+			while (TRUE)
+			{
+				sstab_blk = (BLOCK *)(sstab_bp + i * BLOCKSIZE);
+
+				
+				for(rowno = 0, offset = ROW_OFFSET_PTR(sstab_blk); 
+						rowno < blk->bnextrno; rowno++, offset--)
+				{
+					rp = (char *)sstab_blk + *offset;
+
+					key_in_blk = row_locate_col(rp, TABLE_KEY_FAKE_COLOFF_INROW, 
+								minrowlen, &keylen_in_blk);
+
+					if (rowno > 0)
+					{
+						result = row_col_compare(VARCHAR, key_in_blk, 
+								keylen_in_blk, lastkey_in_blk, 
+								lastkeylen_in_blk);
+						
+						if (result != GR)
+						{
+							traceprint("%s(%d): the %dth block hit index issue\n",sstabname, sstabid, sstab_blk->bblkno);
+						}
+					}
+					
+					lastkey_in_blk = key_in_blk;
+					lastkeylen_in_blk = keylen_in_blk;
+				
+					Assert(*offset < sstab_blk->bfreeoff);
+					
+				}
+
+				i++;
+
+				if (i > (BLK_CNT_IN_SSTABLE - 1))
+				{
+					break;
+				}			
+			
+			}
+			
+			session_close(tabinfo);
+
+			MEMFREEHEAP(tabinfo->t_sinfo);
+			MEMFREEHEAP(tabinfo);
+
+			tabinfo_pop();
+
+		}
+
+
+		i++;
+
+		if (i > (BLK_CNT_IN_SSTABLE - 1))
+		{
+			break;
+		}
+	}
+
+
+	rtn_stat = TRUE;
+
+
+exit:
+	if (rtn_stat)
+	{
+		
+		resp = conn_build_resp_byte(RPC_SUCCESS, 0, NULL);
+	}
+	else
+	{
+		resp = conn_build_resp_byte(RPC_FAIL, 0, NULL);
+	}
+
+	return resp;
+
+}
+
+
+
+static char *
+rg_compact_sstab_by_tablet(COMPACT_DATA *cpctdata)
+{
+	int		rtn_stat;
+	char		*resp;	
+	char		tab_dir[TABLE_NAME_MAX_LEN];
+	int		status;
+	int		namelen;
+	char		tab_sstab_dir[TABLE_NAME_MAX_LEN];
+	
+
+	rtn_stat = FALSE;
+	
+	MEMSET(tab_dir, TABLE_NAME_MAX_LEN);
+	MEMCPY(tab_dir, MT_RANGE_TABLE, STRLEN(MT_RANGE_TABLE));
+
+	
+	str1_to_str2(tab_dir, '/', cpctdata->compact_tabname);
+
+	if (STAT(tab_dir, &st) != 0)
+	{
+		MKDIR(status, tab_dir, 0755);
+
+		if (status < 0)
+		{
+			goto exit;
+		}
+	}
+
+		
+	BLOCK 	*blk;
+
+	int	i = 0, rowno;
+	int	*offset;
+	char 	*rp;
+	char	*sstabname;
+	int	sstabid;
+	char	*sstab_bp;
+	int	ign;
+	
+	while (TRUE)
+	{
+		blk = (BLOCK *)(cpctdata->compact_data + i * BLOCKSIZE);
+
+		
+		for(rowno = 0, offset = ROW_OFFSET_PTR(blk); 
+				rowno < blk->bnextrno; rowno++, offset--)
+		{
+			rp = (char *)blk + *offset;
+		
+			Assert(*offset < blk->bfreeoff);
+		
+			sstabname = row_locate_col(rp, TABLET_SSTABNAME_COLOFF_INROW, 
+						ROW_MINLEN_IN_TABLET, &namelen);
+
+			sstabid = *(int *)row_locate_col(rp, TABLET_SSTABID_COLID_INROW,
+						ROW_MINLEN_IN_TABLET, &ign);
+
+			
+			MEMSET(tab_sstab_dir, TABLE_NAME_MAX_LEN);
+			MEMCPY(tab_sstab_dir, tab_dir, STRLEN(tab_dir));
+			str1_to_str2(tab_sstab_dir, '/', sstabname);	
+
+			TABINFO		*tabinfo;
+			int		minrowlen;
+			BLK_ROWINFO	blk_rowinfo;
+			BUF		*bp;
+			
+			tabinfo = MEMALLOCHEAP(sizeof(TABINFO));
+			MEMSET(tabinfo, sizeof(TABINFO));
+			tabinfo->t_sinfo = (SINFO *)MEMALLOCHEAP(sizeof(SINFO));
+			MEMSET(tabinfo->t_sinfo, sizeof(SINFO));
+
+			tabinfo->t_rowinfo = &blk_rowinfo;
+			MEMSET(tabinfo->t_rowinfo, sizeof(BLK_ROWINFO));
+
+			tabinfo->t_dold = tabinfo->t_dnew = (BUF *) tabinfo;
+
+			tabinfo_push(tabinfo);
+
+			minrowlen = cpctdata->compact_row_minlen;
+
+			
+			TABINFO_INIT(tabinfo, tab_sstab_dir, tabinfo->t_sinfo, minrowlen, 
+					0, cpctdata->compact_tabid, sstabid);
+			SRCH_INFO_INIT(tabinfo->t_sinfo, NULL, 0, cpctdata->compact_key_colid, 
+				       VARCHAR, -1);
+					
+			bp = blk_getsstable(tabinfo);
+
+			sstab_bp = (char *)(bp->bsstab->bblk);
+
+			BLOCK 	*sstab_blk;
+			BLOCK	*sstab_nxtblk;
+
+			int	i = 0, rowno;
+			float	freeoff;
+			int	*offset;
+			char 	*rp;
+			int	rlen;
+					
+			while (TRUE)
+			{
+				sstab_blk = (BLOCK *)(sstab_bp + i * BLOCKSIZE);
+
+				freeoff = (BLOCKSIZE - sstab_blk->bfreeoff - ROW_OFFSET_ENTRYSIZE * sstab_blk->bnextrno) / BLOCKSIZE;
+				
+				if (freeoff > 0.1)
+				{
+					goto nextblk;
+				}
+
+				if ((i + 1) > (BLK_CNT_IN_SSTABLE - 1))
+				{
+					break;
+				}
+
+				Assert(sstab_blk->bnextblkno != -1);
+
+				sstab_nxtblk = (BLOCK *)(sstab_bp + (i +1) * BLOCKSIZE);
+				
+				for(rowno = 0, offset = ROW_OFFSET_PTR(sstab_nxtblk); 
+						rowno < sstab_nxtblk->bnextrno; rowno++, offset--)
+				{
+					rp = (char *)sstab_nxtblk + *offset;
+
+					Assert(*offset < sstab_nxtblk->bfreeoff);
+
+					rlen = ROW_GET_LENGTH(rp, minrowlen);
+					
+
+					if ((sstab_blk->bfreeoff + rlen) > (BLOCKSIZE - BLK_TAILSIZE 
+						- (ROW_OFFSET_ENTRYSIZE * (sstab_blk->bnextrno + 1))))
+					{
+						
+						int *offtab = ROW_OFFSET_PTR(sstab_nxtblk);
+						
+						BACKMOVE(rp, sstab_nxtblk + BLKHEADERSIZE, sstab_nxtblk->bfreeoff - *offset);
+
+						int j,k = sstab_nxtblk->bnextrno - rowno;
+						
+						for (j = sstab_nxtblk->bnextrno; (j > rowno) && (k > 0); j--,k--)
+						{
+							if (offtab[-(j-1)] < *offset)
+							{
+								break;
+							}
+						
+							offtab[-(k-1)] = offtab[-(j-1)] - *offset + BLKHEADERSIZE;						
+						}
+
+						Assert((k == 0) && (j == rowno));
+					}
+
+
+					PUT_TO_BUFFER(sstab_blk + sstab_blk->bfreeoff, ign, rp, rlen);
+
+					ROW_SET_OFFSET(sstab_blk, sstab_blk->bnextrno, sstab_blk->bfreeoff);
+					
+					bp->bblk->bfreeoff += rlen;
+
+					(sstab_blk->bnextrno)++;					
+				}
+
+nextblk:
+
+				i++;
+
+				if (i > (BLK_CNT_IN_SSTABLE - 1))
+				{
+					break;
+				}			
+			
+			}
+			
+			session_close(tabinfo);
+
+			MEMFREEHEAP(tabinfo->t_sinfo);
+			MEMFREEHEAP(tabinfo);
+
+			tabinfo_pop();
+
+		}
+
+
+		i++;
+
+		if (i > (BLK_CNT_IN_SSTABLE - 1))
+		{
+			break;
+		}
+	}
+
+
+	rtn_stat = TRUE;
+
+
+exit:
+	if (rtn_stat)
+	{
+		
+		resp = conn_build_resp_byte(RPC_SUCCESS, 0, NULL);
+	}
+	else
+	{
+		resp = conn_build_resp_byte(RPC_FAIL, 0, NULL);
+	}
+
+	return resp;
+
+}
+
 
 int 
 main(int argc, char *argv[])
