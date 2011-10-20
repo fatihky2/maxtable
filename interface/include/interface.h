@@ -5,6 +5,9 @@
 #include <stdio.h>
 #include <string.h>
 
+#define	BLOCKSIZE		(64 * 1024)
+
+
 #define MAX_RG_NUM 256
 
 #define ESTABLISHED 1
@@ -35,7 +38,7 @@ typedef struct _range_query_contex
 {
 	int	cur_rowpos;
 	int	cur_blockidx;
-	char	data[SSTABLE_SIZE];
+	char	data[BLOCKSIZE];
 }range_query_contex;
 
 /*
