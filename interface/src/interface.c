@@ -516,6 +516,15 @@ int sel_resp_rejoin(char * src_buf, char * dest_buf, int src_len, int * dest_len
 	return TRUE;
 }
 
+
+cli_get_nextrow()
+{
+}
+
+cli_get_firstrow()
+{
+}
+
 static int
 cli_prt_help(char *cmd)
 {
