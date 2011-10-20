@@ -14,7 +14,7 @@
 
 typedef struct _rg_conn
 {
-    char rg_server_ip[24];
+	char rg_server_ip[24];
 	int rg_server_port;
 	int status;
 	int connection_fd;
@@ -22,7 +22,7 @@ typedef struct _rg_conn
 
 typedef struct _conn
 {
-    char meta_server_ip[24];
+	char meta_server_ip[24];
 	int meta_server_port;
 	int connection_fd;
 	int status;
@@ -30,6 +30,13 @@ typedef struct _conn
 	int rg_list_len;
 	
 }conn;
+
+typedef struct _range_query_contex
+{
+	int	cur_rowpos;
+	int	cur_blockidx;
+	char	data[SSTABLE_SIZE];
+}range_query_contex;
 
 /*
 create one connection between cli and svr, return the connection
