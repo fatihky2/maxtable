@@ -158,6 +158,6 @@ void
 start_daemon(int listenfd, char * (*handler_request)(char *req_buf));
 
 void 
-startup(int servPort, int opid, char * (*handler_request)(char *req_buf));
+startup(int servPort, int opid, char * (*handler_request)(char *req_buf, int fd));
 
 #endif

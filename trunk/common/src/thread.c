@@ -270,7 +270,7 @@ void * msg_recv(void *args)
 
 }
 
-void msg_process(char * (*handler_request)(char *req_buf))
+void msg_process(char * (*handler_request)(char *req_buf, int fd))
 {
 	LOCALTSS(tss);
 	int resp_size;
@@ -309,7 +309,7 @@ void msg_process(char * (*handler_request)(char *req_buf))
 		  
 		if(req_msg->n_size)
 		{
-			resp = handler_request(req->data);
+			resp = handler_request(req->data, fd);
 
 			if (resp == NULL)
 			{

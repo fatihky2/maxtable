@@ -34,7 +34,7 @@ typedef struct msg_data_obj
 
 void * msg_recv(void *args);
 
-void msg_process(char * (*handler_request)(char *req_buf));
+void msg_process(char * (*handler_request)(char *req_buf, int fd));
 
 MSG_DATA *
 msg_mem_alloc(void);

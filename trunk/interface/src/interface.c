@@ -517,20 +517,17 @@ int sel_resp_rejoin(char * src_buf, char * dest_buf, int src_len, int * dest_len
 }
 
 
-SELRANGE *
-cli_open_range(conn * connection, char * cmd, char * response, int * resp_len)
+char *
+cli_open_range(conn * connection, char * cmd)
 {
 	LOCALTSS(tss);
 
 	char		send_buf[LINE_BUF_SIZE];
 	char		tab_name[64];
 	int		send_buf_size;
-
 	RPCRESP		*resp;
 	int		querytype;
 	int		rtn_stat;
-	int		sstab_split;
-	int		remove_tab_hit;
 	SELRANGE	*resp_selrg;
 	
 
@@ -545,10 +542,8 @@ cli_open_range(conn * connection, char * cmd, char * response, int * resp_len)
 	}
 
 	rtn_stat = TRUE;
-	sstab_split = FALSE;
-	remove_tab_hit = FALSE;
+	resp_selrg = NULL;
 
-	//querytype = par_get_query(cmd, &querytype_index);
 	if(!parser_open(cmd))
 	{
 		parser_close();
@@ -588,19 +583,21 @@ finish:
 	
 	parser_close();    
 
-	return resp_selrg;
+	return (char *)resp_selrg;
 }
 
-void
-cli_rgsel_send(conn * connection, char * cmd, char * response, int * resp_len, INSMETA *resp_ins, RPCRESP *resp, int send_buf_size)
+rg_conn *
+cli_rgsel_send(conn * connection, char * cmd, char *selrg)
 {
 	char		send_rg_buf[LINE_BUF_SIZE];
-	
+	INSMETA 	*resp_ins;	
 	int		rtn_stat;
 	rg_conn		*rg_connection;
 	int 		i;
 
-	
+
+
+	resp_ins = &(((SELRANGE *)selrg)->left_range);
 	for(i = 0; i < connection->rg_list_len; i++)
 	{
 		if((resp_ins->i_hdr.rg_info.rg_port == connection->rg_list[i]->rg_server_port)
@@ -624,7 +621,7 @@ cli_rgsel_send(conn * connection, char * cmd, char * response, int * resp_len, I
 
 			MEMFREEHEAP(rg_connection);
 			rtn_stat = FALSE;
-			return;
+			return NULL;
 
 		}
 		
@@ -635,24 +632,28 @@ cli_rgsel_send(conn * connection, char * cmd, char * response, int * resp_len, I
 
 	}
 
-	MEMCPY(resp->result, RPC_SELECTRANGE_MAGIC, RPC_MAGIC_MAX_LEN);
+	int send_buf_size = strlen(cmd);
+	
+	MEMCPY(selrg, RPC_SELECTRANGE_MAGIC, RPC_MAGIC_MAX_LEN);
 			
 	MEMSET(send_rg_buf, LINE_BUF_SIZE);
 	MEMCPY(send_rg_buf, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
 
 
-	MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN, resp->result, resp->result_length);
-	MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN + resp->result_length, cmd, send_buf_size);
+	MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN, selrg, sizeof(SELRANGE));
+	MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN + sizeof(SELRANGE), cmd, send_buf_size);
 
 	write(rg_connection->connection_fd, send_rg_buf, 
-			(resp->result_length + send_buf_size + RPC_MAGIC_MAX_LEN));
+			(sizeof(SELRANGE) + send_buf_size + RPC_MAGIC_MAX_LEN));
+
+	return rg_connection;
 	
 
 }
 
 
-void
-cli_rgsel_recv(conn * rg_connection, char * cmd, char * response, int * resp_len,RPCRESP *resp)
+range_query_contex *
+cli_rgsel_recv(rg_conn * rg_connection)
 {
 	RPCRESP		*rg_resp;
 	int		rtn_stat;
@@ -663,22 +664,20 @@ cli_rgsel_recv(conn * rg_connection, char * cmd, char * response, int * resp_len
 	if (rg_resp->status_code == RPC_UNAVAIL)
 	{
 		traceprint("\n need to re-get rg meta \n");
-		conn_destroy_resp(resp);
-
+		
 		rg_connection->status = CLOSED;
 		conn_close(rg_connection->connection_fd, NULL, rg_resp);
 		
 		sleep(HEARTBEAT_INTERVAL + 1);
-		return;
+		return NULL;
 
 	}
 
 	if (rg_resp->status_code == RPC_RETRY)
 	{
 	        traceprint("\n need to try \n");
-	        conn_destroy_resp(resp);
 		conn_destroy_resp(rg_resp);
-		return;
+		return NULL;
 
 	}
 
@@ -686,62 +685,30 @@ cli_rgsel_recv(conn * rg_connection, char * cmd, char * response, int * resp_len
 	{
 		traceprint("\n ERROR in rg_server response \n");
 		rtn_stat = FALSE;
-		return;
+		return NULL;
 
 	}
-
 		
 
-	char	*rp;
-	int	rlen;
-	int	result_len = 0;
-	int	rowcnt;
-	int	row_idx = 0;
-	char	rowbp[512];
-
-	rowcnt = *(int *)(rg_resp->result);
-	rp = rg_resp->result + sizeof(int);
-
-	while(row_idx < rowcnt)
-	{
-		rlen = *(int *)rp;
-		rp += sizeof(int);
-
-		result_len += (rlen + sizeof(int));
-
-		Assert(result_len < rg_resp->result_length);
-
-		MEMSET(rowbp, 512);
-	//	sel_resp_rejoin(rp, rowbp, rlen, &rlen_t, resp->result, querytype);
-
-		printf(" %s\n", rowbp);
-	
-		rp += rlen;
-		row_idx++;
-	}
-	
-	*resp_len = sizeof(SUC_RET);
-	strcpy(response, SUC_RET);
-	
-
+	return (range_query_contex *)(rg_resp->result);
 }
 
 void
-cli_close_range(SELRANGE *selrg)
+cli_close_range(char *selrg)
 {
 	MEMFREEHEAP(selrg);
 }
 
-void
-cli_get_nextrow()
+char *
+cli_get_nextrow(range_query_contex *rgsel_cont)
 {
-	;
+	return NULL;
 }
 
-void
-cli_get_firstrow()
+char *
+cli_get_firstrow(range_query_contex *rgsel_cont)
 {
-	;
+	return NULL;
 }
 
 static int

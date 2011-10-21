@@ -48,7 +48,7 @@ int main(int argc, char *argv[])
 		if (match(argv[1], "insert"))
 		{
 			/* Insert 10000 data rows into table */
-			for(i = 1; i < 50000; i++)
+			for(i = 1; i < 10000; i++)
 			{
 				memset(resp, 0, 256);
 				memset(cmd, 0, 256);
@@ -66,7 +66,7 @@ int main(int argc, char *argv[])
 		if (match(argv[1], "select"))
 		{
 			/* Select datas from table */
-			for(i = 1; i < 50000; i++)
+			for(i = 1; i < 10000; i++)
 			{
 				memset(resp, 0, 256);
 				memset(cmd, 0, 256);
@@ -88,7 +88,25 @@ int main(int argc, char *argv[])
 			memset(resp, 0, 256);
 			memset(cmd, 0, 256);
 			sprintf(cmd, "selectrange gu(gggg10, gggg11)");
-			cli_commit(connection, cmd, resp, &len);
+
+			char *selrg;
+			rg_conn *rg_connection;
+			range_query_contex *rgsel_cont;
+
+			selrg = cli_open_range(connection, cmd);
+retry:
+			rg_connection =  cli_rgsel_send(connection, cmd, selrg);
+
+			rgsel_cont = cli_rgsel_recv(rg_connection);
+
+			if ((rgsel_cont == NULL) || (rgsel_cont->status & DATA_CONT))
+			{
+				goto retry;
+			}
+			
+			cli_close_range(selrg);
+			
+			//cli_commit(connection, cmd, resp, &len);
 			printf("Client 1: %s, ret(%d): %s\n", cmd, len, resp);
 		}
 

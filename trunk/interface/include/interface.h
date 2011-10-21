@@ -36,10 +36,16 @@ typedef struct _conn
 
 typedef struct _range_query_contex
 {
+	int	status;
+	int	first_rowpos;
+	int	end_rowpos;
 	int	cur_rowpos;
-	int	cur_blockidx;
 	char	data[BLOCKSIZE];
 }range_query_contex;
+
+
+#define	DATA_CONT	0x0001	
+#define DATA_DONE	0x0002
 
 /*
 create one connection between cli and svr, return the connection
@@ -55,6 +61,19 @@ extern void cli_exit(conn * connection);
 commit one request
 */
 extern int cli_commit(conn * connection, char * cmd, char * response, int * length);
+
+
+extern char *
+cli_open_range(conn * connection, char * cmd);
+
+extern rg_conn *
+cli_rgsel_send(conn * connection, char * cmd, char *selrg);
+
+extern range_query_contex *
+cli_rgsel_recv(rg_conn * rg_connection);
+
+extern void
+cli_close_range(char *selrg);
 
 
 #endif
