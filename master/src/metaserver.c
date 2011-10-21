@@ -2531,7 +2531,7 @@ exit:
 
 
 char *
-meta_handler(char *req_buf)
+meta_handler(char *req_buf, int fd)
 {
 	LOCALTSS(tss);
 	TREE		*command;
