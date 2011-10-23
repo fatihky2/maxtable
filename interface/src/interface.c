@@ -13,6 +13,7 @@
 #include "row.h"
 #include "type.h"
 #include "interface.h"
+#include "row.h"
 
 
 extern	TSS	*Tss;
@@ -412,7 +413,8 @@ finish:
 
 	conn_destroy_resp(resp);
 	
-	if(rg_resp && ((querytype == INSERT) || (querytype == SELECT) ||(querytype == DELETE)))
+	if(rg_resp && ((querytype == INSERT) || (querytype == SELECT) ||(querytype == DELETE)
+		|| (querytype == SELECTRANGE)))
 	{
 		conn_destroy_resp(rg_resp);
 	}
@@ -652,8 +654,8 @@ cli_rgsel_send(conn * connection, char * cmd, char *selrg)
 }
 
 
-range_query_contex *
-cli_rgsel_recv(rg_conn * rg_connection)
+void
+cli_rgsel_recv(rg_conn * rg_connection, range_query_contex *rgsel_ctx)
 {
 	RPCRESP		*rg_resp;
 	int		rtn_stat;
@@ -669,7 +671,7 @@ cli_rgsel_recv(rg_conn * rg_connection)
 		conn_close(rg_connection->connection_fd, NULL, rg_resp);
 		
 		sleep(HEARTBEAT_INTERVAL + 1);
-		return NULL;
+		return;
 
 	}
 
@@ -677,7 +679,7 @@ cli_rgsel_recv(rg_conn * rg_connection)
 	{
 	        traceprint("\n need to try \n");
 		conn_destroy_resp(rg_resp);
-		return NULL;
+		return;
 
 	}
 
@@ -685,12 +687,11 @@ cli_rgsel_recv(rg_conn * rg_connection)
 	{
 		traceprint("\n ERROR in rg_server response \n");
 		rtn_stat = FALSE;
-		return NULL;
+		return;
 
 	}
 		
-
-	return (range_query_contex *)(rg_resp->result);
+	MEMCPY(rgsel_ctx, rg_resp->result, sizeof(range_query_contex));
 }
 
 void
@@ -699,10 +700,32 @@ cli_close_range(char *selrg)
 	MEMFREEHEAP(selrg);
 }
 
+#define	ROW_OFFSET_ENTRYSIZE	sizeof(int)
+#define	BLK_TAILSIZE		sizeof(time)	
+#define	ROW_OFFSET_PTR(blkptr)	((int *) (((char *)(blkptr)) +		\
+                  (BLOCKSIZE - BLK_TAILSIZE - ROW_OFFSET_ENTRYSIZE)))
+
 char *
 cli_get_nextrow(range_query_contex *rgsel_cont)
 {
-	return NULL;
+	if (rgsel_cont->cur_rowpos == rgsel_cont->end_rowpos)
+	{
+		return NULL;
+	}
+
+	(rgsel_cont->cur_rowpos)++;
+
+	int *offtab = ROW_OFFSET_PTR(rgsel_cont->data);
+
+	char *rp = rgsel_cont->data + offtab[-(rgsel_cont->cur_rowpos)];
+	int rlen = ROW_GET_LENGTH(rp, rgsel_cont->rowminlen);
+
+	char test[128];
+	MEMSET(test, 128);
+	MEMCPY(test, rp, rlen);
+	printf("next row: %s \n", test);
+
+	return rp;
 }
 
 char *

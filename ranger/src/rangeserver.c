@@ -48,7 +48,7 @@
 #include "sstab.h"
 #include "checktable.h"
 #include "compact.h"
-
+#include "b_search.h"
 
 
 extern TSS	*Tss;
@@ -86,6 +86,7 @@ typedef struct _range_query_contex
 	int	first_rowpos;
 	int	end_rowpos;
 	int	cur_rowpos;
+	int	rowminlen;
 	char	data[BLOCKSIZE];
 }range_query_contex;
 
@@ -800,7 +801,6 @@ rg_selrange_tab(TREE *command, TABINFO *tabinfo, int fd)
 	char		*keycol;
 	int		keycolen;
 	int		offset;
-	char   		*col_buf;
 	int 		rlen;
 	char		last_sstab[SSTABLE_NAME_MAX_LEN];
 
@@ -810,7 +810,6 @@ rg_selrange_tab(TREE *command, TABINFO *tabinfo, int fd)
 	rtn_stat = FALSE;
 	sstab_rlen = 0;
 	sstab_idx = 0;
-	col_buf = NULL;
 	tab_name = command->sym.command.tabname;
 	tab_name_len = command->sym.command.tabname_len;
 	ins_meta = tabinfo->t_insmeta;
@@ -865,14 +864,6 @@ rg_selrange_tab(TREE *command, TABINFO *tabinfo, int fd)
 	SRCH_INFO_INIT(tabinfo->t_sinfo, keycol, keycolen, 1, VARCHAR, -1);
 
 
-	/* Mallocate max buffer length. */
-	
-	col_buf = MEMALLOCHEAP(512);
-	MEMSET(col_buf, 512);
-	int	col_len = sizeof(int);
-	int	rowcnt = 0;
-	
-
 	bp = blkget(tabinfo);
 
 	
@@ -896,6 +887,20 @@ rg_selrange_tab(TREE *command, TABINFO *tabinfo, int fd)
 	range_query_contex	rgsel_cont;
 
 	int	resp_cli;
+	int 	*offtab = ROW_OFFSET_PTR(bp->bblk);
+	int	i;
+		
+	for (i = 0; i < bp->bblk->bnextrno; i++)
+	{
+		if (offtab[-i] == offset)
+		{
+			break;
+		}
+	}
+
+	rgsel_cont.first_rowpos = i;
+
+	Assert(i < bp->bblk->bnextrno);
 	
 	while (TRUE)
 	{
@@ -903,34 +908,41 @@ rg_selrange_tab(TREE *command, TABINFO *tabinfo, int fd)
 		
 		rlen = ROW_GET_LENGTH(rp, bp->bblk->bminlen);
 
-		char	*key_in_blk;
-		int	keylen_in_blk;
-		int 	result;
-		
-		key_in_blk = row_locate_col(rp, tabinfo->t_sinfo->sicoloff, bp->bblk->bminlen, 
-						    &keylen_in_blk);
-		
-		result = row_col_compare(tabinfo->t_sinfo->sicoltype, key_in_blk, keylen_in_blk,
-					right_rangekey, right_keylen);
+		TABINFO_INIT(tabinfo, tabinfo->t_sstab_name, tabinfo->t_sinfo, tabinfo->t_row_minlen, 
+			0, tabinfo->t_tabid, tabinfo->t_sstab_id);
+		SRCH_INFO_INIT(tabinfo->t_sinfo, right_rangekey, right_keylen, 2, VARCHAR, -2);
 
-		if (result == GR)
+		B_SRCHINFO	srchinfo;
+		
+		SRCHINFO_INIT((&srchinfo), 0, BLK_GET_NEXT_ROWNO(bp) - 1, BLK_GET_NEXT_ROWNO(bp), LE);
+
+		b_srch_block(tabinfo, bp, &srchinfo);
+
+		rgsel_cont.rowminlen = bp->bblk->bminlen;
+		rgsel_cont.end_rowpos = srchinfo.brownum - 1;
+		rgsel_cont.cur_rowpos = rgsel_cont.first_rowpos;
+
+		MEMCPY(rgsel_cont.data, (char *)(bp->bblk), BLOCKSIZE);
+
+		/* TODO: we need to stamp the status code. */
+
+		resp = conn_build_resp_byte(RPC_SUCCESS, sizeof(range_query_contex), (char *)&rgsel_cont);
+		
+		int resp_size = conn_get_resp_size((RPCRESP *)resp);
+		  
+		write(fd, resp, resp_size);
+
+		/* TODO: placeholder for the TCP/IP check. */
+		read(fd, &resp_cli, 4);
+
+		conn_destroy_resp_byte(resp);	
+
+		if (srchinfo.brownum < bp->bblk->bnextrno)
 		{
-			resp = conn_build_resp_byte(RPC_SUCCESS, BLOCKSIZE, (char *)(bp->bblk));
-			
-			int resp_size = conn_get_resp_size((RPCRESP *)resp);
-			  
-			write(fd, resp, resp_size);
-
-			read(fd, &resp_cli, 4);
-
-			if (resp_cli == 100)
-			{
-				break;
-			}
-			
+			/* We already hit all the data. */
+			break;
 		}
-		
-		
+			
 		if (bp->bblk->bnextblkno != -1)
 		{
 			bp++;
@@ -948,6 +960,7 @@ rg_selrange_tab(TREE *command, TABINFO *tabinfo, int fd)
 
 			bp = blk_getsstable(tabinfo);
 			offset = BLKHEADERSIZE;
+			rgsel_cont.first_rowpos = 0;
 		}
 		else
 		{
@@ -963,11 +976,6 @@ exit:
 		resp = conn_build_resp_byte(RPC_SUCCESS, 0, NULL);
 	}
 
-	if (col_buf != NULL)
-	{
-		MEMFREEHEAP(col_buf);
-	}
-	
 	return resp;
 
 }
@@ -1167,8 +1175,7 @@ rg_handler(char *req_buf, int fd)
 	{
 		ins_meta = &(sel_rg->left_range);
 		
-		req_buf += sizeof(SELRANGE) + sizeof(TABLEHDR) + 
-				ins_meta->col_num * sizeof(COLINFO);
+		req_buf += sizeof(SELRANGE);
 	}
 	else
 	{	
