@@ -5,7 +5,9 @@
 #include <stdio.h>
 #include <string.h>
 
-#define	BLOCKSIZE		(64 * 1024)
+//#define	BLOCKSIZE		(64 * 1024)
+#define	BLOCKSIZE		512
+
 
 
 #define MAX_RG_NUM 256
@@ -40,6 +42,7 @@ typedef struct _range_query_contex
 	int	first_rowpos;
 	int	end_rowpos;
 	int	cur_rowpos;
+	int	rowminlen;
 	char	data[BLOCKSIZE];
 }range_query_contex;
 
@@ -69,11 +72,14 @@ cli_open_range(conn * connection, char * cmd);
 extern rg_conn *
 cli_rgsel_send(conn * connection, char * cmd, char *selrg);
 
-extern range_query_contex *
-cli_rgsel_recv(rg_conn * rg_connection);
+extern void
+cli_rgsel_recv(rg_conn * rg_connection, range_query_contex *rgsel_ctx);
 
 extern void
 cli_close_range(char *selrg);
+
+extern char *
+cli_get_nextrow(range_query_contex *rgsel_cont);
 
 
 #endif

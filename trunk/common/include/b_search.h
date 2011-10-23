@@ -37,13 +37,13 @@ typedef struct b_srchinfo
 #define	SRCHINFO_INIT(srchinfo, low, high, total, result)	\
 do								\
 {								\
-	srchinfo->brow = NULL;					\
-	srchinfo->brownum = (low + high)>>1;			\
-	srchinfo->blow = low;					\
-	srchinfo->bhigh	= high;					\
-	srchinfo->bcomp = result;				\
-	srchinfo->btotrows = total;				\
-	srchinfo->boffset = 0;					\
+	(srchinfo)->brow = NULL;				\
+	(srchinfo)->brownum = (low + high)>>1;			\
+	(srchinfo)->blow = low;					\
+	(srchinfo)->bhigh	= high;				\
+	(srchinfo)->bcomp = result;				\
+	(srchinfo)->btotrows = total;				\
+	(srchinfo)->boffset = 0;				\
 }								\
 while(0)
 

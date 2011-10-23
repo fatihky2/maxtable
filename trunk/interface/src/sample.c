@@ -48,7 +48,7 @@ int main(int argc, char *argv[])
 		if (match(argv[1], "insert"))
 		{
 			/* Insert 10000 data rows into table */
-			for(i = 1; i < 10000; i++)
+			for(i = 1; i < 2000; i++)
 			{
 				memset(resp, 0, 256);
 				memset(cmd, 0, 256);
@@ -91,15 +91,17 @@ int main(int argc, char *argv[])
 
 			char *selrg;
 			rg_conn *rg_connection;
-			range_query_contex *rgsel_cont;
+			range_query_contex rgsel_cont;
 
 			selrg = cli_open_range(connection, cmd);
 retry:
 			rg_connection =  cli_rgsel_send(connection, cmd, selrg);
 
-			rgsel_cont = cli_rgsel_recv(rg_connection);
+			cli_rgsel_recv(rg_connection, &rgsel_cont);
 
-			if ((rgsel_cont == NULL) || (rgsel_cont->status & DATA_CONT))
+			cli_get_nextrow(&rgsel_cont);
+			
+			if ((rgsel_cont.status & DATA_CONT))
 			{
 				goto retry;
 			}
