@@ -642,6 +642,60 @@ _read_again:
 	}
 }
 
+int conn_socket_open(int servPort)
+{
+	struct sockaddr_in servaddr;
+	int listenfd = socket(AF_INET, SOCK_STREAM, 0);
+	
+
+	bzero(&servaddr, sizeof(servaddr));
+	servaddr.sin_family = AF_INET;
+	servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
+	servaddr.sin_port = htons(servPort);
+
+	if(bind(listenfd, (struct sockaddr *)&servaddr, sizeof(servaddr)) != 0)
+	{
+		return 0;
+	}
+
+	listen(listenfd, LISTENQ);
+
+	return listenfd;
+}
+
+int 
+conn_socket_read(int sockfd, char *buf, int size)
+{
+	int	n;
+
+_read_again:	
+	n = read(sockfd, buf, size);
+	if (n > 0) 
+	{
+		buf[n] = '\0';
+	} 
+	else if (n == 0) 
+	{
+		close(sockfd);
+	} 
+	else if (errno == EINTR) 
+	{
+		goto _read_again;
+	} 
+	else 
+	{
+		close(sockfd);
+	}
+
+	return n;
+}
+
+void conn_socket_close(int sockfd)
+{
+	close(sockfd);
+}
+
+
 void startup(int servPort, int opid, char * (*handler_request)(char *req_buf, int fd))
 {
 	

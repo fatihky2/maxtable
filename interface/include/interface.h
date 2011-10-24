@@ -66,17 +66,17 @@ commit one request
 extern int cli_commit(conn * connection, char * cmd, char * response, int * length);
 
 
-extern char *
-cli_open_range(conn * connection, char * cmd);
+extern int
+cli_open_range(conn * connection, char * cmd, char * ip_address,int port);
 
-extern rg_conn *
-cli_rgsel_send(conn * connection, char * cmd, char *selrg);
-
-extern void
-cli_rgsel_recv(rg_conn * rg_connection, range_query_contex *rgsel_ctx);
+extern int
+cli_read_range(int sockfd, range_query_contex *rgsel_cont);
 
 extern void
-cli_close_range(char *selrg);
+cli_write_range(int sockfd);
+
+extern void
+cli_close_range(int sockfd);
 
 extern char *
 cli_get_nextrow(range_query_contex *rgsel_cont);

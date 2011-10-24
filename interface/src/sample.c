@@ -89,24 +89,29 @@ int main(int argc, char *argv[])
 			memset(cmd, 0, 256);
 			sprintf(cmd, "selectrange gu(gggg10, gggg11)");
 
-			char *selrg;
-			rg_conn *rg_connection;
+			int sockfd = cli_open_range(connection, cmd, "127.0.0.1", 1969);
+
 			range_query_contex rgsel_cont;
 
-			selrg = cli_open_range(connection, cmd);
+			char *test_rp;
+
 retry:
-			rg_connection =  cli_rgsel_send(connection, cmd, selrg);
 
-			cli_rgsel_recv(rg_connection, &rgsel_cont);
+			cli_read_range(sockfd, &rgsel_cont);
 
-			cli_get_nextrow(&rgsel_cont);
-			
-			if ((rgsel_cont.status & DATA_CONT))
+			if (rgsel_cont.status & DATA_CONT)
 			{
+				do
+				{
+					test_rp = cli_get_nextrow(&rgsel_cont);
+				} while(test_rp != NULL);
+				
+				cli_write_range(sockfd);
+				
 				goto retry;
 			}
-			
-			cli_close_range(selrg);
+
+			cli_close_range(sockfd);
 			
 			//cli_commit(connection, cmd, resp, &len);
 			printf("Client 1: %s, ret(%d): %s\n", cmd, len, resp);

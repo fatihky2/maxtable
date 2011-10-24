@@ -780,6 +780,9 @@ exit:
 
 }
 
+/* Following define is for the status sending to the client. */
+#define	DATA_CONT	0x0001	
+#define DATA_DONE	0x0002
 
 
 char *
@@ -795,13 +798,13 @@ rg_selrange_tab(TREE *command, TABINFO *tabinfo, int fd)
 	int		sstab_rlen;
 	int		sstab_idx;
 	char		*resp;
+	int		resp_size;
 	INSMETA 	*ins_meta;
 	COLINFO 	*col_info;
 	BUF		*bp;
 	char		*keycol;
 	int		keycolen;
 	int		offset;
-	int 		rlen;
 	char		last_sstab[SSTABLE_NAME_MAX_LEN];
 
 
@@ -872,6 +875,14 @@ rg_selrange_tab(TREE *command, TABINFO *tabinfo, int fd)
 		goto exit;
 	}
 
+	
+	int listenfd = conn_socket_open(1969);
+
+	if (!listenfd)
+	{
+		goto exit;
+	}
+	
 	Assert(tabinfo->t_rowinfo->rblknum == bp->bblk->bblkno);
 	Assert(tabinfo->t_rowinfo->rsstabid == bp->bblk->bsstabid);
 
@@ -886,7 +897,7 @@ rg_selrange_tab(TREE *command, TABINFO *tabinfo, int fd)
 
 	range_query_contex	rgsel_cont;
 
-	int	resp_cli;
+	char	resp_cli[8];
 	int 	*offtab = ROW_OFFSET_PTR(bp->bblk);
 	int	i;
 		
@@ -901,52 +912,94 @@ rg_selrange_tab(TREE *command, TABINFO *tabinfo, int fd)
 	rgsel_cont.first_rowpos = i;
 
 	Assert(i < bp->bblk->bnextrno);
-	
-	while (TRUE)
-	{
-		char *rp = (char *)(bp->bblk) + offset;
-		
-		rlen = ROW_GET_LENGTH(rp, bp->bblk->bminlen);
 
+
+	int n;
+
+	resp = conn_build_resp_byte(RPC_BIGDATA_CONN, 0,NULL);
+	resp_size = conn_get_resp_size((RPCRESP *)resp);	
+	write(fd, resp, resp_size);
+	conn_destroy_resp_byte(resp);
+
+	int	connfd;
+	int	data_cont = FALSE;
+
+		
+	struct sockaddr_in cliaddr;
+	socklen_t cliaddr_len = sizeof(cliaddr);
+
+
+	connfd = accept(listenfd, (struct sockaddr *)&cliaddr, &cliaddr_len);
+		
+	while (TRUE)
+	{				
 		TABINFO_INIT(tabinfo, tabinfo->t_sstab_name, tabinfo->t_sinfo, tabinfo->t_row_minlen, 
 			0, tabinfo->t_tabid, tabinfo->t_sstab_id);
 		SRCH_INFO_INIT(tabinfo->t_sinfo, right_rangekey, right_keylen, 2, VARCHAR, -2);
 
 		B_SRCHINFO	srchinfo;
-		
+
+		MEMSET(&srchinfo, sizeof(B_SRCHINFO));
 		SRCHINFO_INIT((&srchinfo), 0, BLK_GET_NEXT_ROWNO(bp) - 1, BLK_GET_NEXT_ROWNO(bp), LE);
 
 		b_srch_block(tabinfo, bp, &srchinfo);
 
 		rgsel_cont.rowminlen = bp->bblk->bminlen;
-		rgsel_cont.end_rowpos = srchinfo.brownum - 1;
+		
 		rgsel_cont.cur_rowpos = rgsel_cont.first_rowpos;
 
 		MEMCPY(rgsel_cont.data, (char *)(bp->bblk), BLOCKSIZE);
 
-		/* TODO: we need to stamp the status code. */
+		/* Stamp the status code. */
+		if (srchinfo.brownum < (bp->bblk->bnextrno - 1))
+		{
+			rgsel_cont.end_rowpos = srchinfo.brownum;
+			rgsel_cont.status = DATA_DONE;
+			data_cont = FALSE;
+		}
+		else
+		{
+			Assert(srchinfo.brownum == (bp->bblk->bnextrno - 1));
 
-		resp = conn_build_resp_byte(RPC_SUCCESS, sizeof(range_query_contex), (char *)&rgsel_cont);
+			if (srchinfo.bcomp == GR)
+			{
+				rgsel_cont.end_rowpos = srchinfo.brownum;
+				rgsel_cont.status = DATA_CONT;
+				data_cont = TRUE;
+			}
+			else
+			{
+				if (srchinfo.bcomp == LE)
+				{
+					rgsel_cont.end_rowpos = srchinfo.brownum - 1;
+				}
+				else
+				{
+					rgsel_cont.end_rowpos = srchinfo.brownum;
+				}
+				
+				rgsel_cont.status = DATA_DONE;
+				data_cont = FALSE;
+			}
+		}
+	
+	 	resp = conn_build_resp_byte(RPC_SUCCESS, sizeof(range_query_contex), (char *)&rgsel_cont);
 		
-		int resp_size = conn_get_resp_size((RPCRESP *)resp);
+		resp_size = conn_get_resp_size((RPCRESP *)resp);
 		  
-		write(fd, resp, resp_size);
-
-		/* TODO: placeholder for the TCP/IP check. */
-		read(fd, &resp_cli, 4);
+		write(connfd, resp, resp_size);			
 
 		conn_destroy_resp_byte(resp);	
 
-		if (srchinfo.brownum < bp->bblk->bnextrno)
+		if (!data_cont)
 		{
-			/* We already hit all the data. */
+			/* We already hit all the data. */			
 			break;
 		}
 			
 		if (bp->bblk->bnextblkno != -1)
 		{
 			bp++;
-			offset = BLKHEADERSIZE;
 		}
 		else if (bp->bsstab->bblk->bnextsstabnum != -1)
 		{
@@ -958,22 +1011,63 @@ rg_selrange_tab(TREE *command, TABINFO *tabinfo, int fd)
 			sstab_namebyid(last_sstab, tabinfo->t_sstab_name, 
 						bp->bsstab->bblk->bnextsstabnum);
 
-			bp = blk_getsstable(tabinfo);
-			offset = BLKHEADERSIZE;
+			bp = blk_getsstable(tabinfo);			
+		}
+		else
+		{
+			rgsel_cont.status = DATA_DONE;
+			resp = conn_build_resp_byte(RPC_SUCCESS, sizeof(range_query_contex), (char *)&rgsel_cont);
+		
+			resp_size = conn_get_resp_size((RPCRESP *)resp);
+			  
+			write(connfd, resp, resp_size);			
+
+			conn_destroy_resp_byte(resp);	
+			
+			break;
+		}
+
+		if (bp->bblk->bfreeoff > BLKHEADERSIZE)
+		{
 			rgsel_cont.first_rowpos = 0;
 		}
 		else
 		{
+			rgsel_cont.status = DATA_DONE;
+			resp = conn_build_resp_byte(RPC_SUCCESS, sizeof(range_query_contex), (char *)&rgsel_cont);
+		
+			resp_size = conn_get_resp_size((RPCRESP *)resp);
+			  
+			write(connfd, resp, resp_size);			
+
+			conn_destroy_resp_byte(resp);
 			break;
+		}
+
+		/* TODO: placeholder for the TCP/IP check. */
+		MEMSET(resp_cli, 8);
+		n = conn_socket_read(connfd,resp_cli, 8);
+
+		if (n != 8)
+		{
+			goto exit;
 		}
 			
 	}
 	rtn_stat = TRUE;
 
+	close(connfd);
+
 exit:
+	
+	close(listenfd);
 	if (rtn_stat)
 	{
 		resp = conn_build_resp_byte(RPC_SUCCESS, 0, NULL);
+	}
+	else
+	{
+		resp = conn_build_resp_byte(RPC_FAIL, 0, NULL);
 	}
 
 	return resp;

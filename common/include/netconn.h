@@ -73,6 +73,7 @@ typedef struct rpcresp
 #define RPC_PARSER_ERR		0x0004
 #define RPC_RETRY		0x0008	
 #define RPC_UNAVAIL		0x0010
+#define RPC_BIGDATA_CONN	0x0020
 
 
  
@@ -152,6 +153,13 @@ conn_chk_respmagic(char *str);
 void
 conn_destroy_resp_byte(char* resp);
 
+int 
+conn_socket_open(int servPort);
+
+int 
+conn_socket_read(int sockfd, char *buf, int size);
+
+void conn_socket_close(int sockfd);
 
 
 void 
