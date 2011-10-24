@@ -87,7 +87,10 @@ int main(int argc, char *argv[])
 		{
 			memset(resp, 0, 256);
 			memset(cmd, 0, 256);
-			sprintf(cmd, "selectrange gu(gggg10, gggg11)");
+//			sprintf(cmd, "selectrange gu(gggg10, gggg5)");
+//			sprintf(cmd, "selectrange gu(*, gggg5)");
+//			sprintf(cmd, "selectrange gu(gggg10, *)");
+			sprintf(cmd, "selectrange gu(*, *)");
 
 			int sockfd = cli_open_range(connection, cmd, "127.0.0.1", 1969);
 
@@ -99,16 +102,18 @@ retry:
 
 			cli_read_range(sockfd, &rgsel_cont);
 
-			if (rgsel_cont.status & DATA_CONT)
+			if (!(rgsel_cont.status & DATA_EMPTY))
 			{
 				do
 				{
 					test_rp = cli_get_nextrow(&rgsel_cont);
 				} while(test_rp != NULL);
-				
-				cli_write_range(sockfd);
-				
-				goto retry;
+
+				if (rgsel_cont.status & DATA_CONT)
+				{
+					cli_write_range(sockfd);					
+					goto retry;
+				}
 			}
 
 			cli_close_range(sockfd);

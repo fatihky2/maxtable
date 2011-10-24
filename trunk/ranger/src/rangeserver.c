@@ -783,6 +783,7 @@ exit:
 /* Following define is for the status sending to the client. */
 #define	DATA_CONT	0x0001	
 #define DATA_DONE	0x0002
+#define DATA_EMPTY	0x0004
 
 
 char *
@@ -806,6 +807,9 @@ rg_selrange_tab(TREE *command, TABINFO *tabinfo, int fd)
 	int		keycolen;
 	int		offset;
 	char		last_sstab[SSTABLE_NAME_MAX_LEN];
+	int		left_expand;
+	int		right_expand;
+	B_SRCHINFO	srchinfo;
 
 
 	Assert(command);
@@ -817,6 +821,7 @@ rg_selrange_tab(TREE *command, TABINFO *tabinfo, int fd)
 	tab_name_len = command->sym.command.tabname_len;
 	ins_meta = tabinfo->t_insmeta;
 	col_info = tabinfo->t_colinfo;
+	left_expand = right_expand = FALSE;
 
 	MEMSET(tab_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_dir, MT_RANGE_TABLE, STRLEN(MT_RANGE_TABLE));
@@ -857,24 +862,39 @@ rg_selrange_tab(TREE *command, TABINFO *tabinfo, int fd)
 	}
 	
 	keycol = par_get_colval_by_colid(command, 1, &keycolen);
+
+	if ((keycolen == 1) && (!strncasecmp("*", keycol, keycolen)))
+	{
+		left_expand = TRUE;
+	}
 	
 	char	*right_rangekey;
 	int	right_keylen;
 	right_rangekey = par_get_colval_by_colid(command, 2, &right_keylen);
+
+	if ((right_keylen == 1) && (!strncasecmp("*", right_rangekey, right_keylen)))
+	{
+		right_expand = TRUE;
+	}
 	
 	TABINFO_INIT(tabinfo, ins_meta->sstab_name, tabinfo->t_sinfo, tabinfo->t_row_minlen, 
 			0, tabinfo->t_tabid, tabinfo->t_sstab_id);
 	SRCH_INFO_INIT(tabinfo->t_sinfo, keycol, keycolen, 1, VARCHAR, -1);
 
-
-	bp = blkget(tabinfo);
-
-	
-	if (tabinfo->t_stat & TAB_RETRY_LOOKUP)
+	if (left_expand)
 	{
-		goto exit;
+		bp = blk_getsstable(tabinfo);
 	}
-
+	else
+	{
+		bp = blkget(tabinfo);
+	
+	
+		if (tabinfo->t_stat & TAB_RETRY_LOOKUP)
+		{
+			goto exit;
+		}
+	}
 	
 	int listenfd = conn_socket_open(1969);
 
@@ -882,18 +902,25 @@ rg_selrange_tab(TREE *command, TABINFO *tabinfo, int fd)
 	{
 		goto exit;
 	}
-	
-	Assert(tabinfo->t_rowinfo->rblknum == bp->bblk->bblkno);
-	Assert(tabinfo->t_rowinfo->rsstabid == bp->bblk->bsstabid);
 
-	if ((tabinfo->t_rowinfo->rblknum != bp->bblk->bblkno)
-	    || (tabinfo->t_rowinfo->rsstabid != bp->bblk->bsstabid))
+	if (left_expand)
 	{
-		traceprint("Hit a buffer error!\n");
-		ex_raise(EX_ANY);
+		offset = BLKHEADERSIZE;
 	}
-	
-	offset = tabinfo->t_rowinfo->roffset;
+	else
+	{
+		Assert(tabinfo->t_rowinfo->rblknum == bp->bblk->bblkno);
+		Assert(tabinfo->t_rowinfo->rsstabid == bp->bblk->bsstabid);
+
+		if ((tabinfo->t_rowinfo->rblknum != bp->bblk->bblkno)
+		    || (tabinfo->t_rowinfo->rsstabid != bp->bblk->bsstabid))
+		{
+			traceprint("Hit a buffer error!\n");
+			ex_raise(EX_ANY);
+		}
+		
+		offset = tabinfo->t_rowinfo->roffset;
+	}
 
 	range_query_contex	rgsel_cont;
 
@@ -932,56 +959,67 @@ rg_selrange_tab(TREE *command, TABINFO *tabinfo, int fd)
 	connfd = accept(listenfd, (struct sockaddr *)&cliaddr, &cliaddr_len);
 		
 	while (TRUE)
-	{				
-		TABINFO_INIT(tabinfo, tabinfo->t_sstab_name, tabinfo->t_sinfo, tabinfo->t_row_minlen, 
-			0, tabinfo->t_tabid, tabinfo->t_sstab_id);
-		SRCH_INFO_INIT(tabinfo->t_sinfo, right_rangekey, right_keylen, 2, VARCHAR, -2);
-
-		B_SRCHINFO	srchinfo;
-
-		MEMSET(&srchinfo, sizeof(B_SRCHINFO));
-		SRCHINFO_INIT((&srchinfo), 0, BLK_GET_NEXT_ROWNO(bp) - 1, BLK_GET_NEXT_ROWNO(bp), LE);
-
-		b_srch_block(tabinfo, bp, &srchinfo);
-
-		rgsel_cont.rowminlen = bp->bblk->bminlen;
-		
-		rgsel_cont.cur_rowpos = rgsel_cont.first_rowpos;
-
-		MEMCPY(rgsel_cont.data, (char *)(bp->bblk), BLOCKSIZE);
-
-		/* Stamp the status code. */
-		if (srchinfo.brownum < (bp->bblk->bnextrno - 1))
+	{		
+		if (right_expand)
 		{
-			rgsel_cont.end_rowpos = srchinfo.brownum;
-			rgsel_cont.status = DATA_DONE;
-			data_cont = FALSE;
+			rgsel_cont.rowminlen = bp->bblk->bminlen;
+			
+			rgsel_cont.cur_rowpos = rgsel_cont.first_rowpos;
+			rgsel_cont.end_rowpos = bp->bblk->bnextrno - 1;
+			rgsel_cont.status = DATA_CONT;
+			data_cont = TRUE;
 		}
 		else
-		{
-			Assert(srchinfo.brownum == (bp->bblk->bnextrno - 1));
+		{	
+			TABINFO_INIT(tabinfo, tabinfo->t_sstab_name, tabinfo->t_sinfo, tabinfo->t_row_minlen, 
+				0, tabinfo->t_tabid, tabinfo->t_sstab_id);
+			SRCH_INFO_INIT(tabinfo->t_sinfo, right_rangekey, right_keylen, 1, VARCHAR, -1);			
 
-			if (srchinfo.bcomp == GR)
+			MEMSET(&srchinfo, sizeof(B_SRCHINFO));
+			SRCHINFO_INIT((&srchinfo), 0, BLK_GET_NEXT_ROWNO(bp) - 1, BLK_GET_NEXT_ROWNO(bp), LE);
+
+			b_srch_block(tabinfo, bp, &srchinfo);
+
+			rgsel_cont.rowminlen = bp->bblk->bminlen;
+			
+			rgsel_cont.cur_rowpos = rgsel_cont.first_rowpos;
+	
+			/* Stamp the status code. */
+			if (srchinfo.brownum < (bp->bblk->bnextrno - 1))
 			{
 				rgsel_cont.end_rowpos = srchinfo.brownum;
-				rgsel_cont.status = DATA_CONT;
-				data_cont = TRUE;
-			}
-			else
-			{
-				if (srchinfo.bcomp == LE)
-				{
-					rgsel_cont.end_rowpos = srchinfo.brownum - 1;
-				}
-				else
-				{
-					rgsel_cont.end_rowpos = srchinfo.brownum;
-				}
-				
 				rgsel_cont.status = DATA_DONE;
 				data_cont = FALSE;
 			}
+			else
+			{
+				Assert(srchinfo.brownum == (bp->bblk->bnextrno - 1));
+
+				if (srchinfo.bcomp == GR)
+				{
+					rgsel_cont.end_rowpos = srchinfo.brownum;
+					rgsel_cont.status = DATA_CONT;
+					data_cont = TRUE;
+				}
+				else
+				{
+					if (srchinfo.bcomp == LE)
+					{
+						rgsel_cont.end_rowpos = srchinfo.brownum - 1;
+					}
+					else
+					{
+						rgsel_cont.end_rowpos = srchinfo.brownum;
+					}
+					
+					rgsel_cont.status = DATA_DONE;
+					data_cont = FALSE;
+				}
+			}
+
 		}
+
+		MEMCPY(rgsel_cont.data, (char *)(bp->bblk), BLOCKSIZE);
 	
 	 	resp = conn_build_resp_byte(RPC_SUCCESS, sizeof(range_query_contex), (char *)&rgsel_cont);
 		
@@ -996,7 +1034,7 @@ rg_selrange_tab(TREE *command, TABINFO *tabinfo, int fd)
 			/* We already hit all the data. */			
 			break;
 		}
-			
+nextblk:			
 		if (bp->bblk->bnextblkno != -1)
 		{
 			bp++;
@@ -1011,11 +1049,13 @@ rg_selrange_tab(TREE *command, TABINFO *tabinfo, int fd)
 			sstab_namebyid(last_sstab, tabinfo->t_sstab_name, 
 						bp->bsstab->bblk->bnextsstabnum);
 
+			tabinfo->t_sstab_id = bp->bsstab->bblk->bnextsstabnum;
+
 			bp = blk_getsstable(tabinfo);			
 		}
 		else
 		{
-			rgsel_cont.status = DATA_DONE;
+			rgsel_cont.status = DATA_EMPTY;
 			resp = conn_build_resp_byte(RPC_SUCCESS, sizeof(range_query_contex), (char *)&rgsel_cont);
 		
 			resp_size = conn_get_resp_size((RPCRESP *)resp);
@@ -1033,15 +1073,7 @@ rg_selrange_tab(TREE *command, TABINFO *tabinfo, int fd)
 		}
 		else
 		{
-			rgsel_cont.status = DATA_DONE;
-			resp = conn_build_resp_byte(RPC_SUCCESS, sizeof(range_query_contex), (char *)&rgsel_cont);
-		
-			resp_size = conn_get_resp_size((RPCRESP *)resp);
-			  
-			write(connfd, resp, resp_size);			
-
-			conn_destroy_resp_byte(resp);
-			break;
+			goto nextblk;
 		}
 
 		/* TODO: placeholder for the TCP/IP check. */

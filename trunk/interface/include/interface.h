@@ -49,6 +49,8 @@ typedef struct _range_query_contex
 
 #define	DATA_CONT	0x0001	
 #define DATA_DONE	0x0002
+#define DATA_EMPTY	0x0004
+
 
 /*
 create one connection between cli and svr, return the connection
