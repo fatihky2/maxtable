@@ -377,6 +377,73 @@ tablet_srch_row(TABINFO *usertabinfo, TABLEHDR *tablehdr, int tabid, int sstabid
 }
 
 
+char *
+tablet_get_1st_or_last_row(TABLEHDR *tablehdr, int tabid, int sstabid, char *systab, int firstrow)
+{
+	TABINFO		*tabinfo;
+	int		minrowlen;
+	BUF		*bp;
+	int		offset;
+	BLK_ROWINFO	blk_rowinfo;
+
+	
+	tabinfo = MEMALLOCHEAP(sizeof(TABINFO));
+	MEMSET(tabinfo, sizeof(TABINFO));
+
+	tabinfo->t_sinfo = (SINFO *)MEMALLOCHEAP(sizeof(SINFO));
+	MEMSET(tabinfo->t_sinfo, sizeof(SINFO));
+
+	tabinfo->t_rowinfo = &blk_rowinfo;
+	MEMSET(tabinfo->t_rowinfo, sizeof(BLK_ROWINFO));
+
+	tabinfo->t_dold = tabinfo->t_dnew = (BUF *) tabinfo; 
+	
+	tabinfo_push(tabinfo);
+
+	minrowlen = ROW_MINLEN_IN_TABLET;
+
+	TABINFO_INIT(tabinfo, systab, tabinfo->t_sinfo, minrowlen, TAB_SCHM_SRCH, 
+		     tabid, sstabid);
+	SRCH_INFO_INIT(tabinfo->t_sinfo, NULL, 0, TABLET_KEY_COLID_INROW, 
+		       VARCHAR, -1);			
+	
+	bp = blk_getsstable(tabinfo);
+	
+	if (firstrow)
+	{
+		offset = BLKHEADERSIZE;
+	}
+	else
+	{
+		BUF	*lastbp;
+		while(bp->bblk->bnextblkno != -1)
+		{	
+			lastbp = bp;
+			bp++;
+
+			if (bp->bblk->bfreeoff == BLKHEADERSIZE)
+			{
+				bp = lastbp;
+				break;
+			}
+		}
+
+		int *offtab = ROW_OFFSET_PTR(bp->bblk);
+		
+		offset = offtab[-(bp->bblk->bnextrno - 1)];		
+	}
+
+	bufunkeep(bp->bsstab);
+	session_close(tabinfo);
+
+	MEMFREEHEAP(tabinfo->t_sinfo);
+	MEMFREEHEAP(tabinfo);
+
+	tabinfo_pop();
+
+	return ((char *)(bp->bblk) + offset);
+}
+
 void 
 tablet_schm_bld_row(char *rp, int rlen, int tabletid, char *tabletname, 
 			char *rang_addr, char *keycol, int keycolen, int port)
@@ -598,6 +665,74 @@ tablet_schm_srch_row(TABLEHDR *tablehdr, int tabid, int sstabid,
 	return ((char *)(bp->bblk) + offset);
 }
 
+char *
+tablet_schm_get_1st_or_last_row(TABLEHDR *tablehdr, int tabid, int sstabid, char *systab, int firstrow)
+{
+	TABINFO		*tabinfo;
+	int		minrowlen;
+	BUF		*bp;
+	int		offset;
+	BLK_ROWINFO	blk_rowinfo;
+	
+	tabinfo = MEMALLOCHEAP(sizeof(TABINFO));
+	MEMSET(tabinfo, sizeof(TABINFO));
+
+	tabinfo->t_sinfo = (SINFO *)MEMALLOCHEAP(sizeof(SINFO));
+	MEMSET(tabinfo->t_sinfo, sizeof(SINFO));
+
+	tabinfo->t_rowinfo = &blk_rowinfo;
+	MEMSET(tabinfo->t_rowinfo, sizeof(BLK_ROWINFO));
+
+	tabinfo->t_dold = tabinfo->t_dnew = (BUF *) tabinfo;
+
+	tabinfo_push(tabinfo);
+
+	minrowlen = ROW_MINLEN_IN_TABLETSCHM;
+
+	TABINFO_INIT(tabinfo, systab, tabinfo->t_sinfo, minrowlen, 
+		     TAB_SCHM_SRCH, tabid, sstabid);
+
+	
+	SRCH_INFO_INIT(tabinfo->t_sinfo, NULL, 0, 
+		       TABLETSCHM_KEY_COLID_INROW, VARCHAR, -1);
+			
+	
+	bp = blk_getsstable(tabinfo);
+	
+	if (firstrow)
+	{
+		offset = BLKHEADERSIZE;
+	}
+	else
+	{
+		BUF	*lastbp;
+		while(bp->bblk->bnextblkno != -1)
+		{	
+			lastbp = bp;
+			bp++;
+
+			if (bp->bblk->bfreeoff == BLKHEADERSIZE)
+			{
+				bp = lastbp;
+				break;
+			}
+		}		
+
+		int *offtab = ROW_OFFSET_PTR(bp->bblk);
+		
+		offset = offtab[-(bp->bblk->bnextrno - 1)];		
+	}
+	
+	bufunkeep(bp->bsstab);
+	session_close(tabinfo);
+	
+	MEMFREEHEAP(tabinfo->t_sinfo);
+	MEMFREEHEAP(tabinfo);
+	
+	tabinfo_pop();
+
+	return ((char *)(bp->bblk) + offset);
+}
 
 
 void

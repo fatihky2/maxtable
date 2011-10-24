@@ -1571,6 +1571,7 @@ meta_selrangetab(TREE *command, TABINFO *tabinfo)
 	int		res_sstab_id;
 	char		*rg_addr;
 	int		rg_port;
+	int		key_is_expand;
 
 
 	Assert(command);
@@ -1663,14 +1664,35 @@ meta_selrangetab(TREE *command, TABINFO *tabinfo)
 	MEMSET(col_buf, col_buf_len);
 	col_buf_idx = 0;
 
+	
 	for (k = 0; k < 2; k++)
 	{
+		key_is_expand = FALSE;
+		
 		keycol = (k == 0) ? range_leftkey : range_rightkey;
 		keycolen = (k == 0) ? leftkeylen : rightkeylen;
 
-		rp = tablet_schm_srch_row(&tab_hdr, tab_hdr.tab_id, TABLETSCHM_ID, tab_meta_dir, 
+		if ((keycolen == 1) && (!strncasecmp("*", keycol, keycolen)))
+		{
+			key_is_expand = TRUE;
+			
+			if (k == 0)
+			{
+				rp = tablet_schm_get_1st_or_last_row(&tab_hdr, tab_hdr.tab_id, 
+								TABLETSCHM_ID, tab_meta_dir, TRUE);
+			}
+			else
+			{
+				rp = tablet_schm_get_1st_or_last_row(&tab_hdr, tab_hdr.tab_id, 
+								TABLETSCHM_ID, tab_meta_dir, FALSE);
+			}
+		}
+		else
+		{
+			rp = tablet_schm_srch_row(&tab_hdr, tab_hdr.tab_id, TABLETSCHM_ID, tab_meta_dir, 
 					  keycol, keycolen);
-
+		}
+		
 		name = row_locate_col(rp, TABLETSCHM_TABLETNAME_COLOFF_INROW, ROW_MINLEN_IN_TABLETSCHM, 
 				      &namelen);
 
@@ -1704,9 +1726,24 @@ meta_selrangetab(TREE *command, TABINFO *tabinfo)
 		tabletid = *(int *)row_locate_col(rp, TABLETSCHM_TABLETID_COLOFF_INROW, 
 						  ROW_MINLEN_IN_TABLETSCHM, &namelen);
 
-		rp = tablet_srch_row(tabinfo, &tab_hdr, tab_hdr.tab_id, tabletid, tab_meta_dir, 
-				     keycol, keycolen);
-
+		if (key_is_expand)
+		{
+			if (k == 0)
+			{
+				rp = tablet_get_1st_or_last_row(&tab_hdr, tab_hdr.tab_id, tabletid, 
+								tab_meta_dir, TRUE);
+			}
+			else
+			{
+				rp = tablet_get_1st_or_last_row(&tab_hdr, tab_hdr.tab_id, tabletid, 
+								tab_meta_dir, FALSE);
+			}
+		}
+		else
+		{
+			rp = tablet_srch_row(tabinfo, &tab_hdr, tab_hdr.tab_id, tabletid, tab_meta_dir, 
+				     		keycol, keycolen);
+		}
 		
 		name = row_locate_col(rp, TABLET_SSTABNAME_COLOFF_INROW, ROW_MINLEN_IN_TABLET, 
 				      &namelen);

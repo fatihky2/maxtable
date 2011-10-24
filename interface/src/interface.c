@@ -829,7 +829,7 @@ cli_close_range(int sockfd)
 char *
 cli_get_nextrow(range_query_contex *rgsel_cont)
 {
-	if (rgsel_cont->cur_rowpos == rgsel_cont->end_rowpos)
+	if (rgsel_cont->cur_rowpos > rgsel_cont->end_rowpos)
 	{
 		return NULL;
 	}

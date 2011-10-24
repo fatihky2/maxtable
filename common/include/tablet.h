@@ -74,6 +74,9 @@ tablet_bld_row(char *sstab_rp, int sstab_rlen, char *tab_name, int tab_name_len,
 char *
 tablet_srch_row(TABINFO *usertabinfo, TABLEHDR *tablehdr, int tabid, int sstabid, char *systab, char *key, int keylen);
 
+char *
+tablet_get_1st_or_last_row(TABLEHDR *tablehdr, int tabid, int sstabid, char *systab, int firstrow);
+
 int
 tablet_ins_row(TABLEHDR *tablehdr, int tabid, int sstabid, char *tablet_name, char *rp, int minlen);
 
@@ -92,6 +95,9 @@ tablet_schm_del_row(int tabid, int sstabid, char *systab, char *row);
 
 char *
 tablet_schm_srch_row(TABLEHDR *tablehdr, int tabid, int sstabid, char *systab, char *key, int keylen);
+
+char *
+tablet_schm_get_1st_or_last_row(TABLEHDR *tablehdr, int tabid, int sstabid, char *systab, int firstrow);
 
 void
 tablet_namebyname(char *old_sstab, char *new_sstab);
