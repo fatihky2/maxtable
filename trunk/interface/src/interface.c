@@ -654,7 +654,7 @@ cli_rgsel_ranger(conn * connection, char * cmd, SELRANGE *selrg)
 
 
 int
-cli_rgsel_is_bigdata(rg_conn * rg_connection)
+cli_rgsel_is_bigdata(rg_conn * rg_connection, int *bigdataport)
 {
 	RPCRESP		*rg_resp;
 	int		rtn_stat;
@@ -686,6 +686,7 @@ cli_rgsel_is_bigdata(rg_conn * rg_connection)
 		break;
 
 	    case RPC_BIGDATA_CONN:
+	    	*bigdataport = *(int *)rg_resp->result;
 	    	rtn_stat = TRUE;
 		break;
 		
@@ -713,12 +714,13 @@ cli_rgsel_is_bigdata(rg_conn * rg_connection)
 
 
 int
-cli_open_range(conn * connection, char * cmd, char * ip_address,int port)
+cli_open_range(conn * connection, char * cmd)
 {
 	SELRANGE	*selrg;
 	rg_conn		*rg_connection;
 	int 		sockfd = -1;
 	int		conn_cnt = 0;
+	int		bigdataport;
 
 
 	selrg = MEMALLOCHEAP(sizeof(SELRANGE));
@@ -727,7 +729,7 @@ cli_open_range(conn * connection, char * cmd, char * ip_address,int port)
 
 	rg_connection = cli_rgsel_ranger(connection, cmd, selrg);
 
-	if (!cli_rgsel_is_bigdata(rg_connection))
+	if (!cli_rgsel_is_bigdata(rg_connection, &bigdataport))
 	{
 		MEMFREEHEAP(selrg);
 		return -1;
@@ -737,7 +739,7 @@ cli_open_range(conn * connection, char * cmd, char * ip_address,int port)
 
 	while ((sockfd < 0) && (conn_cnt < 1000))
 	{
-		sockfd = conn_open(ip_address, port);
+		sockfd = conn_open(rg_connection->rg_server_ip, bigdataport);
 
 		conn_cnt++;
 	}
