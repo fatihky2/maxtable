@@ -157,9 +157,13 @@ int
 conn_socket_open(int servPort);
 
 int 
+conn_socket_accept(int sockfd);
+
+int 
 conn_socket_read(int sockfd, char *buf, int size);
 
-void conn_socket_close(int sockfd);
+void 
+conn_socket_close(int sockfd);
 
 
 void 
