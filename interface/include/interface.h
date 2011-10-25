@@ -69,7 +69,7 @@ extern int cli_commit(conn * connection, char * cmd, char * response, int * leng
 
 
 extern int
-cli_open_range(conn * connection, char * cmd, char * ip_address,int port);
+cli_open_range(conn * connection, char * cmd);
 
 extern int
 cli_read_range(int sockfd, range_query_contex *rgsel_cont);

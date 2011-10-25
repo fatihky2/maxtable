@@ -92,7 +92,7 @@ int main(int argc, char *argv[])
 //			sprintf(cmd, "selectrange gu(gggg10, *)");
 //			sprintf(cmd, "selectrange gu(*, *)");
 
-			int sockfd = cli_open_range(connection, cmd, "127.0.0.1", 1969);
+			int sockfd = cli_open_range(connection, cmd);
 
 			range_query_contex rgsel_cont;
 
@@ -115,8 +115,6 @@ retry:
 					goto retry;
 				}
 			}
-
-			cli_write_range(sockfd);
 			
 			cli_close_range(sockfd);
 			

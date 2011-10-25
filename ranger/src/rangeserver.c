@@ -75,6 +75,7 @@ typedef struct rg_info
 	int     rg_meta_port;
 	char	rg_ip[RANGE_ADDR_MAX_LEN];
 	int	port;
+	int	bigdataport;
 	int	flush_check_interval;
 }RANGEINFO;
 
@@ -896,7 +897,7 @@ rg_selrange_tab(TREE *command, TABINFO *tabinfo, int fd)
 		}
 	}
 	
-	int listenfd = conn_socket_open(1969);
+	int listenfd = conn_socket_open(Range_infor->bigdataport);
 
 	if (!listenfd)
 	{
@@ -943,7 +944,8 @@ rg_selrange_tab(TREE *command, TABINFO *tabinfo, int fd)
 
 	int n;
 
-	resp = conn_build_resp_byte(RPC_BIGDATA_CONN, 0,NULL);
+	resp = conn_build_resp_byte(RPC_BIGDATA_CONN, sizeof(int),
+					(char *)(&(Range_infor->bigdataport)));
 	resp_size = conn_get_resp_size((RPCRESP *)resp);	
 	write(fd, resp, resp_size);
 	conn_destroy_resp_byte(resp);
@@ -955,6 +957,7 @@ rg_selrange_tab(TREE *command, TABINFO *tabinfo, int fd)
 
 	if (connfd < 0)
 	{
+		printf("hit accept issue\n");
 		goto exit;
 	}
 		
@@ -972,7 +975,7 @@ rg_selrange_tab(TREE *command, TABINFO *tabinfo, int fd)
 		else
 		{	
 			TABINFO_INIT(tabinfo, tabinfo->t_sstab_name, tabinfo->t_sinfo, tabinfo->t_row_minlen, 
-				0, tabinfo->t_tabid, tabinfo->t_sstab_id);
+					0, tabinfo->t_tabid, tabinfo->t_sstab_id);
 			SRCH_INFO_INIT(tabinfo->t_sinfo, right_rangekey, right_keylen, 1, VARCHAR, -1);			
 
 			MEMSET(&srchinfo, sizeof(B_SRCHINFO));
@@ -1029,22 +1032,22 @@ rg_selrange_tab(TREE *command, TABINFO *tabinfo, int fd)
 
 		conn_destroy_resp_byte(resp);	
 
+		
+		/* TODO: placeholder for the TCP/IP check. */
+		MEMSET(resp_cli, 8);
+		n = conn_socket_read(connfd,resp_cli, 8);
+
+		if (n != 8)
+		{
+			goto exit;
+		}
+
 		if (!data_cont)
 		{
 			/* We already hit all the data. */
-			
-			/* TODO: placeholder for the TCP/IP check. */
-			MEMSET(resp_cli, 8);
-			n = conn_socket_read(connfd,resp_cli, 8);
-
-			if (n != 8)
-			{
-				printf("What happen---1!!!\n");
-				goto exit;
-			}
-			
 			break;
 		}
+		
 nextblk:			
 		if (bp->bblk->bnextblkno != -1)
 		{
@@ -1081,10 +1084,9 @@ nextblk:
 
 			if (n != 8)
 			{
-				printf("What happen---3!!!\n");
 				goto exit;
 			}
-			
+
 			break;
 		}
 
@@ -1095,25 +1097,14 @@ nextblk:
 		else
 		{
 			goto nextblk;
-		}
-
-		/* TODO: placeholder for the TCP/IP check. */
-		MEMSET(resp_cli, 8);
-		n = conn_socket_read(connfd,resp_cli, 8);
-
-		if (n != 8)
-		{
-			printf("What happen---2!!!\n");
-			goto exit;
-		}
+		}		
 			
 	}
 	rtn_stat = TRUE;
 
+exit:
 	conn_socket_close(connfd);
 
-exit:
-	
 	conn_socket_close(listenfd);
 	if (rtn_stat)
 	{
@@ -1498,6 +1489,9 @@ rg_setup(char *conf_path)
 	conf_get_value_by_key(Range_infor->rg_meta_ip, conf_path, CONF_META_IP);
 	conf_get_value_by_key(metaport, conf_path, CONF_META_PORT);
 	Range_infor->rg_meta_port = m_atoi(metaport, STRLEN(metaport));
+
+	conf_get_value_by_key(metaport, conf_path, CONF_BIGDATA_PORT);
+	Range_infor->bigdataport = m_atoi(metaport, STRLEN(metaport));
 
 	rg_port = m_atoi(port, STRLEN(port));
 	if(rg_port != INDEFINITE)

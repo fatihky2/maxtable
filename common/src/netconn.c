@@ -752,10 +752,7 @@ conn_socket_read(int sockfd, char *buf, int size)
 			perror("Error in rg server response");
 		}
 
-//		close(sockfd);
-		
 	}
-	
 
 	return n;
 }
