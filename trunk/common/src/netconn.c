@@ -663,29 +663,99 @@ int conn_socket_open(int servPort)
 	return listenfd;
 }
 
+
+int 
+conn_socket_accept(int sockfd)
+{	
+	int		connfd;
+
+	struct sockaddr_in cliaddr;
+	socklen_t cliaddr_len = sizeof(cliaddr);
+	
+	struct timeval tv;
+	tv.tv_sec = RECVIO_TIMEOUT;
+	tv.tv_usec = 0;
+	setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));	
+
+	connfd = accept(sockfd, (struct sockaddr *)&cliaddr, &cliaddr_len);
+
+	if(connfd > 0)
+	{
+		return connfd;
+	}
+	else
+	{	
+		if(errno == ECONNRESET)
+		{
+			traceprint("Rg server is closed before client send request!\n");
+		}
+		else if((errno == ETIMEDOUT)||(errno == EHOSTUNREACH)||(errno == ENETUNREACH))
+		{
+			traceprint("Rg server is breakdown before client send request!\n");
+		}
+		else if(errno == EWOULDBLOCK)
+		{
+			traceprint("Rg server is breakdown after client send request, before client receive response!\n");
+		}
+		else
+		{
+			traceprint("Client receive response error for unknown reason!\n");
+			perror("Error in rg server response");
+		}
+
+		connfd = -1;
+		
+	}
+	
+    
+	return connfd;
+}
+
+
 int 
 conn_socket_read(int sockfd, char *buf, int size)
 {
 	int	n;
 
-_read_again:	
+	struct timeval tv;
+	tv.tv_sec = RECVIO_TIMEOUT;
+	tv.tv_usec = 0;
+	setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+
 	n = read(sockfd, buf, size);
-	if (n > 0) 
+
+	if(n > 0)
 	{
 		buf[n] = '\0';
-	} 
-	else if (n == 0) 
-	{
-		close(sockfd);
-	} 
-	else if (errno == EINTR) 
-	{
-		goto _read_again;
-	} 
-	else 
-	{
-		close(sockfd);
 	}
+	else
+	{
+		if(n == 0)
+		{
+			traceprint("Rg server is closed after client send request, before client receive response!\n");
+		}
+		else if(errno == ECONNRESET)
+		{
+			traceprint("Rg server is closed before client send request!\n");
+		}
+		else if((errno == ETIMEDOUT)||(errno == EHOSTUNREACH)||(errno == ENETUNREACH))
+		{
+			traceprint("Rg server is breakdown before client send request!\n");
+		}
+		else if(errno == EWOULDBLOCK)
+		{
+			traceprint("Rg server is breakdown after client send request, before client receive response!\n");
+		}
+		else
+		{
+			traceprint("Client receive response error for unknown reason!\n");
+			perror("Error in rg server response");
+		}
+
+//		close(sockfd);
+		
+	}
+	
 
 	return n;
 }

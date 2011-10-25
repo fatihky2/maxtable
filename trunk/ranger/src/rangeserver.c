@@ -54,7 +54,6 @@
 extern TSS	*Tss;
 extern KERNEL	*Kernel;
 
-#define DEFAULT_REGION_FLUSH_CHECK_INTERVAL 600 //10min
 
 #ifdef MAXTABLE_BENCH_TEST
 
@@ -97,7 +96,8 @@ RANGEINFO *Range_infor = NULL;
 static int
 rg_fill_resd(TREE *command, COLINFO *colinfor, int totcol);
 
-static void rg_regist();
+static void 
+rg_regist();
 
 static char *
 rg_rebalancer(REBALANCE_DATA * rbd);
@@ -950,13 +950,13 @@ rg_selrange_tab(TREE *command, TABINFO *tabinfo, int fd)
 
 	int	connfd;
 	int	data_cont = FALSE;
+	
+	connfd = conn_socket_accept(listenfd);
 
-		
-	struct sockaddr_in cliaddr;
-	socklen_t cliaddr_len = sizeof(cliaddr);
-
-
-	connfd = accept(listenfd, (struct sockaddr *)&cliaddr, &cliaddr_len);
+	if (connfd < 0)
+	{
+		goto exit;
+	}
 		
 	while (TRUE)
 	{		
@@ -1031,7 +1031,18 @@ rg_selrange_tab(TREE *command, TABINFO *tabinfo, int fd)
 
 		if (!data_cont)
 		{
-			/* We already hit all the data. */			
+			/* We already hit all the data. */
+			
+			/* TODO: placeholder for the TCP/IP check. */
+			MEMSET(resp_cli, 8);
+			n = conn_socket_read(connfd,resp_cli, 8);
+
+			if (n != 8)
+			{
+				printf("What happen---1!!!\n");
+				goto exit;
+			}
+			
 			break;
 		}
 nextblk:			
@@ -1063,6 +1074,16 @@ nextblk:
 			write(connfd, resp, resp_size);			
 
 			conn_destroy_resp_byte(resp);	
+
+			/* TODO: placeholder for the TCP/IP check. */
+			MEMSET(resp_cli, 8);
+			n = conn_socket_read(connfd,resp_cli, 8);
+
+			if (n != 8)
+			{
+				printf("What happen---3!!!\n");
+				goto exit;
+			}
 			
 			break;
 		}
@@ -1082,17 +1103,18 @@ nextblk:
 
 		if (n != 8)
 		{
+			printf("What happen---2!!!\n");
 			goto exit;
 		}
 			
 	}
 	rtn_stat = TRUE;
 
-	close(connfd);
+	conn_socket_close(connfd);
 
 exit:
 	
-	close(listenfd);
+	conn_socket_close(listenfd);
 	if (rtn_stat)
 	{
 		resp = conn_build_resp_byte(RPC_SUCCESS, 0, NULL);
