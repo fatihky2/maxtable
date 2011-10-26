@@ -473,6 +473,12 @@ par_add_server(char *s_str, int querytype)
 	col_info = s_str + start;
 	len =  str1nstr(col_info, ")\0", cmd_len - len);
 
+	if (len < 2)
+	{
+		traceprint("Value is not allowed with NULL.\n");
+		return FALSE;
+	}
+
 	str0n_trunc_0t(col_info, len - 1, &start, &end);
 
 	
@@ -532,6 +538,12 @@ par_crtins_tab(char *s_str, int querytype)
 
 	len = str1nstr(s_str, "(\0", cmd_len);
 
+	if (len < 2)
+	{
+		traceprint("Value is not allowed with NULL.\n");
+		return FALSE;
+	}
+
 	MEMSET(tab_name, 64);
 
 
@@ -541,6 +553,12 @@ par_crtins_tab(char *s_str, int querytype)
 	
 	str0n_trunc_0t(tab_name, len - 1, &start, &end);
 	tab_name_len = end - start;
+
+	if (tab_name_len < 1)
+	{
+		traceprint("Table name not allowed with NULL.\n");
+		return FALSE;
+	}
 
 	if (!par_name_check(&(tab_name[start]), tab_name_len))
 	{
@@ -557,6 +575,12 @@ par_crtins_tab(char *s_str, int querytype)
 	if (len != (cmd_len - start))
 	{
 		
+		return FALSE;
+	}
+
+	if (len < 2)
+	{
+		traceprint("Value is not allowed with NULL.\n");
 		return FALSE;
 	}
 
@@ -595,6 +619,12 @@ par_seldel_tab(char *s_str, int querytype)
 
 	len = str1nstr(s_str, "(\0", cmd_len);
 
+	if (len < 2)
+	{
+		traceprint("Value is not allowed with NULL.\n");
+		return FALSE;
+	}
+
 	MEMSET(tab_name, 64);
 		
 	MEMCPY(tab_name, s_str, len - 1);
@@ -603,6 +633,11 @@ par_seldel_tab(char *s_str, int querytype)
 	str0n_trunc_0t(tab_name, len - 1, &start, &end);
 	tab_name_len = end - start;
 
+	if (tab_name_len < 1)
+	{
+		traceprint("Table name not allowed with NULL.\n");
+		return FALSE;
+	}
 	
 	if (!par_name_check(&(tab_name[start]), tab_name_len))
 	{
@@ -622,6 +657,12 @@ par_seldel_tab(char *s_str, int querytype)
 		return FALSE;
 	}
 
+	if (len < 2)
+	{
+		traceprint("Value is not allowed with NULL.\n");
+		return FALSE;
+	}
+	
 	str0n_trunc_0t(col_info, len - 1, &start, &end);
 
 	
@@ -659,6 +700,12 @@ par_selrange_tab(char *s_str, int querytype)
 
 	len = str1nstr(s_str, "(\0", cmd_len);
 
+	if (len < 2)
+	{
+		traceprint("Value is not allowed with NULL.\n");
+		return FALSE;
+	}
+
 	MEMSET(tab_name, 64);
 		
 	MEMCPY(tab_name, s_str, len - 1);
@@ -667,6 +714,11 @@ par_selrange_tab(char *s_str, int querytype)
 	str0n_trunc_0t(tab_name, len - 1, &start, &end);
 	tab_name_len = end - start;
 
+	if (tab_name_len < 1)
+	{
+		traceprint("Table name not allowed with NULL.\n");
+		return FALSE;
+	}
 	
 	if (!par_name_check(&(tab_name[start]), tab_name_len))
 	{
@@ -686,6 +738,12 @@ par_selrange_tab(char *s_str, int querytype)
 		return FALSE;
 	}
 
+	if (len < 2)
+	{
+		traceprint("Value is not allowed with NULL.\n");
+		return FALSE;
+	}
+	
 	str0n_trunc_0t(col_info, len - 1, &start, &end);
 
 	
@@ -714,6 +772,12 @@ par_dropremovrebalanmcc_tab(char *s_str, int querytype)
 
 	cmd_len = STRLEN(s_str);
 
+	if (cmd_len < 1)
+	{
+		traceprint("Command is not allowed with NULL.\n");
+		return FALSE;
+	}
+	
 	MEMSET(tab_name, 64);
 		
 	MEMCPY(tab_name, s_str, cmd_len);
@@ -722,6 +786,11 @@ par_dropremovrebalanmcc_tab(char *s_str, int querytype)
 	str0n_trunc_0t(tab_name, cmd_len, &start, &end);
 	tab_name_len = end - start;
 
+	if (tab_name_len < 1)
+	{
+		traceprint("Table name is not allowed with NULL.\n");
+		return FALSE;
+	}
 	
 	if (!par_name_check(&(tab_name[start]), tab_name_len))
 	{
@@ -786,6 +855,12 @@ par_addsstab(char *s_str, int querytype)
 		return FALSE;
 	}
 
+	if (len < 2)
+	{
+		traceprint("Value is not allowed with NULL.\n");
+		return FALSE;
+	}
+
 	str0n_trunc_0t(col_info, len - 1, &start, &end);
 
 	
@@ -824,9 +899,21 @@ par_col_info(char *cmd, int cmd_len, int querytype)
 		cmd = &(cmd[len]);
 		len = str01str(cmd, ",\0", cmd_len);
 
+		if (len == -1)
+		{
+			traceprint("Value is not allowed with NULL.\n");
+			return FALSE;
+		}
+
 		str0n_trunc_0t(cmd, len + 1, &start, &end);
 
 		coldata = col_info = &cmd[start];
+
+		if (start == end)
+		{
+			traceprint("Value is not allowed with NULL.\n");
+			return FALSE;
+		}
 
 		if (querytype == TABCREAT)
 		{
@@ -847,6 +934,12 @@ par_col_info(char *cmd, int cmd_len, int querytype)
 			
 			str0n_trunc_0t(&(coldata[i]), (end - start - i), &start, &end);
 
+			if (start == end)
+			{
+				traceprint("Value is not allowed with NULL.\n");
+				return FALSE;
+			}
+			
 			MEMSET(coltype, 64);
 			MEMCPY(coltype, &(coldata[i + start]), (end - start));
 

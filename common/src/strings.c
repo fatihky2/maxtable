@@ -173,6 +173,11 @@ str0n_trunc_0t(char *buf, int len, int *start, int *end)
 	*start = 0;
 	*end = len;
 	str = buf;
+
+	if (len == 0)
+	{
+		return TRUE;
+	}
 	
 	/* Normalize this command. It's just a simple op. */
 	while (((*str == ' ') || (*str == '\t')) && ((*start) < len))
