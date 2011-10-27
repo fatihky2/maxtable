@@ -10,6 +10,7 @@ _Target Release Date: December 15th 2011_
 
         * Metadata Consistency Checking (MCC)
         * Enhance error handling mechanism
+        * Micro log for sstable update
 
 == 1.6 ==
 _Target Release Date: January 31st 2012_
@@ -29,5 +30,6 @@ Code freeze for 2.0 and first major release.
 
 _Target Release Date: TBD_
 
-        * Asynchronous file writes      
+        * Asynchronous file writes  
+        * Multi-index  
         * Data Compression 
