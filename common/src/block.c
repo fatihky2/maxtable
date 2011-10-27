@@ -106,6 +106,23 @@ nextsstab:
 
 			Assert(   (tmpbp->bsstab->bblk->bts_lo > tabinfo->t_insmeta->ts_low)
 			       || (tmpbp->bsstab->bblk->bts_lo == tabinfo->t_insmeta->ts_low));
+
+			if(tabinfo->t_stat & TAB_DO_SPLIT)
+			{
+				/* 
+				** Before committing the first split, stop the new split on the splitting sstable. 
+				** This issue maybe raised by two case:
+				**	1. The first split is waitting for the committing.
+				**	2. The first split is dead before commit its mission. In this case, we need to
+				**	    run the Metadata Consistency Checking with fix option.
+				*/
+
+				traceprint("Hit the new split on the splitting sstable.\n");
+
+				
+				tabinfo->t_stat |= TAB_RETRY_LOOKUP;
+				goto finish;
+			}
 		}
 
 		
@@ -115,6 +132,9 @@ nextsstab:
 			if(   !(tabinfo->t_stat & TAB_DO_SPLIT) 
 			   && (tmpbp->bsstab->bblk->bts_lo < tabinfo->t_insmeta->ts_low))
 			{
+				/*
+				** Case for the new round of ts setting ?
+				*/
 				/* 
 				** TODO: we need to retry this request.  If the processing is not FIFO,
 				** it will hit the insert is not sorted.

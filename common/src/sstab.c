@@ -31,9 +31,12 @@
 #include "tabinfo.h"
 #include "file_op.h"
 #include "timestamp.h"
+#include "log.h"
 
 
 extern	TSS	*Tss;
+extern	char	*RgLogfile;
+extern	char	*RgBackup;
 
 #define	SSTAB_NAMEIDX_MASK	(2^32 - 1)
 
@@ -108,6 +111,7 @@ sstab_namebyid(char *old_sstab, char *new_sstab, int new_sstab_id)
 void
 sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 {
+	LOCALTSS(tss);
 	BUF		*destbuf;
 	TABINFO 	*tabinfo;
 	BLOCK		*nextblk;
@@ -174,6 +178,12 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 
 	tabinfo_push(tabinfo);
 
+	LOGREC logrec;
+
+	log_build(&logrec, LOG_BEGIN, 0, srctabinfo->t_sstab_name, NULL);
+
+	log_insert(tss->rglogfile, &logrec, SPLIT_LOG);
+
 	TABINFO_INIT(tabinfo, destbuf->bsstab_name, tabinfo->t_sinfo, 
 		     srcbp->bsstab->bblk->bminlen, TAB_KEPT_BUF_VALID | TAB_DO_SPLIT,
 		     srctabinfo->t_tabid, srctabinfo->t_insmeta->res_sstab_id);
@@ -228,7 +238,13 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 	MEMCPY(srctabinfo->t_insrg->new_sstab_key, sstab_key, sstab_keylen);
 	
 
+	log_build(&logrec, LOG_DO_SPLIT, srcbp->bsstab->bblk->bts_lo, srctabinfo->t_sstab_name,
+				destbuf->bsstab_name);
+	
+	log_insert(tss->rglogfile, &logrec, SPLIT_LOG);
+
 	session_close(tabinfo);
+	
 
 	if (tabinfo)
 	{

@@ -22,5 +22,15 @@
 #ifndef REGION_H_
 #define REGION_H_
 
+#ifdef MAXTABLE_BENCH_TEST
+
+#define MT_RANGE_TABLE   "./rg_table"
+
+#else
+
+#define MT_RANGE_TABLE   "/mnt/ranger/rg_table"
+
+#endif
+
 
 #endif 

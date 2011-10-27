@@ -49,23 +49,17 @@
 #include "checktable.h"
 #include "compact.h"
 #include "b_search.h"
+#include "log.h"
 
 
 extern TSS	*Tss;
 extern KERNEL	*Kernel;
 
 
-#ifdef MAXTABLE_BENCH_TEST
-
-#define MT_RANGE_TABLE   "./rg_table"
-
-#else
-
-#define MT_RANGE_TABLE   "/mnt/ranger/rg_table"
-
-#endif
-
 #define	RANGE_CONF_PATH_MAX_LEN	64
+
+char	*RgLogfile;
+char	*RgBackup;
 
 
 typedef struct rg_info
@@ -77,6 +71,8 @@ typedef struct rg_info
 	int	port;
 	int	bigdataport;
 	int	flush_check_interval;
+	char	rglogfiledir[256];
+	char	rgbackup[256];
 }RANGEINFO;
 
 
@@ -1324,6 +1320,8 @@ rg_handler(char *req_buf, int fd)
 	
 	tss->tcol_info = col_info;
 	tss->tmeta_hdr = ins_meta;
+	tss->rgbackpfile = RgBackup;
+	tss->rglogfile = RgLogfile;
 
 	if (!parser_open(req_buf))
 	{
@@ -1431,6 +1429,15 @@ rg_handler(char *req_buf, int fd)
 
 
 	session_close(tabinfo);
+
+	if (tabinfo->t_stat & TAB_SSTAB_SPLIT)
+	{
+		LOGREC	logrec;
+		
+		log_build(&logrec, LOG_END, 0, tabinfo->t_sstab_name, NULL);
+
+		log_insert(RgLogfile, &logrec, SPLIT_LOG);
+	}
        
 
 close:
@@ -1477,6 +1484,8 @@ rg_setup(char *conf_path)
 	char	metaport[32];
 
 	Range_infor = MEMALLOCHEAP(sizeof(RANGEINFO));
+	MEMSET(Range_infor, sizeof(RANGEINFO));
+	
 	MEMCPY(Range_infor->conf_path, conf_path, STRLEN(conf_path));
 
 	MEMSET(port, 32);
@@ -1509,8 +1518,44 @@ rg_setup(char *conf_path)
 	}	
 
 	rg_regist();
+
+	char	rgname[64];
+	RgLogfile = Range_infor->rglogfiledir;
+	
+	MEMSET(RgLogfile, 256);
+	MEMCPY(RgLogfile, LOG_FILE_DIR, STRLEN(LOG_FILE_DIR));
+
+	MEMSET(rgname, 64);
+	sprintf(rgname, "%s%d", Range_infor->rg_ip, Range_infor->port);
+
+	str1_to_str2(RgLogfile, '/', rgname);
+	
+	if (!(STAT(RgLogfile, &st) == 0))
+	{
+		traceprint("Log file %s is not exist.\n", RgLogfile);
+		return;
+	}
+
+
+	RgBackup = Range_infor->rgbackup;
+	
+	MEMSET(RgBackup, 256);
+	MEMCPY(RgBackup, BACKUP_DIR, STRLEN(BACKUP_DIR));
+
+	str1_to_str2(RgBackup, '/', rgname);
+
+	if (STAT(RgBackup, &st) != 0)
+	{
+		traceprint("Backup file %s is not exist.\n", RgBackup);
+		return;
+	}
+
 	
 	ca_setup_pool();
+
+	
+
+	return;
 }
 
 
