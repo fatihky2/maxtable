@@ -222,6 +222,11 @@ meta_server_setup(char *conf_path)
 		{
 			if (rg_addr[i].rg_stat == RANGER_IS_ONLINE)
 			{
+				char	logfile[TABLE_NAME_MAX_LEN];
+
+				log_get_rglogfile(logfile, rg_addr[i].rg_addr, rg_addr[i].rg_port);
+				log_undo(logfile, SPLIT_LOG);
+				
 				meta_heartbeat_setup(rg_addr + i);
 			}
 		}
@@ -3289,8 +3294,7 @@ meta_recovery_rg(char * req_buf)
 				if(rg_addr[i].rg_stat == RANGER_IS_ONLINE)
 				{
 					found = TRUE;
-					rg_addr[i].rg_stat = RANGER_IS_OFFLINE;
-
+					
 					char	logfile[TABLE_NAME_MAX_LEN];
 
 					log_get_rglogfile(logfile, rg_addr[i].rg_addr, rg_addr[i].rg_port);
@@ -3304,6 +3308,7 @@ meta_recovery_rg(char * req_buf)
 					}
 					//update rg list
 					rg_addr[i].rg_tablet_num = 0;
+					rg_addr[i].rg_stat = RANGER_IS_OFFLINE;
 					//(rglist->nextrno)++;//do not modify this!
 					meta_save_rginfo();
 					break;
