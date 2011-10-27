@@ -11,6 +11,8 @@ rm -rf ./index
 rm -rf ./rg_server
 rm -rf ./rg_table
 rm -rf ./meta_table
+rm -rf ./rgbackup
+rm -rf ./rglog
 
 rm startClient
 rm startMaster

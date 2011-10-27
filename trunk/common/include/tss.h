@@ -73,6 +73,8 @@ typedef struct tss
 			*tmaster_infor;
 	struct tab_sstab_map
 			*ttab_sstabmap;
+	char		*rglogfile;
+	char		*rgbackpfile;
 
 } TSS;
 

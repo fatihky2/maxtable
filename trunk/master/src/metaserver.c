@@ -45,6 +45,7 @@
 #include "sstab.h"
 #include "rebalancer.h"
 #include "thread.h"
+#include "log.h"
 
 extern	TSS	*Tss;
 
@@ -233,6 +234,16 @@ meta_server_setup(char *conf_path)
 		MKDIR(status, MT_META_INDEX, 0755); 
 	}
 
+	if (STAT(LOG_FILE_DIR, &st) != 0)
+	{
+		MKDIR(status, LOG_FILE_DIR, 0755); 
+	}
+	
+	if (STAT(BACKUP_DIR, &st) != 0)
+	{
+		MKDIR(status, BACKUP_DIR, 0755); 
+	}
+		
 	tab_sstabmap = NULL;
 	sstab_map = NULL;
 	
@@ -2098,6 +2109,59 @@ meta_prt_sstabmap(int begin, int end)
 		begin++;
 	}
 }
+static int
+meta_crt_rg_logbackup_file(char *rgip, int rgport)
+{
+	char	rglogfile[256];
+	char	rgname[64];
+	LOGFILE	*logfile;
+	int	status;
+	int	fd;
+
+
+	MEMSET(rglogfile, 256);
+	MEMCPY(rglogfile, LOG_FILE_DIR, STRLEN(LOG_FILE_DIR));
+
+	MEMSET(rgname, 64);
+	sprintf(rgname, "%s%d", rgip, rgport);
+
+	str1_to_str2(rglogfile, '/', rgname);
+	
+
+	OPEN(fd, rglogfile, (O_CREAT|O_WRONLY|O_TRUNC));
+
+	logfile = (LOGFILE *)MEMALLOCHEAP(sizeof(LOGFILE));
+	MEMSET(logfile,sizeof(LOGFILE));
+
+	logfile->magic[0] = 'm';
+	logfile->magic[1] = 'a';
+	logfile->magic[2] = 'x';
+	logfile->magic[3] = 't';
+	logfile->magic[4] = 'a';
+	logfile->magic[5] = 'b';
+	logfile->magic[6] = 'l';
+	logfile->magic[7] = 'e';
+	logfile->magic[8] = 'l';
+	logfile->magic[9] = 'o';
+	logfile->magic[10] = 'g';	
+
+	WRITE(fd, logfile, sizeof(LOGFILE));
+
+	CLOSE(fd);	
+
+
+	MEMSET(rglogfile, 256);
+	MEMCPY(rglogfile, BACKUP_DIR, STRLEN(BACKUP_DIR));
+
+	str1_to_str2(rglogfile, '/', rgname);
+
+	if (STAT(rglogfile, &st) != 0)
+	{
+		MKDIR(status, rglogfile, 0755);
+	}
+
+	return status;
+}
 
 
 static int
@@ -2161,6 +2225,7 @@ meta_collect_rg(char * req_buf)
 
 		if(start_heartbeat)
 		{
+			meta_crt_rg_logbackup_file(rg_addr[i].rg_addr, rg_addr[i].rg_port);
 			meta_heartbeat_setup(rg_addr + i);
 		}
 
@@ -3225,6 +3290,11 @@ meta_recovery_rg(char * req_buf)
 				{
 					found = TRUE;
 					rg_addr[i].rg_stat = RANGER_IS_OFFLINE;
+
+					char	logfile[TABLE_NAME_MAX_LEN];
+
+					log_get_rglogfile(logfile, rg_addr[i].rg_addr, rg_addr[i].rg_port);
+					log_undo(logfile, SPLIT_LOG);
 					
 					//update tablet
 					if(rg_addr[i].rg_tablet_num > 0)
