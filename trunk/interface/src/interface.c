@@ -102,6 +102,7 @@ int cli_commit(conn * connection, char * cmd, char * response, int * resp_len)
 	int		rtn_stat;
 	int		sstab_split;
 	int		remove_tab_hit;
+	int		retry_cnt;
 	
 
 	if(!validation_request(cmd))
@@ -117,6 +118,7 @@ int cli_commit(conn * connection, char * cmd, char * response, int * resp_len)
 	rtn_stat = TRUE;
 	sstab_split = FALSE;
 	remove_tab_hit = FALSE;
+	retry_cnt = 0;
 
 	//querytype = par_get_query(cmd, &querytype_index);
 	if(!parser_open(cmd))
@@ -258,6 +260,17 @@ retry:
                         traceprint("\n need to try \n");
                         conn_destroy_resp(resp);
 			conn_destroy_resp(rg_resp);
+			retry_cnt++;
+
+			if (retry_cnt > 5)
+			{
+				traceprint("\n Retry Fail\n");
+				rtn_stat = FALSE;
+				goto finish;
+			}
+
+			sleep(5);
+					
                         goto retry;
 
                 }

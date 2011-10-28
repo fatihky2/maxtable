@@ -135,11 +135,16 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 	}
 
 	srctabinfo->t_stat |= TAB_GET_RES_SSTAB;
-	destbuf = bufgrab(srctabinfo);
 
+	if ((destbuf = bufsearch(srctabinfo)) == NULL)
+	{
+		destbuf = bufgrab(srctabinfo);
+		
+		bufhash(destbuf);
+	}
+	
 	srctabinfo->t_stat &= ~TAB_GET_RES_SSTAB;
-	bufhash(destbuf);
-
+	
 	blk = destbuf->bblk;
 		
 	blk_init(blk);

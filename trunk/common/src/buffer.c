@@ -216,8 +216,23 @@ bufsearch(TABINFO *tabinfo)
 	int	tabid;
 
 
-	sstabno = tabinfo->t_sstab_id;
 	tabid= tabinfo->t_tabid;
+
+	if (tabinfo->t_stat & TAB_GET_RES_SSTAB)
+	{
+		Assert(   tabinfo->t_insmeta->res_sstab_id 
+		       && (tabinfo->t_insmeta->res_sstab_id != tabinfo->t_sstab_id));
+		       
+		sstabno = tabinfo->t_insmeta->res_sstab_id;
+	}
+	else if (tabinfo->t_stat & TAB_TABLET_SPLIT)
+	{
+		sstabno = tabinfo->t_split_tabletid;
+	}
+	else
+	{
+		sstabno = tabinfo->t_sstab_id;
+	}
 
 	
 	hashptr = BUFHASH(sstabno, tabid);
