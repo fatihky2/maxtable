@@ -223,9 +223,12 @@ meta_server_setup(char *conf_path)
 			if (rg_addr[i].rg_stat == RANGER_IS_ONLINE)
 			{
 				char	logfile[TABLE_NAME_MAX_LEN];
-
+				char	backup[TABLE_NAME_MAX_LEN];
+				
 				log_get_rglogfile(logfile, rg_addr[i].rg_addr, rg_addr[i].rg_port);
-				log_undo(logfile, SPLIT_LOG);
+				log_get_rgbackup(backup, rg_addr[i].rg_addr, rg_addr[i].rg_port);
+				
+				log_undo(logfile, backup, SPLIT_LOG);
 				
 				meta_heartbeat_setup(rg_addr + i);
 			}
@@ -3296,9 +3299,12 @@ meta_recovery_rg(char * req_buf)
 					found = TRUE;
 					
 					char	logfile[TABLE_NAME_MAX_LEN];
+					char	backup[TABLE_NAME_MAX_LEN];
 
 					log_get_rglogfile(logfile, rg_addr[i].rg_addr, rg_addr[i].rg_port);
-					log_undo(logfile, SPLIT_LOG);
+					log_get_rgbackup(backup, rg_addr[i].rg_addr, rg_addr[i].rg_port);
+				
+					log_undo(logfile, backup, SPLIT_LOG);
 					
 					//update tablet
 					if(rg_addr[i].rg_tablet_num > 0)
