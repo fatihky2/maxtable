@@ -38,6 +38,7 @@ extern TSS	*Tss;
 
 #define BLK_ROW_NEXT_SSTAB	0x0002	
 #define BLK_ROW_NEXT_BLK	0x0004
+#define BLK_INS_SPLITTING_SSTAB	0x0008
 
 
 
@@ -107,21 +108,9 @@ nextsstab:
 			Assert(   (tmpbp->bsstab->bblk->bts_lo > tabinfo->t_insmeta->ts_low)
 			       || (tmpbp->bsstab->bblk->bts_lo == tabinfo->t_insmeta->ts_low));
 
-			if(tabinfo->t_stat & TAB_DO_SPLIT)
+			if (tss->topid & TSS_OP_INSTAB) 
 			{
-				/* 
-				** Before committing the first split, stop the new split on the splitting sstable. 
-				** This issue maybe raised by two case:
-				**	1. The first split is waitting for the committing.
-				**	2. The first split is dead before commit its mission. In this case, we need to
-				**	    run the Metadata Consistency Checking with fix option.
-				*/
-
-				traceprint("Hit the new split on the splitting sstable.\n");
-
-				
-				tabinfo->t_stat |= TAB_RETRY_LOOKUP;
-				goto finish;
+				tabinfo->t_stat |= TAB_INS_SPLITING_SSTAB;
 			}
 		}
 
@@ -450,6 +439,13 @@ blkins(TABINFO *tabinfo, char *rp)
 
 	blk_stat = blk_check_sstab_space(tabinfo, bp, rp, rlen, offset);
 
+
+	if (blk_stat & BLK_INS_SPLITTING_SSTAB)
+	{
+		bufdestroy(bp);
+
+		return FALSE;
+	}
 	
 	if (blk_stat & BLK_ROW_NEXT_SSTAB)
 	{
@@ -709,6 +705,26 @@ blk_check_sstab_space(TABINFO *tabinfo, BUF *bp, char *rp, int rlen, int ins_off
 
 			if (tss->topid & TSS_OP_RANGESERVER)
 			{
+				if(tabinfo->t_stat & TAB_INS_SPLITING_SSTAB)
+				{
+					/* 
+					** Before committing the first split, stop the new split on the splitting sstable. 
+					** This issue maybe raised by two case:
+					**	1. The first split is waitting for the committing.
+					**	2. The first split is dead before commit its mission. In this case, we need to
+					**	    run the Metadata Consistency Checking with fix option.
+					*/
+
+					traceprint("Hit the new split on the splitting sstable %s.\n", tabinfo->t_sstab_name);
+
+					
+					tabinfo->t_stat |= TAB_RETRY_LOOKUP;
+
+					rtn_stat = BLK_INS_SPLITTING_SSTAB;
+
+					break;
+				}
+				
 				sstab_split(tabinfo, bp, rp);
 			}
 			else if (tss->topid & TSS_OP_METASERVER)
@@ -756,6 +772,17 @@ blk_check_sstab_space(TABINFO *tabinfo, BUF *bp, char *rp, int rlen, int ins_off
 
 				if (tss->topid & TSS_OP_RANGESERVER)
 				{
+					if(tabinfo->t_stat & TAB_INS_SPLITING_SSTAB)
+					{
+						traceprint("Hit the new split on the splitting sstable %s.\n", tabinfo->t_sstab_name);
+
+						
+						tabinfo->t_stat |= TAB_RETRY_LOOKUP;
+
+						rtn_stat = BLK_INS_SPLITTING_SSTAB;
+
+						break;
+					}
 					sstab_split(tabinfo, bp, rp);
 				}
 				else if (tss->topid & TSS_OP_METASERVER)

@@ -230,6 +230,7 @@ typedef struct tab_info
 #define	TAB_RETRY_LOOKUP	0x00004000	/* Retry to lookup the metadata. */
 #define	TAB_DO_SPLIT		0x00008000
 #define TAB_RESERV_BUF		0x00010000
+#define TAB_INS_SPLITING_SSTAB	0x00020000	
 
 
 #define TAB_IS_SYSTAB(tabinfo)	(tabinfo->t_stat & TAB_META_SYSTAB)

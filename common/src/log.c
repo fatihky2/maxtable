@@ -85,9 +85,8 @@ log_check_insert(LOGFILE *logfile, int logopid, int logtype)
 }
 
 static int
-log_check_delete(LOGFILE *logfile, int logtype)
+log_check_delete(LOGFILE *logfile, int logtype, char *backup)
 {
-	LOCALTSS(tss);
 	int	status;
 	LOGREC	*logrec;
 
@@ -123,7 +122,7 @@ log_check_delete(LOGFILE *logfile, int logtype)
 			MEMCPY(tmpsstab, logrec[1].oldsstabname + i, STRLEN(logrec[1].oldsstabname + i));
 	
 				
-			sprintf(cmd_str, "rm -rf %s/%s",  tss->rgbackpfile, tmpsstab);
+			sprintf(cmd_str, "rm -rf %s/%s",  backup, tmpsstab);
 			
 			if (!system(cmd_str))
 			{
@@ -225,12 +224,13 @@ exit:
 int
 log_delete(LOGFILE *logfilebuf, int logtype)
 {
+	LOCALTSS(tss);
 	int		status;
 
 
 	status = FALSE;
 	
-	status = log_check_delete(logfilebuf, logtype);
+	status = log_check_delete(logfilebuf, logtype, tss->rgbackpfile);
 
 	if (status == FALSE)
 	{
@@ -252,11 +252,6 @@ log_undo(char *logfile_dir, char *backup_dir, int logtype)
 	int		status;
 	LOGFILE		*logfilebuf;
 
-
-	if (logfilebuf->logtotnum == 0)
-	{
-		return TRUE;
-	}
 	
 	logfilebuf = (LOGFILE *)MEMALLOCHEAP(sizeof(LOGFILE));
 	status = FALSE;
@@ -270,9 +265,14 @@ log_undo(char *logfile_dir, char *backup_dir, int logtype)
 
 	READ(fd,logfilebuf, sizeof(LOGFILE));
 
+	if (logfilebuf->logtotnum == 0)
+	{
+		goto exit;
+	}
+	
 	if (logfilebuf->logrec[logfilebuf->logtotnum - 1].opid == LOG_END)
 	{
-		status = log_check_delete(logfilebuf, logtype);
+		status = log_check_delete(logfilebuf, logtype, backup_dir);
 
 		if (status == FALSE)
 		{
