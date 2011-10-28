@@ -37,12 +37,12 @@ vim ranger.conf
 ./starRanger
 }}}
 
-*RUN REGRESSION TESTS*<br>
-  * Edit Makefile
-{{{
-vim Makefile
-}}}
+*RUN SAMPLE*
   * Start the test in the client
 {{{
-./starClient
+./sample create
+./sample insert
+./sample select
 }}}
+
+*RUN REGRESSION TESTS*<br>
