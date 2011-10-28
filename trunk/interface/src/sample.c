@@ -66,7 +66,7 @@ int main(int argc, char *argv[])
 		if (match(argv[1], "select"))
 		{
 			/* Select datas from table */
-			for(i = 1; i < 2000; i++)
+			for(i = 1; i < 333; i++)
 			{
 				memset(resp, 0, 256);
 				memset(cmd, 0, 256);
