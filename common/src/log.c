@@ -209,7 +209,18 @@ log_insert(char	 *logfile_dir, LOGREC *logrec, int logtype)
 	(logfilebuf->logtotnum)++;
 	logfilebuf->logtype = logtype;
 
+#ifdef MT_KFS_BACKEND
+	CLOSE(fd);
+	
+	OPEN(fd, logfile_dir, (O_RDWR));
+
+	if (fd < 0)
+	{
+		goto exit;
+	}
+#else
 	LSEEK(fd, 0, SEEK_SET);
+#endif
 	WRITE(fd, logfilebuf, sizeof(LOGFILE));
 
 exit:
@@ -347,7 +358,18 @@ log_undo(char *logfile_dir, char *backup_dir, int logtype)
 	logfilebuf->logtotnum = 0;
 	logfilebuf->logtype = 0;
 
+#ifdef MT_KFS_BACKEND
+	CLOSE(fd);
+	
+	OPEN(fd, logfile_dir, (O_RDWR));
+
+	if (fd < 0)
+	{
+		goto exit;
+	}
+#else
 	LSEEK(fd, 0, SEEK_SET);
+#endif
 	WRITE(fd, logfilebuf, sizeof(LOGFILE));
 
 exit:

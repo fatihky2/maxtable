@@ -25,6 +25,8 @@
 #include "memcom.h"
 #include "strings.h"
 
+char	Kfsserver[32];
+int	Kfsport;
 
 CONFIG * 
 conf_build(char *str, char deli)
