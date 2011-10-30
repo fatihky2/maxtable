@@ -1,28 +1,24 @@
-1. Runnig
+1. Building
 
-a. Create a table to store the file meta information for the whole storage cluster. 
-create table tran_metas (varchar file_alias_name, varchar file_true_name, varchar file_location, int file_size,...varchar owner....)
+If using the Kosmos file system as your back-end storage engine, you should set the MT_BACKEND with 'KFS'
+	export MT_BACKEND=KFS
 
-b. Insert one record for the application or file applied by some one user (User1)
-insert into tran_metas (Peter, /home/transoft/jeff, 127.0.0.1, 10000k)
+and set the MT_DFS_CLI_LIB_PATH and MT_DFS_INCLUDE_PATH with your path of KFS's LIB and include.
+	export MT_DFS_CLI_LIB_PATH=~/kosmos/build/src/cc
+	export MT_DFS_INCLUDE_PATH=~/kosmos/src/cc
 
-c. Insert one record for the application or file applied by other user (User2)
-insert into tran_metas (Jimmy, /home/transoft/jeff, 127.0.0.1, 10000k)
+else if using the local system as the storage engine, please set it as follows:
+	export MT_BACKEND=LOCAL
 
-d. Query one file
-select tran_metas (Peter)
-Return: "Peter, /home/transoft/jeff, 127.0.0.1, 10000k"
+make clean
+make
 
-e. Query one file
-select tran_metas (Jimmy)
-Return: "Jimmy, /home/transoft/jeff, 127.0.0.1, 10000k"
-
-2. Building
-
-./clean.sh
-./build.sh
-
-./startClient
 ./startMaster
-./startRegion
+./startRanger
+
+2. Sample Test
+
+./sample create
+./sample insert
+./sample select
 

@@ -36,6 +36,14 @@ typedef struct reginfor
 	int		serving;
 }REGINFOR;
 
+#define CONF_META_IP		"metaserver"
+#define CONF_META_PORT		"metaport"
+#define	CONF_RG_IP		"rangerserver"
+#define CONF_RG_PORT		"rangerport"
+#define CONF_BIGDATA_PORT	"bigdataport"
+#define CONF_KFS_IP		"kfsserver"
+#define CONF_KFS_PORT		"kfsport"
+
 /* Used by config functions. */
 
 #define CONF_MAX_OPTION	32

@@ -42,15 +42,6 @@
 #define HEARTBEAT_INTERVAL		30
 
 
-#define CONF_META_IP    "metaserver"
-#define CONF_META_PORT  "metaport"
-#define	CONF_RG_IP	"rangerserver"
-#define CONF_RG_PORT	"rangerport"
-#define CONF_BIGDATA_PORT	"bigdataport"
-
-
-
-
 #define CONN_BUF_SIZE (1024 * 1024)
 
 typedef struct rpcreq
