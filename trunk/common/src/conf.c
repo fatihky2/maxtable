@@ -57,6 +57,18 @@ conf_build(char *str, char deli)
 		{
 			str++;
 		}
+
+		/* Skip the comment. */
+		if (*start == '#')
+		{
+			while (*str == ' ' || *str == '\t' || *str == deli) 
+			{
+				str++;
+			}
+			
+			continue;
+		}
+		
 		len = str - start;
 		config = (char *)MEMALLOCHEAP(len + 1);
 		strncpy(config, start, len);
