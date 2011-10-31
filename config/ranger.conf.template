@@ -1,7 +1,13 @@
+# Configuration for range server: 
+# Meta server location
 metaserver=127.0.0.1
 metaport=1959
+# Ranger address
 rangerserver=127.0.0.1
+# Port to open for client connections
 rangerport=1949
+# Port to transfer the Bigdata to the client
 bigdataport=1969
+# KFS meta server location
 kfsserver=127.0.0.1
 kfsport=20000
