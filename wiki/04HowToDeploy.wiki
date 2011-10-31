@@ -20,6 +20,7 @@ metaserver=192.168.171.152
 metaport=1959
 rangerserver=192.168.171.153
 rangerport=1949
+bigdataport=1969
 kfsserver=192.168.171.151
 kfsport=20000
 }}}
