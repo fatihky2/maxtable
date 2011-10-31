@@ -1,0 +1,48 @@
+#summary How to install MaxTable servers on a cluster.
+
+*HOW TO BUILD*<br>
+  * Checkout the source code
+{{{
+svn checkout https://maxtable.googlecode.com/svn/trunk/ maxtable
+}}}
+  * Enter into your_source_dir
+{{{
+cd maxtable
+}}}
+  * Build the source code
+{{{
+make clean
+make all
+}}}
+
+*HOW TO RUN*<br>
+  * Enter into your_source_dir
+{{{
+cd maxtable
+}}}
+  * Edit the configure file
+{{{
+vim cli.conf
+vim master.conf
+vim ranger.conf
+}}}
+  * Boot KFS if you use the KFS as the back-end storage engine
+
+  * Boot Master
+{{{
+./starMaster
+}}}
+  * Boot Ranger
+{{{
+./starRanger
+}}}
+
+*RUN SAMPLE*
+  * Start the test in the client
+{{{
+./sample create
+./sample insert
+./sample select
+}}}
+
+*RUN REGRESSION TESTS*<br>
