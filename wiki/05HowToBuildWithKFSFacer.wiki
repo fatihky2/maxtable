@@ -1,0 +1,22 @@
+#summary Build the binary with the API of KFS.
+
+1. Check out the code for the branch of mt2kfs.
+{{{
+svn checkout https://maxtable.googlecode.com/svn/branches/mt2kfs maxtable
+}}}
+2. Change the Makefile with your KFS's directory of include and library
+{{{
+KFSFLAG = -I{YOUR_KFS_INCLUDE} -L{YOUR_KFS_LIBRARY} -L{YOUR_KFS_LIBRARY} -lkfsClient -lboost_regex
+}}}
+2. BUild the library.
+{{{
+cd maxtable
+make kfsfacer_o
+make kfsfacer_a
+}}}
+3. Build the binary.
+{{{
+cd maxtable
+make master
+make ranger
+}}}
