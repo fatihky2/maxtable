@@ -9,7 +9,7 @@
   # What components in the system and how they relate to one another.http://m3.img.libdd.com/farm2/164/A150C68C190405F366A822E6085632A4_461_247.jpg                                 
   # How to store the table in the disk ?
 http://m3.img.libdd.com/farm2/46/BF36B38EE226BA9ACAEB313BCC773D2E_540_143.jpg
-    * One SSTable = 1 M data.
-    * One Tablet = 4K SSTable.
-    * One Table = 4K Tablet.
-So, one table can contain 16T data, or 64 PB data if we use two tablet levels to save index data. 
+    * One SSTable = 4 M data.
+    * One Tablet = 25K SSTable.
+    * One Table = 42K Tablet.
+So, one table can contain more than 4PB data, and we can extend the size of block or use two tablet levels to save index data to contain more data.
