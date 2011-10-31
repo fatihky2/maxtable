@@ -1,0 +1,31 @@
+#summary A brief introduction to Maxtable Query Language (MQL)
+
+MQL is based on the style of traditional relational query language.
+  * *CREATE TABLE*.....create table table_name (column1 type1, ...,cloumnx type x) 
+  * *INSERT*....................insert into table_name (column1_value,...columnx_value)
+  * *DELETE*..................delete table_name (column1_value)
+  * *SELECT*..................select table_name (column1_value)
+  * *SELECTRANGE*......selectrange table_name (column1_value1, column1_value2)
+  * *DROP*.....................drop table_name
+
+*Examples*
+  * create table
+{{{
+create table metabase (filename varchar, filesize int, serveraddr varchar)
+}}}
+  * insert data
+{{{
+insert into metabase (/home/tnsoft/yxue/maxtable/victory.txt, 16000, 192.168.1.152)
+}}}
+  * select data
+{{{
+select metabase (/home/tnsoft/yxue/maxtable/victory.txt)
+}}}
+  * delete data
+{{{
+delete metabase (/home/tnsoft/yxue/maxtable/victory.txt)
+}}}
+  * drop table
+{{{
+drop metabase
+}}}
