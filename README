@@ -7,6 +7,8 @@ and set the MT_DFS_CLI_LIB_PATH and MT_DFS_INCLUDE_PATH with your path of KFS's 
 	export MT_DFS_CLI_LIB_PATH=~/kosmos/build/src/cc/libkfsClient
 	export MT_DFS_INCLUDE_PATH=~/kosmos/src/cc
 
+	cp libkfsCommon.so libkfsIO.so libqcdio.so libkfsClient.so ~/kosmos/build/src/cc/libkfsClient
+
 else if using the local system as the storage engine, please set it as follows:
 	export MT_BACKEND=LOCAL
 
