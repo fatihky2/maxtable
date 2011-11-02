@@ -52,6 +52,10 @@ kfs_seek(int fd, int offset, char *serverHost, int port);
 extern int
 kfs_exist(char *tab_dir, char *serverHost, int port);
 
+extern int
+kfs_readdir(char * tab_dir,MT_ENTRIES * mt_entries);
+
+
 
 #define	OPEN(fd, tab_dir, flag)							\
 	do{									\
@@ -85,6 +89,8 @@ kfs_exist(char *tab_dir, char *serverHost, int port);
 #define	STAT(dir, state)	stat((dir), (state))
 
 #define EXIST(dir)		kfs_exist((char *)(dir), Kfsserver, Kfsport)
+
+#define READDIR(dir, mt_entries)	kfs_readdir((char *)dir, mt_entries)
 
 #else
 

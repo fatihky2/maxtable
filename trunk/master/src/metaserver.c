@@ -99,6 +99,18 @@ struct stat st;
 
 #endif
 
+
+/* Following definition is for the method of read dir, it sames with the definition in the kfsfacer.cc. */
+#define TABLE_MAX_NUM		32
+#define TABLE_NAME_MAX_LEN	128
+typedef struct mt_entries
+{
+	int	ent_num;
+	char	tabname[TABLE_MAX_NUM][TABLE_NAME_MAX_LEN];
+	
+}MT_ENTRIES;
+
+
 static void
 meta_heartbeat_setup(RANGE_PROF * rg_addr);
 
@@ -3384,10 +3396,7 @@ static void
 meta_update(char * rg_addr, int rg_port)
 {
 	char tab_name[256];
-	char tab_dir[256];
-
-	DIR *pDir ;
-	struct dirent *ent ;
+	char tab_dir[256];	
 	
 	MEMSET(tab_dir, 256);
 	MEMCPY(tab_dir, MT_META_TABLE, STRLEN(MT_META_TABLE));
@@ -3402,21 +3411,59 @@ meta_update(char * rg_addr, int rg_port)
 		goto exit;
 	}
 
+#ifdef MT_KFS_BACKEND
+
+	MT_ENTRIES	mt_entries;
+
+	MEMSET(&mt_entries, sizeof(MT_ENTRIES));
+
+	if (!READDIR(tab_dir, &mt_entries))
+	{
+		traceprint("Read dir %s hit error.\n", tab_dir);
+		goto exit;
+	}
+
+	int i;
+
+	for (i = 0; i < mt_entries.ent_num; i++)
+	{
+		if(strcmp(mt_entries.tabname[i],".")==0 || strcmp(mt_entries.tabname[i],"..")==0)
+		{
+			continue;
+		}
+		
+		if (!meta_tablet_update(mt_entries.tabname[i], rg_addr, rg_port))
+		{
+			/* Error infor has been printed in the meta_tablet_updata. */
+			break;
+		}
+	}
+
+#else
+
+	DIR *pDir ;
+	struct dirent *ent ;
+	
 	pDir=opendir(tab_dir);
 	while((ent=readdir(pDir))!=NULL)
 	{
 		if(ent->d_type & DT_DIR)
 		{
 			if(strcmp(ent->d_name,".")==0 || strcmp(ent->d_name,"..")==0)
+			{
 				continue;
+			}
+			
 			MEMSET(tab_name, 256);
 			sprintf(tab_name, "%s", ent->d_name);
 			if (!meta_tablet_update(tab_name, rg_addr, rg_port))
 			{
+				/* Error infor has been printed in the meta_tablet_updata. */
 				break;
 			}
 		}
 	}
+#endif
 
 exit:
 	return;
