@@ -28,6 +28,10 @@ kfs_seek(int fd, int offset, char *serverHost, int port);
 int
 kfs_exist(char *tab_dir, char *serverHost, int port);
 
+int
+kfs_readdir(char * tab_dir,MT_ENTRIES * mt_entries);
+
+
 
 #ifdef __cplusplus
 }

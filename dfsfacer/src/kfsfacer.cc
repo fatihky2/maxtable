@@ -15,6 +15,8 @@ extern "C" {
 #include "libkfsClient/KfsClient.h"
 #include "../include/kfsfacer.h"
 
+using std::vector;
+using std::string;
 using std::cout;
 using std::endl;
 using namespace KFS;
@@ -23,6 +25,14 @@ using namespace KFS;
 //char *serverHost = "127.0.0.1";
 //int port = 20000;
 
+#define TABLE_MAX_NUM		32
+#define TABLE_NAME_MAX_LEN	128
+typedef struct mt_entries
+{
+	int	ent_num;
+	char	tabname[TABLE_MAX_NUM][TABLE_NAME_MAX_LEN];
+	
+}MT_ENTRIES;
 
 int 
 kfs_open(char *fname, int flag, char *serverHost, int port)
@@ -187,6 +197,40 @@ kfs_exist(char *tab_dir, char *serverHost, int port)
 
 	return stat;
 
+}
+
+int
+kfs_readdir(char *tab_dir, MT_ENTRIES *mt_entries)
+{
+	KfsClientPtr kfsClient;
+	int	stat;
+	vector<string> entries;
+
+	kfsClient = getKfsClientFactory()->GetClient(serverHost, port);
+
+	if (!kfsClient) 
+	{
+		cout << "kfs client failed to initialize...exiting" << endl;
+		exit(-1);
+	}
+
+	stat = kfsClient->Readdir(tab_dir, entries);
+    
+    	if ((stat < 0) || (entries.size() == 0))
+        {
+        	return FALSE;
+    	}
+
+	mt_entries->ent_num = entries.size();
+	
+	int i;
+	for (i = 0; i < entries.size(); i++)
+	{
+		memcpy(mt_entries->tabname[i], entries[i].c_str(),entries[i].size);		
+	}
+	
+
+	return TRUE;
 }
 
 /*
