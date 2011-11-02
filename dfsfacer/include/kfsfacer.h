@@ -29,7 +29,7 @@ int
 kfs_exist(char *tab_dir, char *serverHost, int port);
 
 int
-kfs_readdir(char * tab_dir,MT_ENTRIES * mt_entries);
+kfs_readdir(char * tab_dir, char *mt_entries, char *serverHost, int port);
 
 
 

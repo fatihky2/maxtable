@@ -101,12 +101,12 @@ struct stat st;
 
 
 /* Following definition is for the method of read dir, it sames with the definition in the kfsfacer.cc. */
-#define TABLE_MAX_NUM		32
-#define TABLE_NAME_MAX_LEN	128
+#define TABLE_READDIR_MAX_NUM		32
+#define TABLE_NAME_READDIR_MAX_LEN	128
 typedef struct mt_entries
 {
 	int	ent_num;
-	char	tabname[TABLE_MAX_NUM][TABLE_NAME_MAX_LEN];
+	char	tabname[TABLE_READDIR_MAX_NUM][TABLE_NAME_READDIR_MAX_LEN];
 	
 }MT_ENTRIES;
 
@@ -3395,7 +3395,6 @@ exit:
 static void
 meta_update(char * rg_addr, int rg_port)
 {
-	char tab_name[256];
 	char tab_dir[256];	
 	
 	MEMSET(tab_dir, 256);
@@ -3417,7 +3416,7 @@ meta_update(char * rg_addr, int rg_port)
 
 	MEMSET(&mt_entries, sizeof(MT_ENTRIES));
 
-	if (!READDIR(tab_dir, &mt_entries))
+	if (!READDIR(tab_dir, (char *)&mt_entries))
 	{
 		traceprint("Read dir %s hit error.\n", tab_dir);
 		goto exit;
@@ -3440,7 +3439,7 @@ meta_update(char * rg_addr, int rg_port)
 	}
 
 #else
-
+	char tab_name[256];
 	DIR *pDir ;
 	struct dirent *ent ;
 	

@@ -53,7 +53,7 @@ extern int
 kfs_exist(char *tab_dir, char *serverHost, int port);
 
 extern int
-kfs_readdir(char * tab_dir,MT_ENTRIES * mt_entries);
+kfs_readdir(char * tab_dir, char* mt_entries, char *serverHost, int port);
 
 
 
@@ -90,7 +90,7 @@ kfs_readdir(char * tab_dir,MT_ENTRIES * mt_entries);
 
 #define EXIST(dir)		kfs_exist((char *)(dir), Kfsserver, Kfsport)
 
-#define READDIR(dir, mt_entries)	kfs_readdir((char *)dir, mt_entries)
+#define READDIR(dir, mt_entries)	kfs_readdir((char *)dir, mt_entries, Kfsserver, Kfsport)
 
 #else
 
