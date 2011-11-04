@@ -18,6 +18,7 @@
 ** permissions and limitations under the License.
 */
 #include "master/metaserver.h"
+#include "memcom.h"
 #include "buffer.h"
 #include "block.h"
 #include "cache.h"
@@ -28,18 +29,10 @@
 #include "sstab.h"
 #include "tablet.h"
 #include "b_search.h"
+#include "timestamp.h"
 
 
 extern TSS	*Tss;
-
-
-#define	BLK_BUF_NEED_CHANGE	0x0001
-
-
-#define BLK_ROW_NEXT_SSTAB	0x0002	
-#define BLK_ROW_NEXT_BLK	0x0004
-#define BLK_INS_SPLITTING_SSTAB	0x0008
-
 
 
 BUF *
@@ -99,14 +92,14 @@ nextsstab:
 		    && !stat_chg)
 		{
 			
-			if (tmpbp->bsstab->bblk->bts_lo == tabinfo->t_insmeta->ts_low)
+			if (tmpbp->bsstab->bblk->bsstab_split_ts_lo == tabinfo->t_insmeta->ts_low)
 			{
 				tmpbp->bsstab->bblk->bstat &= ~BLK_SSTAB_SPLIT;
 				goto finish;
 			}
 
-			Assert(   (tmpbp->bsstab->bblk->bts_lo > tabinfo->t_insmeta->ts_low)
-			       || (tmpbp->bsstab->bblk->bts_lo == tabinfo->t_insmeta->ts_low));
+			Assert(   (tmpbp->bsstab->bblk->bsstab_split_ts_lo > tabinfo->t_insmeta->ts_low)
+			       || (tmpbp->bsstab->bblk->bsstab_split_ts_lo == tabinfo->t_insmeta->ts_low));
 
 			if (tss->topid & TSS_OP_INSTAB) 
 			{
@@ -119,7 +112,7 @@ nextsstab:
 		    && !stat_chg)
 		{
 			if(   !(tabinfo->t_stat & TAB_DO_SPLIT) 
-			   && (tmpbp->bsstab->bblk->bts_lo < tabinfo->t_insmeta->ts_low))
+			   && (tmpbp->bsstab->bblk->bsstab_split_ts_lo < tabinfo->t_insmeta->ts_low))
 			{
 				/*
 				** Case for the new round of ts setting ?
@@ -405,6 +398,7 @@ blk_getsstable(TABINFO *tabinfo)
 int
 blkins(TABINFO *tabinfo, char *rp)
 {
+	LOCALTSS(tss);
 	BUF	*bp;
 	int	offset;
 	int	minlen;
@@ -486,7 +480,14 @@ blkins(TABINFO *tabinfo, char *rp)
 		offtab[-i] = offset;
 	}
 	
+	if (tss->topid & TSS_OP_RANGESERVER)
+	{
+		tabinfo->t_insdel_old_ts_lo = bp->bsstab->bblk->bsstab_insdel_ts_lo;
 		
+		bp->bsstab->bblk->bsstab_insdel_ts_lo = mtts_increment(bp->bsstab->bblk->bsstab_insdel_ts_lo);
+
+		tabinfo->t_insdel_new_ts_lo = bp->bsstab->bblk->bsstab_insdel_ts_lo;
+	}
 	
 	PUT_TO_BUFFER((char *)bp->bblk + offset, ign, rp, rlen);
 
@@ -563,17 +564,21 @@ blkdel(TABINFO *tabinfo)
 	rp = (char *)(bp->bblk) + offset;
 	rlen = ROW_GET_LENGTH(rp, minlen);
 
-	if (   (tss->topid & TSS_OP_RANGESERVER) && (bp->bblk->bblkno == 0) 
-	    && (offset == BLKHEADERSIZE))
+	if (tss->topid & TSS_OP_RANGESERVER)
 	{
-		
-		ROW_SET_STATUS(rp, ROW_DELETED);
+		tabinfo->t_cur_rowp = (char *)MEMALLOCHEAP(rlen);
 
-		
-		
-		goto finish;
+		MEMCPY(tabinfo->t_cur_rowp, rp, rlen);
+
+		tabinfo->t_cur_rowlen = rlen;
+
+		if ((bp->bblk->bblkno == 0) && (offset == BLKHEADERSIZE))
+		{
+			ROW_SET_STATUS(rp, ROW_DELETED);
+			goto finish;
+		}		
 	}
-	
+		
 	if (bp->bblk->bfreeoff - offset)
 	{
 		MEMCPY(rp, rp + rlen, (bp->bblk->bfreeoff - offset - rlen));
@@ -598,7 +603,15 @@ blkdel(TABINFO *tabinfo)
 	
 	}
 
+	if (tss->topid & TSS_OP_RANGESERVER)
+	{
+		tabinfo->t_insdel_old_ts_lo = bp->bsstab->bblk->bsstab_insdel_ts_lo;
+		
+		bp->bsstab->bblk->bsstab_insdel_ts_lo = mtts_increment(bp->bsstab->bblk->bsstab_insdel_ts_lo);
 
+		tabinfo->t_insdel_new_ts_lo = bp->bsstab->bblk->bsstab_insdel_ts_lo;
+	}
+	
 	bp->bblk->bfreeoff -= rlen;
 	
 	BLK_GET_NEXT_ROWNO(bp)--;

@@ -47,13 +47,16 @@ extern int
 kfs_close(int fd, char *serverHost, int port);
 
 extern int
-kfs_seek(int fd, int offset, char *serverHost, int port);
+kfs_seek(int fd, int offset, int flag, char *serverHost, int port);
 
 extern int
 kfs_exist(char *tab_dir, char *serverHost, int port);
 
 extern int
 kfs_readdir(char * tab_dir, char* mt_entries, char *serverHost, int port);
+
+extern int
+kfs_append(int fd, char *buf, int buf_len, char *serverHost, int port);
 
 
 
@@ -84,13 +87,15 @@ kfs_readdir(char * tab_dir, char* mt_entries, char *serverHost, int port);
 
 #define	CLOSE(fd)		kfs_close(fd, Kfsserver, Kfsport)
 
-#define LSEEK(fd, offset)	kfs_seek(fd, offset, Kfsserver, Kfsport)
+#define LSEEK(fd, offset flag)	kfs_seek(fd, offset, flag, Kfsserver, Kfsport)
 
 #define	STAT(dir, state)	stat((dir), (state))
 
 #define EXIST(dir)		kfs_exist((char *)(dir), Kfsserver, Kfsport)
 
 #define READDIR(dir, mt_entries)	kfs_readdir((char *)dir, mt_entries, Kfsserver, Kfsport)
+
+#define APPEND(fd, buf, buf_len)	kfs_append(fd, buf, buf_len, Kfsserver, Kfsport)
 
 #else
 
@@ -124,6 +129,22 @@ kfs_readdir(char * tab_dir, char* mt_entries, char *serverHost, int port);
 #define LSEEK(fd, offset, flag)	lseek(fd, offset, flag)
 
 #define	STAT(dir, state)	stat((dir), (state))
+
+#define APPEND(fd, buf, buf_len, status)					\
+	do{									\
+		int offset = LSEEK(fd, 0, SEEK_END);				\
+										\
+		if ((offset + buf_len) > SSTABLE_SIZE)				\
+		{								\
+			status = 0;						\
+		}								\
+		else								\
+		{								\
+			*(int *)(buf + buf_len - sizeof(int) - sizeof(int)) = offset;\
+			*(int *)(buf + buf_len - sizeof(int)) = offset + buf_len;\
+			status = WRITE(fd, buf, buf_len);			\
+		}								\
+	}while(0)
 
 #endif
 

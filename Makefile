@@ -91,4 +91,4 @@ client_lib: ${LIB_OBJS_C}
 
 clean: 
 	rm -rf startClient startMaster startRanger imql memTest benchmark sample libmtService.a ${LIB_OBJS_C} ${LIB_OBJS_CPP} libmtClient.so kfsfacer.o kfsfacer.a
-
+	rm -rf ./table ./index ./rg_server ./rg_table ./meta_table ./rgbackup ./rglog

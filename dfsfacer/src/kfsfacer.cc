@@ -34,6 +34,8 @@ typedef struct mt_entries
 	
 }MT_ENTRIES;
 
+#define	KFS_LOG_FILE_SIZE	(4 * 1024 * 1024)
+
 int 
 kfs_open(char *fname, int flag, char *serverHost, int port)
 {
@@ -159,7 +161,7 @@ kfs_close(int fd, char *serverHost, int port)
 } 
 
 int
-kfs_seek(int fd, int offset, char *serverHost, int port)
+kfs_seek(int fd, int offset, int flag, char *serverHost, int port)
 {
 	KfsClientPtr kfsClient;
 	int	stat;
@@ -173,7 +175,7 @@ kfs_seek(int fd, int offset, char *serverHost, int port)
 		exit(-1);
 	}
 
-	stat = kfsClient->Seek(fd, offset, SEEK_SET);
+	stat = kfsClient->Seek(fd, offset, flag);
 	
 	return stat;
 }
@@ -233,6 +235,46 @@ kfs_readdir(char *tab_dir, char *ent, char *serverHost, int port)
 		memcpy(mt_entries->tabname[i], entries[i].c_str(),strlen(entries[i].c_str()));		
 	}
 	
+
+	return 1;
+}
+
+
+int
+kfs_append(int fd, char *buf, int buf_len, char *serverHost, int port)
+{
+	KfsClientPtr kfsClient;
+	int	nwrite;
+	int	offset;
+
+	kfsClient = getKfsClientFactory()->GetClient(serverHost, port);
+
+	if (!kfsClient) 
+	{
+		cout << "kfs client failed to initialize...exiting" << endl;
+		exit(-1);
+	}
+
+	offset = kfsClient->Tell(fd);
+
+	if ((offset + buf_len) > KFS_LOG_FILE_SIZE)
+	{
+		return 0;
+	}
+
+	/* Fill the LOGREC. */
+	*(int *)(buf + buf_len - sizeof(int) - sizeof(int)) = offset;
+	*(int *)(buf + buf_len - sizeof(int)) = offset + buf_len;
+
+	nwrite = kfsClient->Write(fd, buf, buf_len);
+
+	if (nwrite != buf_len) 
+	{
+		cout << "Was able to write only: " << nwrite << " instead of " << buf_len << endl;
+	}
+
+	// flush out the changes
+	kfsClient->Sync(fd);
 
 	return 1;
 }

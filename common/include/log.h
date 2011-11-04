@@ -43,18 +43,32 @@
 #define	LOG_BEGIN		1
 #define LOG_END			2
 #define	LOG_DO_SPLIT		3
+#define LOG_INSERT		4
+#define LOG_DELETE		5
+#define CHECKPOINT		6
 
 typedef struct logrec
 {
 	int		opid;
-	unsigned int	ts;
+	int		status;
+	unsigned int	oldts;
+	unsigned int	newts;
+	int		minrowlen;
+	int		tabid;
+	int		sstabid;
 	char		tablename[TABLET_NAME_MAX_LEN];
 	char		oldsstabname[SSTABLE_NAME_MAX_LEN];
 	char		newsstabname[SSTABLE_NAME_MAX_LEN];
+	int		rowend_off;
+	int		cur_log_off;
+	int		next_log_off;
 }LOGREC;
 
-/* Following definition is for the logtype. */
-#define	SPLIT_LOG	1
+/* Following definition is for the status. */
+#define	CHECKPOINT_BEGIN	0x0001
+#define CHECKPOINT_END		0x0002
+
+
 
 typedef struct logfile
 {
@@ -64,24 +78,37 @@ typedef struct logfile
 	LOGREC	logrec[LOG_TOTALNUM];
 }LOGFILE;
 
+/* Following definition is for the logtype. */
+#define	SPLIT_LOG	1
+
 
 void
-log_build(LOGREC *logrec, int logopid, unsigned int ts, char *oldsstab, char *newsstab);
+log_build(LOGREC *logrec, int logopid, unsigned int oldts, unsigned int newts, char *oldsstab, 
+		char *newsstab, int minrowlen, int tabid, int sstabid);
 
 int
-log_insert(char	 *logfile_dir, LOGREC *logrec, int logtype);
+log_insert_sstab_split(char	 *logfile_dir, LOGREC *logrec, int logtype);
 
 int
 log_delete(LOGFILE *logfilebuf, int logtype);
 
 int
-log_undo(char *logfile_dir, char *backup_dir, int logtype);
+log_undo_sstab_split(char *logfile_dir, char *backup_dir, int logtype);
 
 int
-log_get_rglogfile(char *rglogfile, char *rgip, int rgport);
+log_get_sstab_split_logfile(char *rglogfile, char *rgip, int rgport);
 
 int
 log_get_rgbackup(char *rgbackup, char *rgip, int rgport);
+
+int
+log_insert_insdel(char	 *logfile_dir, LOGREC *logrec, char *rp, int rlen);
+
+int
+log_get_latest_rginsedelfile(char *rginsdellogfile, char *rg_ip, int port);
+
+int
+log_redo_insdel(char *insdellogfile);
 
 
 #endif

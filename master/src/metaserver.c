@@ -87,9 +87,9 @@ struct stat st;
 
 #ifdef MAXTABLE_BENCH_TEST
 
-#define MT_META_TABLE   "/meta_table"
-#define MT_META_REGION  "/rg_server"
-#define MT_META_INDEX   "/index"	
+#define MT_META_TABLE   "./meta_table"
+#define MT_META_REGION  "./rg_server"
+#define MT_META_INDEX   "./index"	
 
 #else
 
@@ -98,17 +98,6 @@ struct stat st;
 #define MT_META_INDEX   "/mnt/metaserver/index"	
 
 #endif
-
-
-/* Following definition is for the method of read dir, it sames with the definition in the kfsfacer.cc. */
-#define TABLE_READDIR_MAX_NUM		32
-#define TABLE_NAME_READDIR_MAX_LEN	128
-typedef struct mt_entries
-{
-	int	ent_num;
-	char	tabname[TABLE_READDIR_MAX_NUM][TABLE_NAME_READDIR_MAX_LEN];
-	
-}MT_ENTRIES;
 
 
 static void
@@ -253,10 +242,10 @@ meta_server_setup(char *conf_path)
 				char	logfile[TABLE_NAME_MAX_LEN];
 				char	backup[TABLE_NAME_MAX_LEN];
 				
-				log_get_rglogfile(logfile, rg_addr[i].rg_addr, rg_addr[i].rg_port);
+				log_get_sstab_split_logfile(logfile, rg_addr[i].rg_addr, rg_addr[i].rg_port);
 				log_get_rgbackup(backup, rg_addr[i].rg_addr, rg_addr[i].rg_port);
 				
-				log_undo(logfile, backup, SPLIT_LOG);
+				log_undo_sstab_split(logfile, backup, SPLIT_LOG);
 				
 				meta_heartbeat_setup(rg_addr + i);
 			}
@@ -2280,7 +2269,18 @@ meta_crt_rg_logbackup_file(char *rgip, int rgport)
 	sprintf(rgname, "%s%d", rgip, rgport);
 
 	str1_to_str2(rglogfile, '/', rgname);
+
 	
+#ifdef MT_KFS_BACKEND
+	if (!EXIST(rglogfile))
+#else
+	if (STAT(rglogfile, &st) != 0)
+#endif
+	{
+		MKDIR(status, rglogfile, 0755);
+	}
+	
+	str1_to_str2(rglogfile, '/', "log");
 
 	OPEN(fd, rglogfile, (O_CREAT|O_WRONLY|O_TRUNC));
 
@@ -2377,13 +2377,14 @@ meta_collect_rg(char * req_buf)
 
 			(rglist->nextrno)++;
 
+			meta_crt_rg_logbackup_file(rg_addr[i].rg_addr, rg_addr[i].rg_port);
+			
 			meta_save_rginfo();
 
 		}
 
 		if(start_heartbeat)
-		{
-			meta_crt_rg_logbackup_file(rg_addr[i].rg_addr, rg_addr[i].rg_port);
+		{			
 			meta_heartbeat_setup(rg_addr + i);
 		}
 
@@ -3501,10 +3502,15 @@ meta_recovery_rg(char * req_buf)
 					char	logfile[TABLE_NAME_MAX_LEN];
 					char	backup[TABLE_NAME_MAX_LEN];
 
-					log_get_rglogfile(logfile, rg_addr[i].rg_addr, rg_addr[i].rg_port);
+					log_get_sstab_split_logfile(logfile, rg_addr[i].rg_addr, rg_addr[i].rg_port);
 					log_get_rgbackup(backup, rg_addr[i].rg_addr, rg_addr[i].rg_port);
 				
-					log_undo(logfile, backup, SPLIT_LOG);
+					log_undo_sstab_split(logfile, backup, SPLIT_LOG);
+
+					log_get_latest_rginsedelfile(logfile, rg_addr[i].rg_addr, rg_addr[i].rg_port);
+					
+					log_redo_insdel(logfile);
+						
 					
 					//update tablet
 					if(rg_addr[i].rg_tablet_num > 0)
