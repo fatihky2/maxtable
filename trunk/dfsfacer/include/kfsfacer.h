@@ -23,7 +23,7 @@ int
 kfs_close(int fd, char *serverHost, int port);
 
 int
-kfs_seek(int fd, int offset, char *serverHost, int port);
+kfs_seek(int fd, int offset, int flag, char *serverHost, int port);
 
 int
 kfs_exist(char *tab_dir, char *serverHost, int port);
@@ -31,6 +31,8 @@ kfs_exist(char *tab_dir, char *serverHost, int port);
 int
 kfs_readdir(char * tab_dir, char *mt_entries, char *serverHost, int port);
 
+int
+kfs_append(int fd, char *buf, int buf_len, char *serverHost, int port);
 
 
 #ifdef __cplusplus

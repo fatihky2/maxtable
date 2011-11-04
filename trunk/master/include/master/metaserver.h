@@ -209,6 +209,10 @@ typedef struct tab_info
 	struct buf	*t_keptbuf;
 	struct buf	*t_resbuf;
 	INSRG		*t_insrg;
+	unsigned int	t_insdel_old_ts_lo;		
+	unsigned int    t_insdel_new_ts_lo;
+	char		*t_cur_rowp;
+	int		t_cur_rowlen;
 } TABINFO;
 
 

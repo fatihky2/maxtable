@@ -22,7 +22,7 @@
 
 
 
-#define	BLKHEADERSIZE	52
+#define	BLKHEADERSIZE	60
 
 
 #define	BLOCKSIZE		(64 * 1024)		
@@ -63,9 +63,11 @@ typedef	struct block
 	int		btabid;		
 	int		bnextsstabnum;	
 	int		bprevsstabnum;	
-	unsigned int	bts_lo;		
+	unsigned int	bsstab_split_ts_lo;		
 	int		bnextrno;	
-	unsigned int    bts_hi;	 	
+	unsigned int    bsstab_split_ts_hi;	
+	unsigned int	bsstab_insdel_ts_lo;		
+	unsigned int    bsstab_insdel_ts_hi;
 	int		bfreeoff; 	
 	short		bstat; 		
 	short		bminlen; 	
@@ -144,6 +146,15 @@ do {											\
 		(nextblk)->bfreeoff = BLKHEADERSIZE;					\
 		(nextblk)->bminlen = 0;							\
 }while(0)
+
+
+#define	BLK_BUF_NEED_CHANGE	0x0001
+
+
+#define BLK_ROW_NEXT_SSTAB	0x0002	
+#define BLK_ROW_NEXT_BLK	0x0004
+#define BLK_INS_SPLITTING_SSTAB	0x0008
+
 
 BUF *
 blkget(struct tab_info *tabinfo);

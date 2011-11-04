@@ -23,13 +23,23 @@
 #include "master/metaserver.h"
 #include "ranger/rangeserver.h"
 #include "memcom.h"
+#include "buffer.h"
+#include "block.h"
 #include "file_op.h"
 #include "utils.h"
 #include "tss.h"
 #include "log.h"
+#include "row.h"
+#include "type.h"
+#include "timestamp.h"
+#include "session.h"
 
 
 extern TSS	*Tss;
+
+static int
+log__redo_insdel(LOGREC *logrec, char *rp);
+
 
 static int
 log_check_insert(LOGFILE *logfile, int logopid, int logtype)
@@ -143,12 +153,17 @@ log_check_delete(LOGFILE *logfile, int logtype, char *backup)
 }
 
 void
-log_build(LOGREC *logrec, int logopid, unsigned int ts, char *oldsstab, char *newsstab)
+log_build(LOGREC *logrec, int logopid, unsigned int oldts, unsigned int newts, char *oldsstab, 
+		char *newsstab, int minrowlen, int tabid, int sstabid)
 {
 	MEMSET(logrec, sizeof(LOGREC));
 	
 	logrec->opid = logopid;
-	logrec->ts = ts;
+	logrec->oldts = oldts;
+	logrec->newts = newts;
+	logrec->minrowlen = minrowlen;
+	logrec->tabid = tabid;
+	logrec->sstabid = sstabid;
 
 	if (oldsstab)
 	{
@@ -162,7 +177,7 @@ log_build(LOGREC *logrec, int logopid, unsigned int ts, char *oldsstab, char *ne
 }
 
 int
-log_insert(char	 *logfile_dir, LOGREC *logrec, int logtype)
+log_insert_sstab_split(char *logfile_dir, LOGREC *logrec, int logtype)
 {
 	LOCALTSS(tss);
 	int		fd;
@@ -232,6 +247,84 @@ exit:
 	return status;
 }
 
+
+
+int
+log_insert_insdel(char	 *logfile_dir, LOGREC *logrec, char *rp, int rlen)
+{
+	LOCALTSS(tss);
+	int		fd;
+	int		status;
+	char		*logbuf;
+	int		logbuflen;
+	int		retry_cnt;
+	int		flag;
+
+
+	logbuflen = rlen+ sizeof(LOGREC);
+	logbuf = (char *)MEMALLOCHEAP(logbuflen);
+	retry_cnt = 0;
+	status = 0;
+	flag = O_RDWR;
+
+retry:	
+	OPEN(fd, logfile_dir, (flag));
+
+	if (fd < 0)
+	{
+		goto exit;
+	}
+
+	int	idx = 0;
+	PUT_TO_BUFFER(logbuf, idx, rp, rlen);
+	PUT_TO_BUFFER(logbuf, idx, logrec, sizeof(LOGREC));
+
+	logrec->rowend_off = rlen;
+	
+#ifdef MT_KFS_BACKEND
+
+	status = APPEND(fd, logbuf, logbuflen);
+
+#else
+	APPEND(fd, logbuf, logbuflen, status);
+#endif
+
+	if (status == 0)
+	{
+		if (retry_cnt)
+		{
+			traceprint("logfile hit error while lohinsdel record.\n");
+			goto exit;
+		}
+		
+		CLOSE(fd);
+		
+		retry_cnt = 1;
+		int idxpos = str1nstr(logfile_dir, tss->rglogfile, STRLEN(logfile_dir));
+
+		int logfilenum = m_atoi(logfile_dir + idxpos, 
+					STRLEN(logfile_dir) - idxpos);
+		
+		logfilenum++;
+
+		MEMSET(logfile_dir, STRLEN(logfile_dir));
+		sprintf(logfile_dir, "%s%d", tss->rglogfile, logfilenum);
+
+		flag = O_CREAT|O_WRONLY|O_TRUNC;
+
+		goto retry;
+	}
+	
+exit:
+
+	CLOSE(fd);	
+
+	MEMFREEHEAP(logbuf);
+
+	return status;
+}
+
+
 int
 log_delete(LOGFILE *logfilebuf, int logtype)
 {
@@ -257,7 +350,7 @@ exit:
 }
 
 int
-log_undo(char *logfile_dir, char *backup_dir, int logtype)
+log_undo_sstab_split(char *logfile_dir, char *backup_dir, int logtype)
 {
 	int		fd;
 	int		status;
@@ -383,7 +476,7 @@ exit:
 
 
 int
-log_get_rglogfile(char *rglogfile, char *rgip, int rgport)
+log_get_sstab_split_logfile(char *rglogfile, char *rgip, int rgport)
 {
 	MEMSET(rglogfile, 256);
 	MEMCPY(rglogfile, LOG_FILE_DIR, STRLEN(LOG_FILE_DIR));
@@ -394,6 +487,8 @@ log_get_rglogfile(char *rglogfile, char *rgip, int rgport)
 	sprintf(rgname, "%s%d", rgip, rgport);
 
 	str1_to_str2(rglogfile, '/', rgname);
+
+	str1_to_str2(rglogfile, '/', "log");
 
 	if (STAT(rglogfile, &st) != 0)
 	{
@@ -425,4 +520,477 @@ log_get_rgbackup(char *rgbackup, char *rgip, int rgport)
 	}
 
 	return TRUE;
+}
+
+int
+log_get_latest_rginsedelfile(char *rginsdellogfile, char *rg_ip, int port)
+{	
+	int	slen1;
+	int	slen2;
+	char	logdir[256];
+	char	rgname[64];
+
+
+	MEMSET(rginsdellogfile, 256);
+	MEMSET(logdir, 256);
+
+	
+	MEMCPY(logdir, LOG_FILE_DIR, STRLEN(LOG_FILE_DIR));
+
+	MEMSET(rgname, 64);
+	sprintf(rgname, "%s%d", rg_ip, port);
+
+	str1_to_str2(logdir, '/', rgname);
+	
+#ifdef MT_KFS_BACKEND
+	
+	MT_ENTRIES	mt_entries;
+
+	MEMSET(&mt_entries, sizeof(MsT_ENTRIES));
+
+	if (!READDIR(logdir, (char *)&mt_entries))
+	{
+		traceprint("Read dir %s hit error.\n", logdir);
+		return FALSE;
+	}
+
+	int i;
+
+	for (i = 0; i < mt_entries.ent_num; i++)
+	{
+		if(strcmp(mt_entries.tabname[i],".")==0 || strcmp(mt_entries.tabname[i],"..")==0)
+		{
+			continue;
+		}
+
+		slen1 = STRLEN(mt_entries.tabname[i]);
+		slen2 = STRLEN(rginsdellogfile);
+
+		if (slen1 > slen2)
+		{
+			MEMCPY(rginsdellogfile, mt_entries.tabname[i], slen1);
+		}
+		else if (slen1 == slen2)
+		{
+			if (strcmp(mt_entries.tabname[i], rginsdellogfile))
+			{
+				MEMCPY(rginsdellogfile, mt_entries.tabname[i], slen1);
+			}
+		}	
+	}
+	
+#else
+	DIR *pDir ;
+	struct dirent *ent ;
+
+	pDir=opendir(logdir);
+	while((ent=readdir(pDir))!=NULL)
+	{		
+		if(strcmp(ent->d_name,".")==0 || strcmp(ent->d_name,"..")==0)
+		{
+			continue;
+		}
+		
+		slen1 = STRLEN(ent->d_name);
+		slen2 = STRLEN(rginsdellogfile);
+
+		if (slen1 > slen2)
+		{
+			MEMCPY(rginsdellogfile, ent->d_name, slen1);
+		}
+		else if (slen1 == slen2)
+		{
+			if (strcmp(ent->d_name, rginsdellogfile))
+			{
+				MEMCPY(rginsdellogfile, ent->d_name, slen1);
+			}
+		}	
+	}
+#endif
+
+	str1_to_str2(logdir, '/', rginsdellogfile);
+	MEMCPY(rginsdellogfile, logdir, STRLEN(logdir));
+	
+	return TRUE;
+}
+
+
+int
+log_redo_insdel(char *insdellogfile)
+{
+	int		fd;
+	int		status;
+	char	 	*logfilebuf;
+	int		offset;
+	LOGREC		*logrec;
+	char		*rp;
+	int		minrowlen;
+	
+	
+	logfilebuf = (char *)malloc(SSTABLE_SIZE);
+	status = FALSE;
+	
+	OPEN(fd, insdellogfile, (O_RDWR));
+
+	if (fd < 0)
+	{
+		goto exit;
+	}
+
+	offset = LSEEK(fd, 0, SEEK_END);
+
+	Assert(offset < SSTABLE_SIZE);
+
+#ifdef MT_KFS_BACKEND
+	READ(fd, logfilebuf, offset);
+#else
+
+	LSEEK(fd, 0, SEEK_SET);
+	READ(fd, logfilebuf, offset);
+#endif
+	int tmp = offset;
+	int row_cnt = 0; 
+	
+	while(tmp > 0)
+	{
+		logrec = (LOGREC *)(logfilebuf + tmp - sizeof(LOGREC));
+
+		if ((logrec->opid == CHECKPOINT) && (logrec->status & CHECKPOINT_END))
+		{
+			break;
+		}
+
+		tmp = logrec->cur_log_off;
+
+		if (logrec->opid != CHECKPOINT)
+		{
+			minrowlen = logrec->minrowlen;
+
+			row_cnt++;
+		}
+	}
+
+	while (row_cnt > 0)
+	{	
+		if (logrec->opid == CHECKPOINT)
+		{
+			rp = (logfilebuf + logrec->next_log_off);
+
+			logrec = (LOGREC *)(logfilebuf + logrec->next_log_off + ROW_GET_LENGTH(rp, minrowlen));
+			continue;
+		}
+
+		log__redo_insdel(logrec, (logfilebuf + logrec->cur_log_off));
+
+		row_cnt--;
+
+		if (row_cnt > 0)
+		{
+			rp = (logfilebuf + logrec->next_log_off);
+
+			logrec = (LOGREC *)(logfilebuf + logrec->next_log_off + ROW_GET_LENGTH(rp, minrowlen));
+		}
+		
+	}
+	
+
+exit:
+
+	CLOSE(fd);	
+
+	free(logfilebuf);
+
+	return status;
+
+}
+
+static int
+log__redo_insdel(LOGREC *logrec, char *rp)
+{
+	TABINFO		*tabinfo;
+	BLK_ROWINFO	blk_rowinfo;
+	char		*keycol;
+	int		keycollen;
+	int		status;
+
+	BUF	*bp;
+	int	offset;
+	int	minlen;
+	int	ign;
+	int	rlen;
+	int	i;
+	int	*offtab;
+	int	blk_stat;
+	char	*tmprp;
+
+
+	status = FALSE;
+	tabinfo = MEMALLOCHEAP(sizeof(TABINFO));
+	MEMSET(tabinfo, sizeof(TABINFO));
+
+	tabinfo->t_sinfo = (SINFO *)MEMALLOCHEAP(sizeof(SINFO));
+	MEMSET(tabinfo->t_sinfo, sizeof(SINFO));
+
+	tabinfo->t_rowinfo = &blk_rowinfo;
+	MEMSET(tabinfo->t_rowinfo, sizeof(BLK_ROWINFO));
+
+	tabinfo->t_dold = tabinfo->t_dnew = (BUF *) tabinfo;
+
+	keycol = row_locate_col(rp, -1, logrec->minrowlen, &keycollen);
+
+	TABINFO_INIT(tabinfo, logrec->oldsstabname, tabinfo->t_sinfo, logrec->minrowlen, 
+			0, logrec->tabid, logrec->sstabid);
+	SRCH_INFO_INIT(tabinfo->t_sinfo, keycol, keycollen, 1, VARCHAR, -1); 		
+	
+	if (logrec->opid & LOG_INSERT)
+	{
+		minlen = tabinfo->t_row_minlen;
+		
+		tabinfo->t_sinfo->sistate |= SI_INS_DATA;
+		
+		bp = blkget(tabinfo);
+
+		if (tabinfo->t_stat & TAB_RETRY_LOOKUP)
+		{
+			goto exit;
+		}
+
+		if (bp->bsstab->bblk->bsstab_insdel_ts_lo < logrec->oldts)
+		{
+			traceprint("Some logs has not been recovery.\n");
+			goto exit;
+		}
+		else if (bp->bsstab->bblk->bsstab_insdel_ts_lo > logrec->oldts)
+		{
+			Assert(   (bp->bsstab->bblk->bsstab_insdel_ts_lo == logrec->newts)
+			       || (bp->bsstab->bblk->bsstab_insdel_ts_lo > logrec->newts));
+
+			status = TRUE;
+
+			Assert(!(tabinfo->t_sinfo->sistate & SI_NODATA));
+			goto exit;
+		}
+
+		/* REDO */
+
+		Assert(tabinfo->t_sinfo->sistate & SI_NODATA);
+		
+		bufpredirty(bp);
+
+	//	offset = blksrch(tabinfo, bp);
+
+		Assert(tabinfo->t_rowinfo->rblknum == bp->bblk->bblkno);
+		Assert(tabinfo->t_rowinfo->rsstabid == bp->bblk->bsstabid);
+		offset = tabinfo->t_rowinfo->roffset;
+
+		ign = 0;
+		rlen = ROW_GET_LENGTH(rp, minlen);
+
+		blk_stat = blk_check_sstab_space(tabinfo, bp, rp, rlen, offset);
+
+
+		if (blk_stat & BLK_INS_SPLITTING_SSTAB)
+		{
+			bufdestroy(bp);
+
+			return FALSE;
+		}
+		
+		if (blk_stat & BLK_ROW_NEXT_SSTAB)
+		{
+			goto insfinish;
+		}
+
+		
+		if (blk_stat & BLK_ROW_NEXT_BLK)
+		{
+			bp++;
+		}
+
+		
+		if ((blk_stat & BLK_BUF_NEED_CHANGE))
+		{
+			offset = blksrch(tabinfo, bp);
+		}
+
+		if (bp->bblk->bfreeoff - offset)
+		{
+			
+			offtab = ROW_OFFSET_PTR(bp->bblk);
+			
+			BACKMOVE((char *)bp->bblk + offset, (char *)bp->bblk + offset + rlen, 
+					bp->bblk->bfreeoff - offset);
+
+			
+			for (i = bp->bblk->bnextrno; i > 0; i--)
+			{
+				if (offtab[-(i-1)] < offset)
+				{
+					break;
+				}
+
+				offtab[-i] = offtab[-(i-1)] + rlen;
+			
+			}
+			offtab[-i] = offset;
+		}
+
+		bp->bsstab->bblk->bsstab_insdel_ts_lo = mtts_increment(bp->bsstab->bblk->bsstab_insdel_ts_lo);
+
+		PUT_TO_BUFFER((char *)bp->bblk + offset, ign, rp, rlen);
+
+		if (bp->bblk->bfreeoff == offset)
+		{
+			
+			ROW_SET_OFFSET(bp->bblk, BLK_GET_NEXT_ROWNO(bp), offset);
+		}
+		
+
+
+		bp->bblk->bfreeoff += rlen;
+
+		bp->bblk->bminlen = minlen;
+		
+		BLK_GET_NEXT_ROWNO(bp)++;
+
+insfinish:
+
+		if (tabinfo->t_stat & TAB_SSTAB_SPLIT)
+		{
+			bp->bsstab->bblk->bstat |= BLK_SSTAB_SPLIT;
+
+			
+		}
+		
+		bufdirty(bp);
+			
+		tabinfo->t_sinfo->sistate &= ~SI_INS_DATA;
+	}
+	else if (logrec->opid & LOG_DELETE)
+	{
+		minlen = tabinfo->t_row_minlen;
+		
+		tabinfo->t_sinfo->sistate |= SI_DEL_DATA;
+		
+		bp = blkget(tabinfo);
+
+		if (tabinfo->t_stat & TAB_RETRY_LOOKUP)
+		{
+			return FALSE;
+		}
+
+		if (bp->bsstab->bblk->bsstab_insdel_ts_lo < logrec->oldts)
+		{
+			traceprint("Some logs has not been recovery.\n");
+			goto exit;
+		}
+		else if (bp->bsstab->bblk->bsstab_insdel_ts_lo > logrec->oldts)
+		{
+			Assert(   (bp->bsstab->bblk->bsstab_insdel_ts_lo == logrec->newts)
+			       || (bp->bsstab->bblk->bsstab_insdel_ts_lo > logrec->newts));
+
+			status = TRUE;
+
+			goto exit;
+		}
+
+		/* REDO */
+
+		Assert(!(tabinfo->t_sinfo->sistate & SI_NODATA));
+		
+
+		bufpredirty(bp);
+
+	//	offset = blksrch(tabinfo, bp);
+
+		Assert(tabinfo->t_rowinfo->rblknum == bp->bblk->bblkno);
+		Assert(tabinfo->t_rowinfo->rsstabid == bp->bblk->bsstabid);
+		offset = tabinfo->t_rowinfo->roffset;
+
+		if (tabinfo->t_sinfo->sistate & SI_NODATA)
+		{
+			traceprint("We can not find the row to be deleted.\n");	
+			return FALSE;
+		}
+
+		tmprp = (char *)(bp->bblk) + offset;
+		rlen = ROW_GET_LENGTH(tmprp, minlen);
+
+		if ((bp->bblk->bblkno == 0) && (offset == BLKHEADERSIZE))
+		{
+			ROW_SET_STATUS(tmprp, ROW_DELETED);
+			goto delfinish;
+		}
+			
+		if (bp->bblk->bfreeoff - offset)
+		{
+			MEMCPY(tmprp, tmprp + rlen, (bp->bblk->bfreeoff - offset - rlen));
+		}
+
+		offtab = ROW_OFFSET_PTR(bp->bblk);
+
+		
+		for (i = bp->bblk->bnextrno; i > 0; i--)
+		{
+					
+			if (offtab[-(i-1)] < offset)
+			{
+				break;
+			}
+		}
+
+		int j;
+		for(j = i; j < (bp->bblk->bnextrno - 1); j++)
+		{
+			offtab[-j] = offtab[-(j + 1)] - rlen;
+		
+		}
+
+		bp->bsstab->bblk->bsstab_insdel_ts_lo = mtts_increment(bp->bsstab->bblk->bsstab_insdel_ts_lo);
+		
+		bp->bblk->bfreeoff -= rlen;
+		
+		BLK_GET_NEXT_ROWNO(bp)--;
+
+delfinish:
+		bufdirty(bp);
+			
+		tabinfo->t_sinfo->sistate &= ~SI_DEL_DATA;
+		
+	}
+
+
+	status = TRUE;
+exit:
+	session_close(tabinfo);
+
+	if (tabinfo!= NULL)
+	{
+		MEMFREEHEAP(tabinfo->t_sinfo);
+
+		if (tabinfo->t_insrg)
+		{
+			Assert(tabinfo->t_stat & TAB_SSTAB_SPLIT);
+
+			if (tabinfo->t_insrg->new_sstab_key)
+			{
+				MEMFREEHEAP(tabinfo->t_insrg->new_sstab_key);
+			}
+
+			if (tabinfo->t_insrg->old_sstab_key)
+			{
+				MEMFREEHEAP(tabinfo->t_insrg->old_sstab_key);
+			}
+
+			MEMFREEHEAP(tabinfo->t_insrg);
+		}
+		
+		MEMFREEHEAP(tabinfo);
+//		tss->ttabinfo = NULL;
+	}
+	
+	
+
+	return status;
+
 }

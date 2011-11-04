@@ -37,6 +37,7 @@
 extern	TSS	*Tss;
 extern	char	*RgLogfile;
 extern	char	*RgBackup;
+extern	char	*RgInsdelLogfile;
 
 #define	SSTAB_NAMEIDX_MASK	(2^32 - 1)
 
@@ -185,9 +186,9 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 
 	LOGREC logrec;
 
-	log_build(&logrec, LOG_BEGIN, 0, srctabinfo->t_sstab_name, NULL);
+	log_build(&logrec, LOG_BEGIN, 0, 0, srctabinfo->t_sstab_name, NULL, 0, 0, 0);
 
-	log_insert(tss->rglogfile, &logrec, SPLIT_LOG);
+	log_insert_sstab_split(tss->rglogfile, &logrec, SPLIT_LOG);
 
 	TABINFO_INIT(tabinfo, destbuf->bsstab_name, tabinfo->t_sinfo, 
 		     srcbp->bsstab->bblk->bminlen, TAB_KEPT_BUF_VALID | TAB_DO_SPLIT,
@@ -201,7 +202,7 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 
 	
 	srctabinfo->t_insmeta->ts_low = mtts_increment(srctabinfo->t_insmeta->ts_low);
-	srcbp->bsstab->bblk->bts_lo = srctabinfo->t_insmeta->ts_low;
+	srcbp->bsstab->bblk->bsstab_split_ts_lo = srctabinfo->t_insmeta->ts_low;
 	
 	if (ins_nxtsstab)
 	{
@@ -243,10 +244,10 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 	MEMCPY(srctabinfo->t_insrg->new_sstab_key, sstab_key, sstab_keylen);
 	
 
-	log_build(&logrec, LOG_DO_SPLIT, srcbp->bsstab->bblk->bts_lo, srctabinfo->t_sstab_name,
-				destbuf->bsstab_name);
+	log_build(&logrec, LOG_DO_SPLIT, srcbp->bsstab->bblk->bsstab_split_ts_lo, 0,
+			srctabinfo->t_sstab_name, destbuf->bsstab_name, 0, 0, 0);
 	
-	log_insert(tss->rglogfile, &logrec, SPLIT_LOG);
+	log_insert_sstab_split(tss->rglogfile, &logrec, SPLIT_LOG);
 
 	session_close(tabinfo);
 	

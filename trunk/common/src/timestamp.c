@@ -86,7 +86,7 @@ mtts_blktscmp(BLOCK *blk, MTTS *tsptr)
 	register int	ret;
 	
 
-	ret = mtts_tscomp(blk->bts_hi, blk->bts_lo, tsptr->ts_high, tsptr->ts_low);
+	ret = mtts_tscomp(blk->bsstab_split_ts_hi, blk->bsstab_split_ts_lo, tsptr->ts_high, tsptr->ts_low);
 	
 	return (ret);
 }

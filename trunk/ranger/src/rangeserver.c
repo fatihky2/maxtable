@@ -61,6 +61,7 @@ extern	int	Kfsport;
 
 char	*RgLogfile;
 char	*RgBackup;
+char	*RgInsdelLogfile;
 
 
 typedef struct rg_info
@@ -74,6 +75,8 @@ typedef struct rg_info
 	int	flush_check_interval;
 	char	rglogfiledir[256];
 	char	rgbackup[256];
+	char	rginsdellogfile[256];
+	int	rginsdellognum;
 }RANGEINFO;
 
 
@@ -372,6 +375,13 @@ exit:
 	{
 		
 		resp = conn_build_resp_byte(RPC_SUCCESS, resp_len, resp_buf);
+
+		LOGREC	logrec;
+
+		log_build(&logrec, LOG_INSERT, tabinfo->t_insdel_old_ts_lo, tabinfo->t_insdel_new_ts_lo,
+				tabinfo->t_sstab_name, NULL, tabinfo->t_row_minlen, tabinfo->t_tabid, tabinfo->t_sstab_id);
+		
+		log_insert_insdel(RgInsdelLogfile, &logrec, rp, rp_idx);
 	}
 	else
 	{
@@ -548,6 +558,17 @@ exit:
 		{
 			
 			resp = conn_build_resp_byte(RPC_SUCCESS, 0, NULL);
+
+			LOGREC	logrec;
+
+			log_build(&logrec, LOG_DELETE, tabinfo->t_insdel_old_ts_lo, tabinfo->t_insdel_new_ts_lo,
+					tabinfo->t_sstab_name, NULL, tabinfo->t_row_minlen, tabinfo->t_tabid, 
+					tabinfo->t_sstab_id);
+			
+			log_insert_insdel(RgInsdelLogfile, &logrec, tabinfo->t_cur_rowp,
+						tabinfo->t_cur_rowlen);
+
+			MEMFREEHEAP(tabinfo->t_cur_rowp);
 		}
 		else
 		{
@@ -1470,9 +1491,9 @@ rg_handler(char *req_buf, int fd)
 	{
 		LOGREC	logrec;
 		
-		log_build(&logrec, LOG_END, 0, tabinfo->t_sstab_name, NULL);
+		log_build(&logrec, LOG_END, 0, 0, tabinfo->t_sstab_name, NULL, 0, 0, 0);
 
-		log_insert(RgLogfile, &logrec, SPLIT_LOG);
+		log_insert_sstab_split(RgLogfile, &logrec, SPLIT_LOG);
 	}
        
 
@@ -1511,6 +1532,65 @@ close:
 
 }
 
+static int
+rg_crt_rg_insdel_logfile(char *rgip, int rgport)
+{
+	char	rglogfile[256];
+	char	rgname[64];
+	LOGFILE	*logfile;
+	int	status;
+	int	fd;
+
+
+	MEMSET(rglogfile, 256);
+	MEMCPY(rglogfile, LOG_FILE_DIR, STRLEN(LOG_FILE_DIR));
+
+	MEMSET(rgname, 64);
+	sprintf(rgname, "%s%d", rgip, rgport);
+
+	str1_to_str2(rglogfile, '/', rgname);
+	
+
+	OPEN(fd, rglogfile, (O_CREAT|O_WRONLY|O_TRUNC));
+
+	logfile = (LOGFILE *)MEMALLOCHEAP(sizeof(LOGFILE));
+	MEMSET(logfile,sizeof(LOGFILE));
+
+	logfile->magic[0] = 'm';
+	logfile->magic[1] = 'a';
+	logfile->magic[2] = 'x';
+	logfile->magic[3] = 't';
+	logfile->magic[4] = 'a';
+	logfile->magic[5] = 'b';
+	logfile->magic[6] = 'l';
+	logfile->magic[7] = 'e';
+	logfile->magic[8] = 'l';
+	logfile->magic[9] = 'o';
+	logfile->magic[10] = 'g';	
+
+	WRITE(fd, logfile, sizeof(LOGFILE));
+
+	CLOSE(fd);	
+
+
+	MEMSET(rglogfile, 256);
+	MEMCPY(rglogfile, BACKUP_DIR, STRLEN(BACKUP_DIR));
+
+	str1_to_str2(rglogfile, '/', rgname);
+
+#ifdef MT_KFS_BACKEND
+	if (!EXIST(rglogfile))
+#else
+	if (STAT(rglogfile, &st) != 0)
+#endif
+	{
+		MKDIR(status, rglogfile, 0755);
+	}
+
+	return status;
+}
+
+
 void
 rg_setup(char *conf_path)
 {
@@ -1518,6 +1598,7 @@ rg_setup(char *conf_path)
 	char	port[32];
 	int	rg_port;
 	char	metaport[32];
+	int	fd;
 
 	Range_infor = MEMALLOCHEAP(sizeof(RANGEINFO));
 	MEMSET(Range_infor, sizeof(RANGEINFO));
@@ -1576,6 +1657,8 @@ rg_setup(char *conf_path)
 
 	str1_to_str2(RgLogfile, '/', rgname);
 
+	str1_to_str2(RgLogfile, '/', "log");
+
 #ifdef MT_KFS_BACKEND
 	if (!EXIST(RgLogfile))
 #else
@@ -1586,6 +1669,21 @@ rg_setup(char *conf_path)
 		return;
 	}
 
+	RgInsdelLogfile = Range_infor->rginsdellogfile;
+	log_get_latest_rginsedelfile(RgInsdelLogfile, Range_infor->rg_ip, Range_infor->port);
+
+	if (strcmp(RgLogfile, RgInsdelLogfile) == 0)
+	{
+		sprintf(RgInsdelLogfile, "%s0", RgInsdelLogfile);
+
+		OPEN(fd, RgInsdelLogfile, (O_CREAT|O_WRONLY|O_TRUNC));
+		CLOSE(fd);
+	}
+
+	int idxpos = str1nstr(RgInsdelLogfile, RgLogfile, STRLEN(RgLogfile));
+
+	Range_infor->rginsdellognum = m_atoi(RgInsdelLogfile + idxpos, 
+					STRLEN(RgInsdelLogfile) - idxpos);
 
 	RgBackup = Range_infor->rgbackup;
 	
