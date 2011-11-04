@@ -1,4 +1,0 @@
-# Configuration for the client: 
-# Meta server location
-metaserver=127.0.0.1
-metaport=1959
