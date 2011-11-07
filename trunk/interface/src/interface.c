@@ -170,7 +170,7 @@ retry:
 		
 		rg_conn * rg_connection;
 		int i;
-		printf("rg server: %s/%d\n", resp_ins->i_hdr.rg_info.rg_addr, resp_ins->i_hdr.rg_info.rg_port);
+		//printf("rg server: %s/%d\n", resp_ins->i_hdr.rg_info.rg_addr, resp_ins->i_hdr.rg_info.rg_port);
 		for(i = 0; i < connection->rg_list_len; i++)
 		{
 			if((resp_ins->i_hdr.rg_info.rg_port == connection->rg_list[i]->rg_server_port)
