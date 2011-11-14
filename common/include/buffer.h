@@ -36,19 +36,19 @@ typedef struct buf
 	struct buf	*bsstabnew;	
 	struct buf	*bsstabold;	
 	struct buf	*bsstab;	
-	int		bsstab_size;		
+	int		bsstab_size;			
 } BUF;
 
 
 
-#define	BUF_WRITING	0x0001	
-#define	BUF_KEPT	0x0002	
-#define	BUF_IOERR	0x0004	
-#define	BUF_NOTHASHED	0x0008	
-#define	BUF_HASHED	0x0010	
+#define	BUF_WRITING	0x0001		
+#define	BUF_KEPT	0x0002		
+#define	BUF_IOERR	0x0004		
+#define	BUF_NOTHASHED	0x0008		
+#define	BUF_HASHED	0x0010		
 #define	BUF_DIRTY	0x0020
 #define	BUF_DESTROY	0x0040
-#define BUF_READ_EMPTY	0x0080
+#define BUF_READ_EMPTY	0x0080		
 #define BUF_RESERVED	0x0100
 
 

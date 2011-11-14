@@ -35,17 +35,17 @@ typedef struct objinfo
 
 typedef struct memobject 
 {
-	MEMCOM		f_mc;		
-	LINK		f_block;	
-	LINK		f_free;		
-//	LINK		f_used;		
-	size_t		f_itemsize;	
-	size_t		f_maxengines;	
-	int		f_status;	
-	long		f_count;	
-	long		f_destr_count;	
-	size_t		f_security;	
-	long		f_spares[2];	
+	MEMCOM		f_mc;			
+	LINK		f_block;		
+	LINK		f_free;			
+//	LINK		f_used;			
+	size_t		f_itemsize;		
+	size_t		f_maxengines;		
+	int		f_status;		
+	long		f_count;		
+	long		f_destr_count;		
+	size_t		f_security;		
+	long		f_spares[2];		
 } MEMOBJECT;
 
 

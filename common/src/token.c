@@ -37,6 +37,7 @@ TOKENS  MT_Tokens[] =
 	{REBALANCE,	"rebalance"},
 	{SELECTRANGE,	"selectrange"},
 	{MCC,		"mcc"},
+	{SELECTWHERE,	"selectwhere"},
 };
 
 int

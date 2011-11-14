@@ -550,6 +550,10 @@ conn_chk_reqmagic(char *str)
 	{
 		return RPC_REQ_M2RHEARTBEAT_OP;
 	}
+	else if (!strncasecmp(RPC_SELECTWHERE_MAGIC, str, STRLEN(RPC_SELECTWHERE_MAGIC)))
+	{
+		return RPC_REQ_SELECWHERE_OP;
+	}
 		
 
 	return 0;

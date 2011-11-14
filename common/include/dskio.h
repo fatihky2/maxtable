@@ -34,12 +34,12 @@ typedef struct blkio
 
 
 
-#define	DBREAD		0x0001	
-#define	DBWRITE		0x0002	
+#define	DBREAD		0x0001		
+#define	DBWRITE		0x0002		
 
 
-#define	D_READ_ONLY	0x1	
-#define	D_O_DIRECT	0x2 	
+#define	D_READ_ONLY	0x1		
+#define	D_O_DIRECT	0x2 		
 #define	D_CREATE	0x4
 #define	D_WRITE_ONLY	0x8
 

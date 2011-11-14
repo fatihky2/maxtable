@@ -34,6 +34,7 @@ MEMPOOL *Globle_mp;
 
 #define	MEMFRAG_INIT_SIZE	(1024 * 1024)
 
+
 static int
 mp_frag_grow(MEMPOOL * mp, size_t grow_size);
 static int
@@ -126,7 +127,7 @@ mem_init_alloc_regions()
 						TSS_MIN_ITEMS, TSS_MAX_ITEMS);
 	mp_list_insert((MEMOBJECT *)Kernel->ke_tss_objpool, MEMPOOL_OBJECT);
 
-        
+         
         Kernel->ke_buf_objpool = (void *)mp_obj_crt(sizeof(BUF), 
 						TSS_MIN_ITEMS, TSS_MAX_ITEMS);
 	mp_list_insert((MEMOBJECT *)Kernel->ke_buf_objpool, MEMPOOL_OBJECT);
@@ -480,7 +481,7 @@ mp_frag_realloc(MEMPOOL *mp, void * addr, size_t size)
 			
 			mfp->mf_size = alloc_size;
 
-			
+						
 		}
 
 		traceprint("MEMORY REALLOCATED BY ADDRESS == 0x%x\n", addr);
@@ -596,10 +597,10 @@ mp_frag_free(MEMPOOL *mp, void *addr, char *file, int line)
 static int
 mp_frag_grow(MEMPOOL * mp, size_t grow_size)
 {
-	char		*mem_star_addr;	
-	MEMBLK	*mbp;		
-	MEMFRAG		*mfp;		
-	int		ret;		
+	char		*mem_star_addr;		
+	MEMBLK		*mbp;			
+	MEMFRAG		*mfp;			
+	int		ret;			
 
 	
 	ret = FALSE;
@@ -662,7 +663,7 @@ mp_frag_grow(MEMPOOL * mp, size_t grow_size)
 int
 mp_frag_destroy(MEMPOOL *mp)
 {
-	MEMBLK	*mbp;		
+	MEMBLK		*mbp;			
 	void 		*temp_ptr;
 	int 		status = TRUE;
 	LINK		freeblocks;
@@ -702,7 +703,7 @@ mp_frag_destroy(MEMPOOL *mp)
 static int
 mp_list_insert(void * pool_hdl, int type) 
 {
-	MEMPLIST	*mpl;	
+	MEMPLIST	*mpl;		
 	
 	
 	mpl = MEMPOOL_TYPE_TO_LIST(type);

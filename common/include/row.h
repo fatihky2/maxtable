@@ -25,13 +25,13 @@
 
 typedef struct rowfmt
 {
-	int		rowno;  
-	int		status;	
-	int		vattcnt;
+	int		rowno;  	
+	int		status;		
+	int		vattcnt;	
 }ROWFMT;
 
 
-#define	ROW_DELETED	0x0001		
+#define	ROW_DELETED	0x0001			
 
 
 
@@ -112,7 +112,7 @@ do									\
 #define ROWSTAT(rp) ((ROWFMT *)(rp))->status
 #define ROWVATTCNT(rp) ((ROWFMT *)(rp))->vattcnt
 	
-#define EQ      0       
+#define EQ      0  	     
 #define LE      -1      
 #define GR      1       
 	

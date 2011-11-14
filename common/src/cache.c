@@ -83,8 +83,6 @@ long
 ca_get_struct_size()
 {
 	long		struct_size;	
-
-
 	struct_size = 0;
 	
 	struct_size += bufhashsize();
@@ -95,6 +93,7 @@ ca_get_struct_size()
 
 	return struct_size;
 }
+
 
 int
 ca_setup_pool()
@@ -109,6 +108,7 @@ ca_setup_pool()
 
 	struct_size = 0;
 	
+	
 	ca_memptr = mem_os_malloc(BLOCK_CACHE_SIZE);
 	MEMSET(ca_memptr, BLOCK_CACHE_SIZE);
 
@@ -121,6 +121,7 @@ ca_setup_pool()
 	ca_memptr += sizeof (BUF);
 	struct_size += sizeof (BUF);
 
+	
 	
 	
 	bp = (BUF *) ca_memptr;

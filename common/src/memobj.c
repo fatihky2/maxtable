@@ -52,6 +52,7 @@ mp_obj_crt(size_t itemsize, size_t minitems, size_t maxitems)
 	memptr = mem_os_malloc(seg_size);
 	free_memptr = memptr;	
 
+	
 	fp = (MEMOBJECT *) free_memptr;
 	free_memptr += sizeof(MEMOBJECT);
 
@@ -94,13 +95,15 @@ mp_obj_crt(size_t itemsize, size_t minitems, size_t maxitems)
 		INSQTAIL(&(fp->f_block), mbp);
 
 		
-	
+		
 		while (itemp <= (top - itemsize))
-		{			
+		{	
+			
 			INSQTAIL(&(fp->f_free), itemp);
 			fp->f_count++;
 			MEMCOM_TOTAL(fp)++;
-				
+
+			
 			itemp += itemsize;
 		}
 	}
@@ -116,8 +119,8 @@ mp_obj_crt(size_t itemsize, size_t minitems, size_t maxitems)
 void *
 mp_obj_alloc(MEMOBJECT *fp)
 {
-	int	grow_status;	
-	void	*item;		
+	int	grow_status;		
+	void	*item;			
 	
 	item = NULL;
 
@@ -158,7 +161,7 @@ mp_obj_grow(MEMOBJECT * fp)
 	char    *itemp;         
 	char    *last_one;      
 	MEMBLK  *mbp;           
-	size_t  itemsize; 
+	size_t  itemsize; 	
 	int	grow_items;
 
 
@@ -186,7 +189,6 @@ mp_obj_grow(MEMOBJECT * fp)
 	mbp->mb_begin = (void *)space;
 	mbp->mb_end = (void *)top;
 
-	
 	
 
 	
@@ -231,7 +233,7 @@ int
 mp_obj_free(MEMOBJECT * fp, void * item)
 {
 	int     growsize;       
-//	LINK    *list;          
+//	LINK    *list;          		
 
 	if ( fp == NULL )
 	{

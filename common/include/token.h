@@ -49,9 +49,10 @@ typedef struct tokens
 #define REBALANCE	10
 #define SELECTRANGE	11
 #define	MCC		12
+#define SELECTWHERE	13
 	
 
-#define MAXSI_FIXED_TOKENS	12
+#define MAXSI_FIXED_TOKENS	13
 
 int
 token_validate(char *token);

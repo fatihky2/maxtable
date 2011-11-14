@@ -64,10 +64,15 @@ nextsstab:
 		tabinfo->t_rowinfo->rblknum = bp->bblk->bblkno;
 		tabinfo->t_rowinfo->roffset = BLKHEADERSIZE;
 		tabinfo->t_rowinfo->rsstabid = bp->bblk->bsstabid;
+
 		
 		return bp->bsstab;
 	}
 
+	
+	
+
+	
 	tabinfo->t_sinfo->sistate |= SI_INDEX_BLK;
 	blkidx = blksrch(tabinfo, bp);
 
@@ -92,14 +97,17 @@ nextsstab:
 		    && !stat_chg)
 		{
 			
-			if (tmpbp->bsstab->bblk->bsstab_split_ts_lo == tabinfo->t_insmeta->ts_low)
+			if (tmpbp->bsstab->bblk->bsstab_split_ts_lo 
+						== tabinfo->t_insmeta->ts_low)
 			{
 				tmpbp->bsstab->bblk->bstat &= ~BLK_SSTAB_SPLIT;
 				goto finish;
 			}
 
-			Assert(   (tmpbp->bsstab->bblk->bsstab_split_ts_lo > tabinfo->t_insmeta->ts_low)
-			       || (tmpbp->bsstab->bblk->bsstab_split_ts_lo == tabinfo->t_insmeta->ts_low));
+			Assert(   (tmpbp->bsstab->bblk->bsstab_split_ts_lo 
+						> tabinfo->t_insmeta->ts_low)
+			       || (tmpbp->bsstab->bblk->bsstab_split_ts_lo 
+						== tabinfo->t_insmeta->ts_low));
 
 			if (tss->topid & TSS_OP_INSTAB) 
 			{
@@ -112,24 +120,23 @@ nextsstab:
 		    && !stat_chg)
 		{
 			if(   !(tabinfo->t_stat & TAB_DO_SPLIT) 
-			   && (tmpbp->bsstab->bblk->bsstab_split_ts_lo < tabinfo->t_insmeta->ts_low))
+			   && (tmpbp->bsstab->bblk->bsstab_split_ts_lo 
+			   			< tabinfo->t_insmeta->ts_low))
 			{
-				/*
-				** Case for the new round of ts setting ?
-				*/
-				/* 
-				** TODO: we need to retry this request.  If the processing is not FIFO,
-				** it will hit the insert is not sorted.
-				*/
+				
+				
 				tabinfo->t_stat |= TAB_RETRY_LOOKUP;
 			}
+
 			
 			goto finish;
 		}
 
 		
-		if (   ((tss->topid & TSS_OP_SELDELTAB) && (tabinfo->t_sinfo->sistate & SI_NODATA))
-		    || ((tss->topid & TSS_OP_INSTAB) && (tabinfo->t_rowinfo->roffset == tmpbp->bblk->bfreeoff)))
+		if (   (   (tss->topid & TSS_OP_SELDELTAB) 
+			&& (tabinfo->t_sinfo->sistate & SI_NODATA))
+		    || (   (tss->topid & TSS_OP_INSTAB) 
+		    	&& (tabinfo->t_rowinfo->roffset == tmpbp->bblk->bfreeoff)))
 		{
 			
 			if (tmpblkidx < (BLK_CNT_IN_SSTABLE - 1))
@@ -143,7 +150,7 @@ nextsstab:
 				}
 				else
 				{
-					Assert(tmpbp->bblk->bfreeoff == BLKHEADERSIZE);					
+					Assert(tmpbp->bblk->bfreeoff == BLKHEADERSIZE);				
 				}
 			}
 
@@ -153,20 +160,24 @@ nextsstab:
 			{
 				goto finish;;
 			}
+
 			
 			MEMSET(last_sstab, SSTABLE_NAME_MAX_LEN);
-			MEMCPY(last_sstab, tabinfo->t_sstab_name, STRLEN(tabinfo->t_sstab_name));
+			MEMCPY(last_sstab, tabinfo->t_sstab_name, 
+						STRLEN(tabinfo->t_sstab_name));
 			last_sstabid = tabinfo->t_sstab_id;
 			last_blkidx = blkidx;
 			lastbp = bp;
-			MEMCPY(&blk_rinfo, tabinfo->t_rowinfo, sizeof(BLK_ROWINFO));
+			MEMCPY(&blk_rinfo, tabinfo->t_rowinfo,
+						sizeof(BLK_ROWINFO));
 			
 			
 //			blk_getnextsstab(tabinfo, tmpbp->bsstab->bblk);
 
 			MEMSET(tabinfo->t_sstab_name, SSTABLE_NAME_MAX_LEN);			
 			
-			sstab_namebyid(last_sstab, tabinfo->t_sstab_name, nextsstabnum);
+			sstab_namebyid(last_sstab, tabinfo->t_sstab_name, 
+								nextsstabnum);
 
 			tabinfo->t_sstab_id = nextsstabnum;			
 
@@ -181,11 +192,13 @@ nextsstab:
 			tabinfo->t_sstab_id = last_sstabid;
 
 			MEMSET(tabinfo->t_sstab_name, SSTABLE_NAME_MAX_LEN);
-			MEMCPY(tabinfo->t_sstab_name, last_sstab, STRLEN(last_sstab));
+			MEMCPY(tabinfo->t_sstab_name, last_sstab, 
+							STRLEN(last_sstab));
 			bp = lastbp;
 			blkidx = last_blkidx;
 
-			MEMCPY(tabinfo->t_rowinfo, &blk_rinfo, sizeof(BLK_ROWINFO));
+			MEMCPY(tabinfo->t_rowinfo, &blk_rinfo, 
+							sizeof(BLK_ROWINFO));
 		}
 
 		
@@ -218,7 +231,7 @@ blksrch(TABINFO *tabinfo, BUF *bp)
 	blkidx = -1;
 	
 	
-	if (BLK_GET_NEXT_ROWNO(bp) == 0)
+	if (BLK_GET_NEXT_ROWNO(bp->bblk) == 0)
 	{
 		blkidx = bp->bblk->bblkno;
 		last_offset = bp->bblk->bfreeoff;
@@ -241,8 +254,8 @@ blksrch(TABINFO *tabinfo, BUF *bp)
 
 
 	low = 0;
-	high = BLK_GET_NEXT_ROWNO(bp) - 1;
-	total = BLK_GET_NEXT_ROWNO(bp);
+	high = BLK_GET_NEXT_ROWNO(bp->bblk) - 1;
+	total = BLK_GET_NEXT_ROWNO(bp->bblk);
 	result = LE;	
 
 	SRCHINFO_INIT(srchinfo, 0, high, total, result);
@@ -254,6 +267,7 @@ blksrch(TABINFO *tabinfo, BUF *bp)
 	rp = srchinfo->brow;
 	last_offset = srchinfo->boffset;
 
+	
 	if (!(tabinfo->t_stat & TAB_SCHM_SRCH))
 	{	
 		if ((result == EQ))
@@ -265,8 +279,9 @@ blksrch(TABINFO *tabinfo, BUF *bp)
 			tabinfo->t_sinfo->sistate |= SI_NODATA;
 		}
 	}
+
 	
-	if (rowno == BLK_GET_NEXT_ROWNO(bp))
+	if (rowno == BLK_GET_NEXT_ROWNO(bp->bblk))
 	{
 		if (!(tabinfo->t_stat & TAB_SCHM_SRCH))
 		{
@@ -344,6 +359,7 @@ blk_getsstable(TABINFO *tabinfo)
 		{
 			bufhash(bp);
 		}
+
 		
 		blk_init(bp->bblk);
 	
@@ -355,7 +371,8 @@ blk_getsstable(TABINFO *tabinfo)
 		bp->bstat &= ~BUF_READ_EMPTY;
 		
 		if (   (   (tss->topid & TSS_OP_RANGESERVER) 
-			&& (tabinfo->t_insmeta->status & INS_META_1ST))
+			&& (   (tabinfo->t_insmeta) 
+			    && (tabinfo->t_insmeta->status & INS_META_1ST)))
 		    || (   (tss->topid & TSS_OP_METASERVER) 
 		        && (tabinfo->t_stat & TAB_CRT_NEW_FILE)))
 		{
@@ -376,7 +393,8 @@ blk_getsstable(TABINFO *tabinfo)
 	
 	
 	if (   (tss->topid & TSS_OP_RANGESERVER) 
-	    && (tabinfo->t_insmeta->status & INS_META_1ST))
+	    && (   (tabinfo->t_insmeta)
+	        && (tabinfo->t_insmeta->status & INS_META_1ST)))
 	{
 		bp->bsstab->bblk->bsstabnum = tabinfo->t_insmeta->sstab_id;
 
@@ -463,7 +481,8 @@ blkins(TABINFO *tabinfo, char *rp)
 		
 		offtab = ROW_OFFSET_PTR(bp->bblk);
 		
-		BACKMOVE((char *)bp->bblk + offset, (char *)bp->bblk + offset + rlen, 
+		BACKMOVE((char *)bp->bblk + offset, 
+				(char *)bp->bblk + offset + rlen, 
 				bp->bblk->bfreeoff - offset);
 
 		
@@ -482,19 +501,23 @@ blkins(TABINFO *tabinfo, char *rp)
 	
 	if (tss->topid & TSS_OP_RANGESERVER)
 	{
-		tabinfo->t_insdel_old_ts_lo = bp->bsstab->bblk->bsstab_insdel_ts_lo;
+		tabinfo->t_insdel_old_ts_lo = 
+					bp->bsstab->bblk->bsstab_insdel_ts_lo;
 		
-		bp->bsstab->bblk->bsstab_insdel_ts_lo = mtts_increment(bp->bsstab->bblk->bsstab_insdel_ts_lo);
+		bp->bsstab->bblk->bsstab_insdel_ts_lo = mtts_increment(
+					bp->bsstab->bblk->bsstab_insdel_ts_lo);
 
-		tabinfo->t_insdel_new_ts_lo = bp->bsstab->bblk->bsstab_insdel_ts_lo;
+		tabinfo->t_insdel_new_ts_lo = 
+					bp->bsstab->bblk->bsstab_insdel_ts_lo;
 	}
+
 	
 	PUT_TO_BUFFER((char *)bp->bblk + offset, ign, rp, rlen);
 
 	if (bp->bblk->bfreeoff == offset)
 	{
 		
-		ROW_SET_OFFSET(bp->bblk, BLK_GET_NEXT_ROWNO(bp), offset);
+		ROW_SET_OFFSET(bp->bblk, BLK_GET_NEXT_ROWNO(bp->bblk), offset);
 	}
 	
 
@@ -503,7 +526,7 @@ blkins(TABINFO *tabinfo, char *rp)
 
 	bp->bblk->bminlen = minlen;
 	
-	BLK_GET_NEXT_ROWNO(bp)++;
+	BLK_GET_NEXT_ROWNO(bp->bblk)++;
 
 finish:
 
@@ -574,7 +597,11 @@ blkdel(TABINFO *tabinfo)
 
 		if ((bp->bblk->bblkno == 0) && (offset == BLKHEADERSIZE))
 		{
+			
 			ROW_SET_STATUS(rp, ROW_DELETED);
+
+			
+			
 			goto finish;
 		}		
 	}
@@ -605,16 +632,19 @@ blkdel(TABINFO *tabinfo)
 
 	if (tss->topid & TSS_OP_RANGESERVER)
 	{
-		tabinfo->t_insdel_old_ts_lo = bp->bsstab->bblk->bsstab_insdel_ts_lo;
+		tabinfo->t_insdel_old_ts_lo = 
+					bp->bsstab->bblk->bsstab_insdel_ts_lo;
 		
-		bp->bsstab->bblk->bsstab_insdel_ts_lo = mtts_increment(bp->bsstab->bblk->bsstab_insdel_ts_lo);
+		bp->bsstab->bblk->bsstab_insdel_ts_lo = mtts_increment(
+					bp->bsstab->bblk->bsstab_insdel_ts_lo);
 
-		tabinfo->t_insdel_new_ts_lo = bp->bsstab->bblk->bsstab_insdel_ts_lo;
+		tabinfo->t_insdel_new_ts_lo = 
+					bp->bsstab->bblk->bsstab_insdel_ts_lo;
 	}
 	
 	bp->bblk->bfreeoff -= rlen;
 	
-	BLK_GET_NEXT_ROWNO(bp)--;
+	BLK_GET_NEXT_ROWNO(bp->bblk)--;
 
 finish:
 	bufdirty(bp);
@@ -651,7 +681,8 @@ blk_file_back_move(BLOCK *blk)
 	tmpblk = (BLOCK *) ((char *)blk + BLOCKSIZE);
 
 	
-	if ((blk->bfreeoff - offset) && blk_check_sstab_space(NULL, NULL, rp, rlen, 0))
+	if (   (blk->bfreeoff - offset) 
+	    && blk_check_sstab_space(NULL, NULL, rp, rlen, 0))
 	{
 		BACKMOVE((char *)blk + offset, (char *)blk + offset + rlen, 
 				blk->bfreeoff - offset);
@@ -675,7 +706,8 @@ blk_file_back_move(BLOCK *blk)
 
 
 int
-blk_check_sstab_space(TABINFO *tabinfo, BUF *bp, char *rp, int rlen, int ins_offset)
+blk_check_sstab_space(TABINFO *tabinfo, BUF *bp, char *rp, int rlen, 
+			int ins_offset)
 {
 	LOCALTSS(tss);
 	int	blkno;
@@ -691,8 +723,8 @@ blk_check_sstab_space(TABINFO *tabinfo, BUF *bp, char *rp, int rlen, int ins_off
 	blkno = blk->bblkno;
 	row_cnt = blk->bnextrno;
 
-	if ((blk->bfreeoff + rlen) < (BLOCKSIZE - BLK_TAILSIZE 
-					- (ROW_OFFSET_ENTRYSIZE * (row_cnt + 1))))
+	if ((blk->bfreeoff + rlen) < (BLOCKSIZE - BLK_TAILSIZE -
+					(ROW_OFFSET_ENTRYSIZE * (row_cnt + 1))))
 	{
 		rtn_stat &= ~BLK_BUF_NEED_CHANGE;
 
@@ -701,9 +733,11 @@ blk_check_sstab_space(TABINFO *tabinfo, BUF *bp, char *rp, int rlen, int ins_off
 	
 	while(1)
 	{
+		row_cnt = blk->bnextrno;
 		
-		if ((blk->bfreeoff + rlen) < (BLOCKSIZE - BLK_TAILSIZE 
-						- (ROW_OFFSET_ENTRYSIZE * (row_cnt + 1))))
+		
+		if ((blk->bfreeoff + rlen) < (BLOCKSIZE - BLK_TAILSIZE -
+					(ROW_OFFSET_ENTRYSIZE * (row_cnt + 1))))
 		{
 			break;
 		}
@@ -720,13 +754,7 @@ blk_check_sstab_space(TABINFO *tabinfo, BUF *bp, char *rp, int rlen, int ins_off
 			{
 				if(tabinfo->t_stat & TAB_INS_SPLITING_SSTAB)
 				{
-					/* 
-					** Before committing the first split, stop the new split on the splitting sstable. 
-					** This issue maybe raised by two case:
-					**	1. The first split is waitting for the committing.
-					**	2. The first split is dead before commit its mission. In this case, we need to
-					**	    run the Metadata Consistency Checking with fix option.
-					*/
+					
 
 					traceprint("Hit the new split on the splitting sstable %s.\n", tabinfo->t_sstab_name);
 
@@ -877,7 +905,8 @@ blk_backmov(BLOCK *blk)
 
 	nextblk = blk;
 
-	while ((nextblk->bnextblkno!= -1) && (nextblk->bfreeoff != BLKHEADERSIZE))
+	while (   (nextblk->bnextblkno!= -1) 
+	       && (nextblk->bfreeoff != BLKHEADERSIZE))
 	{		
 		nextblk = (BLOCK *) ((char *)nextblk + BLOCKSIZE);
 	}
@@ -894,7 +923,8 @@ blk_backmov(BLOCK *blk)
 		tmpblk = (BLOCK *) ((char *)nextblk+ BLOCKSIZE);
 
 		
-		Assert((tmpblk->bblkno != -1) && (tmpblk->bfreeoff == BLKHEADERSIZE));
+		Assert(   (tmpblk->bblkno != -1) 
+		       && (tmpblk->bfreeoff == BLKHEADERSIZE));
 
 
 		BLOCK_MOVE(tmpblk,nextblk);
@@ -936,7 +966,7 @@ blk_get_location_sstab(TABINFO *tabinfo, BUF *bp)
 
 	while(bp->bblk->bblkno != -1)
 	{
-		if (BLK_GET_NEXT_ROWNO(bp) == 0)
+		if (BLK_GET_NEXT_ROWNO(bp->bblk) == 0)
 		{
 			break;
 		}
@@ -947,10 +977,22 @@ blk_get_location_sstab(TABINFO *tabinfo, BUF *bp)
 		key_in_blk = row_locate_col(rp, coloffset, bp->bblk->bminlen, 
 					    &keylen_in_blk);
 
-		result = row_col_compare(coltype, key, keylen, key_in_blk, keylen_in_blk);
+		result = row_col_compare(coltype, key, keylen, key_in_blk, 
+							keylen_in_blk);
+
 
 		
-		if ((result == LE) || ((result == EQ) && (tss->topid & TSS_OP_INSTAB)))
+		if (   (result == EQ) && (tabinfo->t_sinfo) 
+		    && (tabinfo->t_sinfo->sistate & SI_DEL_DATA))
+		{
+			blkidx = bp->bblk->bblkno;
+
+			break;
+		}
+
+		
+		if ((result == LE) || (   (result == EQ) 
+				       && (tss->topid & TSS_OP_INSTAB)))
 		{
 			
 			if (bp->bblk->bblkno == 0)
@@ -974,5 +1016,32 @@ blk_get_location_sstab(TABINFO *tabinfo, BUF *bp)
 	}
 
 	return blkidx;
+}
+
+int
+blk_appendrow(BLOCK *blk, char *rp, int rlen)
+{
+	int	ign = 0;
+
+
+	if ((blk->bfreeoff + rlen) > (BLOCKSIZE - BLK_TAILSIZE -
+		(ROW_OFFSET_ENTRYSIZE * (BLK_GET_NEXT_ROWNO(blk) + 1))))
+	{
+		return FALSE;
+	}
+	
+	PUT_TO_BUFFER((char *)blk + blk->bfreeoff, ign, rp, rlen);
+
+	
+	
+	ROW_SET_OFFSET(blk, BLK_GET_NEXT_ROWNO(blk), blk->bfreeoff);
+	
+
+	blk->bfreeoff += rlen;
+
+
+	BLK_GET_NEXT_ROWNO(blk)++;
+
+	return TRUE;
 }
 

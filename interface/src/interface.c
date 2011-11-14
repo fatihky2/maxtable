@@ -136,7 +136,27 @@ int cli_commit(conn * connection, char * cmd, char * response, int * resp_len)
 
 retry:
 
+#ifdef MT_KEY_VALUE
+	if (querytype == INSERT)
+	{		
+		int cmd_len = STRLEN(cmd);
+
+		cmd_len = str1nstr(cmd, "(\0", cmd_len);
+
+		char	*col_info = cmd + cmd_len;
+		send_buf_size = *(int *)col_info;
+
+		send_buf_size += *(int *)(col_info + sizeof(int) + send_buf_size + 1);
+
+		send_buf_size += (2 * sizeof(int) + 1) + cmd_len;
+	}
+	else
+	{
+		send_buf_size = strlen(cmd);
+	}
+#else
 	send_buf_size = strlen(cmd);
+#endif
 	MEMSET(send_buf, LINE_BUF_SIZE);
 	MEMCPY(send_buf, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
 	MEMCPY(send_buf + RPC_MAGIC_MAX_LEN, cmd, send_buf_size);
@@ -153,15 +173,21 @@ retry:
 	}
 
 	if(   (querytype == INSERT) || (querytype == SELECT) || (querytype == DELETE) 
-	   || (querytype == SELECTRANGE) || (querytype == DROP))
+	   || (querytype == SELECTRANGE) || (querytype == DROP) || (querytype == SELECTWHERE))
 	{
 		INSMETA		*resp_ins;
 		SELRANGE	*resp_selrg;
+		SELWHERE	*resp_selwh;
 		
 		if (querytype == SELECTRANGE)
 		{			
 			resp_selrg = (SELRANGE *)resp->result;
 			resp_ins = &(resp_selrg->left_range);
+		}
+		else if (querytype == SELECTWHERE)
+		{
+			/*TODO: select where clause. */
+			resp_selwh= (SELWHERE *)resp->result;
 		}
 		else
 		{
@@ -533,7 +559,7 @@ int sel_resp_rejoin(char * src_buf, char * dest_buf, int src_len, int * dest_len
 
 
 int
-cli_rgsel_meta(conn * connection, char * cmd, SELRANGE	 *resp_selrg)
+cli_rgsel_meta(conn * connection, char * cmd, SELCTX *resp_selctx)
 {
 	LOCALTSS(tss);
 
@@ -586,8 +612,16 @@ cli_rgsel_meta(conn * connection, char * cmd, SELRANGE	 *resp_selrg)
 
 	}
 
-	MEMCPY(resp_selrg, resp->result, sizeof(SELRANGE));
-			
+	if (resp_selctx->stat == SELECT_RANGE_OP)
+	{
+		MEMCPY(&(resp_selctx->ctx.selrg), resp->result, sizeof(SELRANGE));
+	}
+	else if(resp_selctx->stat == SELECT_WHERE_OP)
+	{
+		MEMCPY(&(resp_selctx->ctx.selwh), resp->result, sizeof(SELWHERE));
+		MEMCPY(&(resp_selctx->rglist), resp->result + sizeof(SELWHERE), 
+					sizeof(SVR_IDX_FILE));		
+	}
 	
 finish:
 
@@ -600,21 +634,18 @@ finish:
 
 
 rg_conn *
-cli_rgsel_ranger(conn * connection, char * cmd, SELRANGE *selrg)
+cli_rgsel_ranger(conn * connection, char * cmd, SELCTX *selctx, char *ip, int port)
 {
 	char		send_rg_buf[LINE_BUF_SIZE];
-	INSMETA 	*resp_ins;	
 	int		rtn_stat;
 	rg_conn		*rg_connection;
 	int 		i;
 
 
-
-	resp_ins = &(((SELRANGE *)selrg)->left_range);
 	for(i = 0; i < connection->rg_list_len; i++)
 	{
-		if((resp_ins->i_hdr.rg_info.rg_port == connection->rg_list[i]->rg_server_port)
-		     &&(!strcmp(resp_ins->i_hdr.rg_info.rg_addr, connection->rg_list[i]->rg_server_ip))
+		if((port == connection->rg_list[i]->rg_server_port)
+		     &&(!strcmp(ip, connection->rg_list[i]->rg_server_ip))
 		     &&(connection->rg_list[i]->status == ESTABLISHED))
 		{
 			rg_connection = connection->rg_list[i];
@@ -625,10 +656,11 @@ cli_rgsel_ranger(conn * connection, char * cmd, SELRANGE *selrg)
 	if(i == connection->rg_list_len)
 	{
 		rg_connection = (rg_conn *)MEMALLOCHEAP(sizeof(rg_conn));
-		rg_connection->rg_server_port = resp_ins->i_hdr.rg_info.rg_port;
-		strcpy(rg_connection->rg_server_ip, resp_ins->i_hdr.rg_info.rg_addr);
+		rg_connection->rg_server_port = port;
+		strcpy(rg_connection->rg_server_ip, ip);
 
-		if((rg_connection->connection_fd = conn_open(rg_connection->rg_server_ip, rg_connection->rg_server_port)) < 0)
+		if((rg_connection->connection_fd = conn_open(rg_connection->rg_server_ip,
+				rg_connection->rg_server_port)) < 0)
 		{
 			perror("error in create connection with rg server: ");
 
@@ -646,18 +678,39 @@ cli_rgsel_ranger(conn * connection, char * cmd, SELRANGE *selrg)
 	}
 
 	int send_buf_size = strlen(cmd);
-	
-	MEMCPY(selrg, RPC_SELECTRANGE_MAGIC, RPC_MAGIC_MAX_LEN);
-			
-	MEMSET(send_rg_buf, LINE_BUF_SIZE);
-	MEMCPY(send_rg_buf, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
+
+	if (selctx->stat == SELECT_RANGE_OP)
+	{
+		MEMCPY(&(selctx->ctx.selrg), RPC_SELECTRANGE_MAGIC, RPC_MAGIC_MAX_LEN);
+				
+		MEMSET(send_rg_buf, LINE_BUF_SIZE);
+		MEMCPY(send_rg_buf, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
 
 
-	MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN, selrg, sizeof(SELRANGE));
-	MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN + sizeof(SELRANGE), cmd, send_buf_size);
-
-	write(rg_connection->connection_fd, send_rg_buf, 
+		MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN, &(selctx->ctx.selrg), 
+			sizeof(SELRANGE));
+		MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN + sizeof(SELRANGE), cmd, 
+			send_buf_size);
+		
+		write(rg_connection->connection_fd, send_rg_buf, 
 			(sizeof(SELRANGE) + send_buf_size + RPC_MAGIC_MAX_LEN));
+	}
+	else if (selctx->stat == SELECT_WHERE_OP)
+	{
+		MEMCPY(&(selctx->ctx.selwh), RPC_SELECTWHERE_MAGIC, RPC_MAGIC_MAX_LEN);
+				
+		MEMSET(send_rg_buf, LINE_BUF_SIZE);
+		MEMCPY(send_rg_buf, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
+
+
+		MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN, &(selctx->ctx.selwh), 
+			sizeof(SELWHERE));
+		MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN + sizeof(SELWHERE), cmd, 
+			send_buf_size);
+		
+		write(rg_connection->connection_fd, send_rg_buf, 
+			(sizeof(SELWHERE) + send_buf_size + RPC_MAGIC_MAX_LEN));
+	}
 
 	
 	return rg_connection;
@@ -727,29 +780,67 @@ cli_rgsel_is_bigdata(rg_conn * rg_connection, int *bigdataport)
 
 
 int
-cli_open_range(conn * connection, char * cmd)
+cli_open_range(conn * connection, char * cmd, int opid)
 {
-	SELRANGE	*selrg;
+	SELCTX		*selctx;
 	rg_conn		*rg_connection;
 	int 		sockfd = -1;
 	int		conn_cnt = 0;
 	int		bigdataport;
+	char		*ip;
+	int		port;
 
 
-	selrg = MEMALLOCHEAP(sizeof(SELRANGE));
-		
-	cli_rgsel_meta(connection, cmd, selrg);
+	selctx = MEMALLOCHEAP(sizeof(SELCTX));
 
-	rg_connection = cli_rgsel_ranger(connection, cmd, selrg);
+	if (opid == SELECT_RANGE_OP)
+	{
+		selctx->stat = SELECT_RANGE_OP;
+	}
+	else if (opid == SELECT_WHERE_OP)
+	{
+		selctx->stat = SELECT_WHERE_OP;
+	}
+	
+	cli_rgsel_meta(connection, cmd, selctx);
+
+	if (opid == SELECT_RANGE_OP)
+	{
+		ip = selctx->ctx.selrg.left_range.i_hdr.rg_info.rg_addr;
+		port = selctx->ctx.selrg.left_range.i_hdr.rg_info.rg_port;
+	}
+	else if (opid == SELECT_WHERE_OP)
+	{
+		SVR_IDX_FILE	*temp_store;
+		RANGE_PROF	*rg_prof;
+	
+		temp_store = &(selctx->rglist);
+		rg_prof = (RANGE_PROF *)(temp_store->data);
+
+		int	i;
+
+		for(i = 0; i < temp_store->nextrno; i++)
+		{
+			if(rg_prof[i].rg_stat == RANGER_IS_ONLINE)
+			{
+				ip = rg_prof[i].rg_addr;
+				port = rg_prof[i].rg_port;
+				break;
+			}
+		}
+	}
+
+	rg_connection = cli_rgsel_ranger(connection, cmd, selctx, ip, port);
 
 	if (!cli_rgsel_is_bigdata(rg_connection, &bigdataport))
 	{
-		MEMFREEHEAP(selrg);
+		MEMFREEHEAP(selctx);
 		return -1;
 	}
-
-	MEMFREEHEAP(selrg);
-
+	
+	MEMFREEHEAP(selctx);
+	
+	
 	while ((sockfd < 0) && (conn_cnt < 1000))
 	{
 		sockfd = conn_open(rg_connection->rg_server_ip, bigdataport);
@@ -761,7 +852,7 @@ cli_open_range(conn * connection, char * cmd)
 }
 
 int
-cli_read_range(int sockfd, range_query_contex *rgsel_cont)
+cli_read_range(int sockfd, RANGE_QUERYCTX *rgsel_cont)
 {
 	RPCRESP		*rg_resp;
 	int		rtn_stat;
@@ -802,7 +893,7 @@ cli_read_range(int sockfd, range_query_contex *rgsel_cont)
 		}
 		else
 		{
-			MEMCPY(rgsel_cont, rg_resp->result, sizeof(range_query_contex));
+			MEMCPY(rgsel_cont, rg_resp->result, sizeof(RANGE_QUERYCTX));
 			rtn_stat = TRUE;
 		}
 
@@ -842,7 +933,7 @@ cli_close_range(int sockfd)
                   (BLOCKSIZE - BLK_TAILSIZE - ROW_OFFSET_ENTRYSIZE)))
 
 char *
-cli_get_nextrow(range_query_contex *rgsel_cont)
+cli_get_nextrow(RANGE_QUERYCTX *rgsel_cont)
 {
 	if (rgsel_cont->cur_rowpos > rgsel_cont->end_rowpos)
 	{
@@ -865,7 +956,7 @@ cli_get_nextrow(range_query_contex *rgsel_cont)
 }
 
 char *
-cli_get_firstrow(range_query_contex *rgsel_cont)
+cli_get_firstrow(RANGE_QUERYCTX *rgsel_cont)
 {
 	return NULL;
 }

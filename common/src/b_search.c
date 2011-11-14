@@ -62,7 +62,8 @@ nextrow:
 	    case EQ:
 		if (   (tabinfo->t_stat & TAB_SRCH_DATA) 
 		    && (tss->topid & TSS_OP_RANGESERVER))
-		{			
+		{	
+			
 			if (ROW_IS_DELETED(srchinfo->brow))
 			{
 				Assert(   (bp->bblk->bblkno == 0) 
@@ -97,8 +98,8 @@ nextrow:
 				    && (srchinfo->brownum == 0) 
 			    	    && (bp->bblk->bblkno == 0))
 				{
-					Assert((srchinfo->boffset) == 
-						(ROW_OFFSET_PTR(bp->bblk)[-(srchinfo->brownum)]));
+					Assert(   (srchinfo->boffset)
+					       == (ROW_OFFSET_PTR(bp->bblk)[-(srchinfo->brownum)]));
 					//Assert(last_offset == *offset);
 					
 					tabinfo->t_stat |= TAB_TABLET_KEYROW_CHG;

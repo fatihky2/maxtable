@@ -32,7 +32,7 @@
 char *
 row_locate_col(char * rowptr, int coloffset, int minrowlen, int * length)
 {
-	int		collen;		
+	int		collen;			
 	int		varcolno;	
 	int		varcount;	
 
@@ -78,7 +78,6 @@ row_build_row()
 {
 	;
 	
-
 }
 
 

@@ -52,10 +52,10 @@ while(0)
 #define BSRCH_MOVE_LEFT(blkptr, srchinfo)			\
 do                                                             	\
 {                                                              	\
-	srchinfo->blow = srchinfo->brownum + 1;      	\
-	srchinfo->brownum = (srchinfo->blow + 		\
-					srchinfo->bhigh) >> 1;\
-	srchinfo->brow = ROW_GETPTR_FROM_OFFTAB(blkptr,	\
+	srchinfo->blow = srchinfo->brownum + 1;      		\
+	srchinfo->brownum = (srchinfo->blow + 			\
+					srchinfo->bhigh) >> 1;	\
+	srchinfo->brow = ROW_GETPTR_FROM_OFFTAB(blkptr,		\
 					srchinfo->brownum);	\
 } while (0)
 
@@ -63,9 +63,9 @@ do                                                             	\
 do                                                             	\
 {                                                               \
 	srchinfo->bhigh = srchinfo->brownum - 1;        	\
-	srchinfo->brownum = (srchinfo->blow + 		\
-					srchinfo->bhigh) >> 1;\
-	srchinfo->brow = ROW_GETPTR_FROM_OFFTAB(blkptr,	\
+	srchinfo->brownum = (srchinfo->blow + 			\
+					srchinfo->bhigh) >> 1;	\
+	srchinfo->brow = ROW_GETPTR_FROM_OFFTAB(blkptr,		\
 					srchinfo->brownum);	\
 } while (0)
 

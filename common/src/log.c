@@ -68,7 +68,7 @@ log_check_insert(LOGFILE *logfile, int logopid, int logtype)
 	switch (lastopid)
 	{
 	    case LOG_BEGIN:
-	    	/* TODO: we need to expand it for the other log opid, like insert, delete.*/
+	    	
 	    	if (logopid == LOG_DO_SPLIT)
 	    	{
 	    		status = TRUE;
@@ -142,7 +142,7 @@ log_check_delete(LOGFILE *logfile, int logtype, char *backup)
 
 		break;
 		
-	    	/* TODO: we need to expand it for the other log opid, like insert, delete.*/
+	    	
 
 	    default:
 	    			
@@ -205,7 +205,7 @@ log_insert_sstab_split(char *logfile_dir, LOGREC *logrec, int logtype)
 
 	if (logrec->opid == LOG_DO_SPLIT)
 	{
-		/* Copy the file into the backup file. */
+		
 		char	cmd_str[TABLE_NAME_MAX_LEN];
 		
 		MEMSET(cmd_str, TABLE_NAME_MAX_LEN);
@@ -392,7 +392,7 @@ log_undo_sstab_split(char *logfile_dir, char *backup_dir, int logtype)
 				Assert(logfilebuf->logrec[1].opid == LOG_DO_SPLIT);
 			
 			
-				/* Copy the file into the backup file. */
+				
 				char	cmd_str[64];
 				
 				MEMSET(cmd_str, 64);
@@ -771,7 +771,7 @@ log__redo_insdel(LOGREC *logrec, char *rp)
 			goto exit;
 		}
 
-		/* REDO */
+		
 
 		Assert(tabinfo->t_sinfo->sistate & SI_NODATA);
 		
@@ -842,7 +842,7 @@ log__redo_insdel(LOGREC *logrec, char *rp)
 		if (bp->bblk->bfreeoff == offset)
 		{
 			
-			ROW_SET_OFFSET(bp->bblk, BLK_GET_NEXT_ROWNO(bp), offset);
+			ROW_SET_OFFSET(bp->bblk, BLK_GET_NEXT_ROWNO(bp->bblk), offset);
 		}
 		
 
@@ -851,7 +851,7 @@ log__redo_insdel(LOGREC *logrec, char *rp)
 
 		bp->bblk->bminlen = minlen;
 		
-		BLK_GET_NEXT_ROWNO(bp)++;
+		BLK_GET_NEXT_ROWNO(bp->bblk)++;
 
 insfinish:
 
@@ -894,7 +894,7 @@ insfinish:
 			goto exit;
 		}
 
-		/* REDO */
+		
 
 		Assert(!(tabinfo->t_sinfo->sistate & SI_NODATA));
 		
@@ -950,7 +950,7 @@ insfinish:
 		
 		bp->bblk->bfreeoff -= rlen;
 		
-		BLK_GET_NEXT_ROWNO(bp)--;
+		BLK_GET_NEXT_ROWNO(bp->bblk)--;
 
 delfinish:
 		bufdirty(bp);
