@@ -188,7 +188,8 @@ cli_deamon()
 
 		querytype = ((TREE *)(tss->tcmd_parser))->sym.command.querytype;
 		MEMSET(tab_name, 64);
-		MEMCPY(tab_name, ((TREE *)(tss->tcmd_parser))->sym.command.tabname,
+		MEMCPY(tab_name, 
+			((TREE *)(tss->tcmd_parser))->sym.command.tabname,
 			((TREE *)(tss->tcmd_parser))->sym.command.tabname_len);
 
 		/* Each command must send the request to metadata server first. */

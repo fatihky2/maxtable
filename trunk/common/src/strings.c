@@ -22,15 +22,7 @@
 #include "global.h"
 
 
-/*
-** return the start of 
-**
-**	        0 1 2 3 4 5 6 7 89
-**	buf : a b c d c c d x s d
-**	sub:          dc
-**	rtn: 5
-** you can use buf[5-9]
-*/
+
 int
 str1nstr (char *buf, char *sub, int len)
 {
@@ -70,15 +62,7 @@ str1nstr (char *buf, char *sub, int len)
 }
 
 
-/*
-** return the start of 
-**
-**	        0 1 2 3 4 5 6 7 89
-**	buf : a b c d c c d x s d
-**	sub:          dc
-**	rtn: 2
-** you can use buf[0-2]
-*/
+
 
 int
 str01str (char *buf, char *sub, int len)
@@ -113,13 +97,7 @@ str01str (char *buf, char *sub, int len)
 	return (i - 1);
 }
 
-/*
-**	"./rg_table/yxue/yxuetablet0sstable1313042021"     &  "/",    strlen()
-**
-**			To
-**
-**	"yxuetablet0sstable1313042021"
-*/
+
 
 int
 strmnstr (char *buf, char *sub, int len)
@@ -179,7 +157,7 @@ str0n_trunc_0t(char *buf, int len, int *start, int *end)
 		return TRUE;
 	}
 	
-	/* Normalize this command. It's just a simple op. */
+	
 	while (((*str == ' ') || (*str == '\t')) && ((*start) < len))
 	{
 		str++;

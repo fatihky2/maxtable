@@ -27,13 +27,13 @@
 
 struct command
 {
-	int		querytype;  
+	int		querytype;  	
 	long            rootstat;
 	int             tabname_len;
 	char            tabname[128];
 };
 
-struct resdom
+typedef struct resdom
 {
 	int		colid;   	
 	char		colname[64];
@@ -42,15 +42,24 @@ struct resdom
 	int		coloffset;		
 	char		pad[2];
 	int		colen;   	
-} ;
+}RESDOM;
 
 typedef struct constant
 {
 	int            	len;
-	char            *value;  
+	char            *value;  	
+
+	
+	int		rightlen;	
+	char		*rightval;
+
 	short	       	constat;	
 	short           pad;
 } CONSTANT;
+
+
+#define	CONSTANT_SELECTWHERE		0x0001	
+
 
 typedef union symbol
 {	
@@ -67,9 +76,9 @@ typedef struct tree
 	union symbol	sym;
 } TREE;
 
-#define PAR_CMD_NODE		1   
-#define PAR_RESDOM_NODE		2   
-#define PAR_CONSTANT_NODE	3   
+#define PAR_CMD_NODE		1	
+#define PAR_RESDOM_NODE		2	
+#define PAR_CONSTANT_NODE	3	
 
 
 #define PAR_NODE_IS_COMMAND(type)       (type == PAR_CMD_NODE)
@@ -79,6 +88,25 @@ typedef struct tree
 #define PAR_NODE_IS_CONSTANT(type)      (type == PAR_CONSTANT_NODE)
 
 
+
+#define	OR	1
+#define	AND	2
+#define WHERE	3
+
+
+typedef struct srchclause
+{	struct tree	*scterms;	
+} SRCHCLAUSE;
+
+
+
+typedef struct orandplan
+{
+	struct srchclause	orandsclause;	
+	struct orandplan	*orandplnext;	
+} ORANDPLAN;
+
+
 TREE*
 par_bld_cmd(char *data, int data_len, int querytype);
 
@@ -86,7 +114,7 @@ void
 par_destroy_cmd(TREE *node);
 
 TREE*
-par_bld_const(char *data, int datalen, int datatype);
+par_bld_const(char *data, int datalen, int datatype, char *rightdata, int rightdatalen);
 
 void
 par_destroy_const(TREE *node);
@@ -138,6 +166,33 @@ par_name_check(char *name, int len);
 
 int 
 par_selrange_tab(char *s_str, int querytype);
+
+int
+par_col_info4where(char *cmd, int cmd_len, int querytype, char *colname);
+
+int 
+par_selwhere_tab(char *s_str, int querytype);
+
+int
+par_op_where(char *cmd, int len);
+
+CONSTANT *
+par_get_constant_by_colname(TREE *command, char *colname);
+
+RESDOM *
+par_get_resdom_by_colname(TREE *command, char *colname);
+
+int
+par_fill_colinfo(char *tab_dir, int colnum, TREE *command);
+
+ORANDPLAN *
+par_get_orplan(TREE *command);
+
+ORANDPLAN *
+par_get_andplan(TREE *command);
+
+void
+par_release_orandplan(ORANDPLAN *orandplan);
 
 
 #endif

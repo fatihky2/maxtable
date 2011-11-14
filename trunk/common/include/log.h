@@ -38,7 +38,7 @@
 
 #define	LOG_TOTALNUM	8
 
-/* Following definition id for the opid. */
+
 #define	LOG_INVALID		0
 #define	LOG_BEGIN		1
 #define LOG_END			2
@@ -64,7 +64,7 @@ typedef struct logrec
 	int		next_log_off;
 }LOGREC;
 
-/* Following definition is for the status. */
+
 #define	CHECKPOINT_BEGIN	0x0001
 #define CHECKPOINT_END		0x0002
 
@@ -78,7 +78,7 @@ typedef struct logfile
 	LOGREC	logrec[LOG_TOTALNUM];
 }LOGFILE;
 
-/* Following definition is for the logtype. */
+
 #define	SPLIT_LOG	1
 
 

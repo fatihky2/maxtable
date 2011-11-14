@@ -44,7 +44,7 @@ typedef struct _range_query_contex
 	int	cur_rowpos;
 	int	rowminlen;
 	char	data[BLOCKSIZE];
-}range_query_contex;
+}RANGE_QUERYCTX;
 
 
 #define	DATA_CONT	0x0001	
@@ -69,10 +69,10 @@ extern int cli_commit(conn * connection, char * cmd, char * response, int * leng
 
 
 extern int
-cli_open_range(conn * connection, char * cmd);
+cli_open_range(conn * connection, char * cmd, int opid);
 
 extern int
-cli_read_range(int sockfd, range_query_contex *rgsel_cont);
+cli_read_range(int sockfd, RANGE_QUERYCTX *rgsel_cont);
 
 extern void
 cli_write_range(int sockfd);
@@ -81,7 +81,7 @@ extern void
 cli_close_range(int sockfd);
 
 extern char *
-cli_get_nextrow(range_query_contex *rgsel_cont);
+cli_get_nextrow(RANGE_QUERYCTX *rgsel_cont);
 
 
 #endif

@@ -42,7 +42,7 @@ bufread(BUF *bp)
 {
 	BLKIO	*blkioptr;
 
-
+	
 	blkioptr = MEMALLOCHEAP(sizeof(BLKIO));
 
 	
@@ -112,7 +112,7 @@ retry:
 
 		bp_res_cnt++;
 
-		/* Simple checking */
+		
 		if (bp_res_cnt > 6)
 		{
 			traceprint("buffer pool must not exceed 6 reserved buffer\n ");
@@ -197,9 +197,6 @@ bufawrite(BUF *bp)
 
 //	V_SPINLOCK(BUF_SPIN);
 
-	
-	
-
 	MEMFREEHEAP(blkioptr);
 
 	return;
@@ -210,8 +207,8 @@ bufawrite(BUF *bp)
 BUF *
 bufsearch(TABINFO *tabinfo)
 {
-	BUF	*bufptr;		
-	BUF	**hashptr;		
+	BUF	*bufptr;			
+	BUF	**hashptr;			
 	int	sstabno;
 	int	tabid;
 
@@ -221,7 +218,8 @@ bufsearch(TABINFO *tabinfo)
 	if (tabinfo->t_stat & TAB_GET_RES_SSTAB)
 	{
 		Assert(   tabinfo->t_insmeta->res_sstab_id 
-		       && (tabinfo->t_insmeta->res_sstab_id != tabinfo->t_sstab_id));
+		       && (   tabinfo->t_insmeta->res_sstab_id 
+		           != tabinfo->t_sstab_id));
 		       
 		sstabno = tabinfo->t_insmeta->res_sstab_id;
 	}
@@ -240,6 +238,7 @@ bufsearch(TABINFO *tabinfo)
 	
 //	P_SPINLOCK(BUF_SPIN);
 
+	
 	for (bufptr = *hashptr; bufptr; bufptr = bufptr->bhash)
 	{
 		if (   (bufptr->bsstabid == sstabno) 
@@ -487,7 +486,7 @@ buffree(BUF *bp)
 {
 	
 	LRUUNLINK(bp->bsstab);
-
+	
 	
 	LRULINK(bp->bsstab, Kernel->ke_buflru);
 

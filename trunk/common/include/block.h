@@ -31,14 +31,12 @@
 
 
 //#define	BLK_CNT_IN_SSTABLE	16
-
 #define	BLK_CNT_IN_SSTABLE	64
 
 
 #define	SSTABLE_SIZE		(BLK_CNT_IN_SSTABLE * BLOCKSIZE)
 
 
-/* Adjust the cache size. */
 #define	SSTABLE_MAX_COUNT	64
 
 
@@ -56,22 +54,35 @@ typedef	struct block
 {
 	char		pad2[4];
 	
-	int		bblkno;		
+	int		bblkno;			
 	int		bnextblkno;	
 	int		bsstabnum;	
 	int		bsstabid;	
 	int		btabid;		
 	int		bnextsstabnum;	
 	int		bprevsstabnum;	
-	unsigned int	bsstab_split_ts_lo;		
+
+	
+	unsigned int	bsstab_split_ts_lo;
+	
 	int		bnextrno;	
-	unsigned int    bsstab_split_ts_hi;	
-	unsigned int	bsstab_insdel_ts_lo;		
+
+	
+	unsigned int    bsstab_split_ts_hi;
+	
+	
+	unsigned int	bsstab_insdel_ts_lo;
+
+	
 	unsigned int    bsstab_insdel_ts_hi;
+	
 	int		bfreeoff; 	
 	short		bstat; 		
 	short		bminlen; 	
+
+	
 	char		bdata[BLOCKSIZE - BLKHEADERSIZE - 4]; 
+	
 	int		boffsets[1];	
 }BLOCK;
 
@@ -83,7 +94,7 @@ typedef	struct block
 
 #define	ROW_OFFSET_ENTRYSIZE	sizeof(int)
 #define	BLK_TAILSIZE		sizeof(time)	
-#define	BLK_GET_NEXT_ROWNO(bp)	(bp->bblk->bnextrno)
+#define	BLK_GET_NEXT_ROWNO(blk)	(blk->bnextrno)
 
 
 #define	ROW_OFFSET_PTR(blkptr)	((int *) (((char *)(blkptr)) +		\
@@ -120,7 +131,7 @@ typedef struct srch_info
 #define	SI_DATA_BLK	0x00000002
 #define	SI_INS_DATA	0x00000004	
 #define	SI_NODATA	0x00000008	
-#define SI_DEL_DATA	0x00000010
+#define SI_DEL_DATA	0x00000010	
 
 
 #define SRCH_INFO_INIT(srch_info, key, keylen, colid, coltype, coloff)	\
@@ -148,9 +159,8 @@ do {											\
 }while(0)
 
 
+
 #define	BLK_BUF_NEED_CHANGE	0x0001
-
-
 #define BLK_ROW_NEXT_SSTAB	0x0002	
 #define BLK_ROW_NEXT_BLK	0x0004
 #define BLK_INS_SPLITTING_SSTAB	0x0008
@@ -171,9 +181,9 @@ blkins(struct tab_info *tabinfo, char *rp);
 int
 blkdel(TABINFO *tabinfo);
 
-
 int
-blk_check_sstab_space(TABINFO *tabinfo, BUF *bp, char *rp, int rlen, int ins_offset);
+blk_check_sstab_space(TABINFO *tabinfo, BUF *bp, char *rp, int rlen,
+						int ins_offset);
 
 void
 blk_split(BLOCK *blk);
@@ -186,6 +196,9 @@ blk_init(BLOCK *blk);
 
 int
 blk_get_location_sstab(struct tab_info *tabinfo, BUF *bp);
+
+int
+blk_appendrow(BLOCK *blk, char *rp, int rlen);
 
 
 #endif

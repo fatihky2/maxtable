@@ -29,6 +29,7 @@ struct table_hdr;
 
 
 
+
 #define ROW_MINLEN_IN_TABLET		(sizeof(ROWFMT) + sizeof(int) + SSTABLE_NAME_MAX_LEN + sizeof(int) )
 
 #define TABLET_SSTABID_COLID_INROW	1
@@ -42,6 +43,7 @@ struct table_hdr;
 #define TABLET_KEY_COLOFF_INROW		(ROW_MINLEN_IN_TABLET + sizeof(int))
 
 #define TABLE_KEY_FAKE_COLOFF_INROW	-1
+
 
 
 

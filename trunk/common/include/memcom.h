@@ -33,10 +33,11 @@ extern "C" {
 
 
 
-#define MEMPOOL_BLOCK	1	
-#define MEMPOOL_FRAG	2	
-#define MEMPOOL_OBJECT	3	
-#define MEMPOOL_STACK	4	
+
+#define MEMPOOL_BLOCK	1		
+#define MEMPOOL_FRAG	2		
+#define MEMPOOL_OBJECT	3		
+#define MEMPOOL_STACK	4		
 
 #define	ALIGNDATATYPE	long
 
@@ -54,8 +55,8 @@ typedef struct free_frag_link
 
 typedef struct memplist
 {
-	LINK 	mpl_link;	
-	size_t	mpl_count;	
+	LINK 	mpl_link;		
+	size_t	mpl_count;		
 } MEMPLIST;
 
 
@@ -87,35 +88,35 @@ typedef struct memcom
 
 typedef struct mempool
 {
-	MEMCOM	mp_mc;		
-	LINK	mp_link;	
-	LINK	mp_frags;	
-	FLINK   mp_free_frags;  
-	size_t	mp_ovhd;	
-	size_t	mp_nfrags;	
+	MEMCOM	mp_mc;			
+	LINK	mp_link;		
+	LINK	mp_frags;		
+	FLINK   mp_free_frags;  	
+	size_t	mp_ovhd;		
+	size_t	mp_nfrags;		
 } MEMPOOL;
 
 
 typedef struct memblk
 {
-	LINK 	mb_link;	
-	void 	*mb_begin;	
-	void	*mb_end;	
-	int	mb_frags;	
+	LINK 	mb_link;		
+	void 	*mb_begin;		
+	void	*mb_end;		
+	int	mb_frags;		
 } MEMBLK;
 
 
 typedef struct memfrag
 {
-	LINK	mf_link;	
-	MEMBLK *mf_block;	
-	int	mf_size;	
-	short	mf_flags;	
+	LINK	mf_link;			
+	MEMBLK *mf_block;		
+	int	mf_size;		
+	short	mf_flags;		
 	char	pad[2];
 } MEMFRAG;
 
 
-#define MEMPOOL_SUCCESS		0	
+#define MEMPOOL_SUCCESS		0		
 #define MEMPOOL_FAIL		-1	
 #define MEMPOOL_INVALIDADDR 	-2	
 #define MEMPOOL_BUSY		-3	
@@ -124,7 +125,7 @@ typedef struct memfrag
 
 
 
-#define MEMPOOL_USED	0x1	
+#define MEMPOOL_USED	0x1		
 
 
 #define MF_FREE(mfp) (((mfp)->mf_flags & MEMPOOL_USED) == 0)
@@ -136,6 +137,7 @@ typedef struct memfrag
 
 #define MY_MEMPAGESIZE		4096L	
 #define MY_KERNEL_MEM_SIZE	(32 * MY_MEMPAGESIZE + 1)
+
 
 
 
@@ -192,7 +194,7 @@ typedef struct kernel
 	void		*ke_msgdata_objpool;
 	SPINLOCK	ke_buf_spinlock;
 	SPINLOCK	ke_msg_obj_lock;
-	struct buf	*ke_buflru;		
+	struct buf	*ke_buflru;			
 	struct buf	**ke_bufhash;		
 	struct buf	*ke_bufwash;		
 //	struct hkgc_info hkgc_info;
@@ -200,7 +202,6 @@ typedef struct kernel
 
 #define	BUF_SPIN	(Kernel->ke_buf_spinlock)
 #define MSG_OBJ_SPIN	(Kernel->ke_msg_obj_lock)
-
 
 
 
@@ -213,7 +214,6 @@ typedef struct kernel
 
 #define MSGDATA_MIN_ITEMS   256
 #define MSGDATA_MAX_ITEMS   1024
-
 
 
 

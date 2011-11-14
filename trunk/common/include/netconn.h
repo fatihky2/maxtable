@@ -27,7 +27,7 @@
 #define RPC_REQUEST_MAGIC "rpcrqst"
 #define RPC_RESPONSE_MAGIC "rpcresp"
 
-
+/* Following is the special magic number. */
 #define	RPC_DROP_TABLE_MAGIC	"drop"
 #define RPC_RG2MASTER_REPORT	"rg_rpt"
 #define RPC_RBD_MAGIC		"rebalan"
@@ -35,13 +35,15 @@
 #define RPC_MASTER2RG_HEARTBEAT	"hb_rqst"
 #define RPC_RECOVERY 		"re_cov"
 #define RPC_MASTER2RG_NOTIFY	"rsync"
+#define RPC_SELECTWHERE_MAGIC	"sel_wh"
+
 
 
 
 #define RECVIO_TIMEOUT			30
 #define HEARTBEAT_INTERVAL		30
 
-
+/* The Buffer Pool for holding RPCRESP Data  */
 #define CONN_BUF_SIZE (1024 * 1024)
 
 typedef struct rpcreq
@@ -55,7 +57,7 @@ typedef struct rpcresp
 {
 	char	magic[RPC_MAGIC_MAX_LEN];
 	int	status_code; 
-	int	result_length; 
+	int	result_length;	/* used in serializing and deserializing */
 	char	*result;
 }RPCRESP;
 
@@ -68,8 +70,10 @@ typedef struct rpcresp
 #define RPC_UNAVAIL		0x0010
 #define RPC_BIGDATA_CONN	0x0020
 
-
- 
+/*
+** Copy data from the transmission buffer to the location
+** specified by the pointer.
+*/  
 #define GET_FROM_BUFFER( buf, idx, ptr, size )		\
 {							\
 	MEMCPY ( ptr, buf+idx, size );                  \
@@ -89,6 +93,7 @@ typedef struct rpcresp
 #define RPC_REQ_SELECTRANGE_OP	0x0008
 #define RPC_REQ_M2RNOTIFY_OP	0x0010
 #define RPC_REQ_M2RHEARTBEAT_OP	0x0020
+#define	RPC_REQ_SELECWHERE_OP	0x0040
 
 
 char *

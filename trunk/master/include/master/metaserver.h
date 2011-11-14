@@ -29,6 +29,8 @@
 
 
 
+
+
 struct srch_info;
 struct buf;
 struct block_row_info;
@@ -46,6 +48,21 @@ struct block_row_info;
 
 struct stat st;
 
+#ifdef MAXTABLE_BENCH_TEST
+
+#define MT_META_TABLE   "./meta_table"
+#define MT_META_REGION  "./rg_server"
+#define MT_META_INDEX   "./index"	
+
+#else
+
+#define MT_META_TABLE   "/mnt/metaserver/meta_table"
+#define MT_META_REGION  "/mnt/metaserver/rg_server"
+#define MT_META_INDEX   "/mnt/metaserver/index"	
+
+#endif
+
+
 typedef struct key_col
 {
 	int	col_offset;	
@@ -56,31 +73,31 @@ typedef struct table_hdr
 {
 	int     tab_id;
 	char    tab_name[128];
-	int	tab_tablet;	
-	int	tab_sstab;	
-	int	tab_row_minlen;
-	int	tab_key_colid;	
-	int	tab_key_coloff;	
-	int	tab_key_coltype;
-	int	tab_col;	
-	int	tab_varcol;	
-	int	tab_stat;	
-	int 	offset_c1;	
-	int 	offset_c2;	
+	int	tab_tablet;		
+	int	tab_sstab;		
+	int	tab_row_minlen;		
+	int	tab_key_colid;		
+	int	tab_key_coloff;		
+	int	tab_key_coltype;	
+	int	tab_col;		
+	int	tab_varcol;		
+	int	tab_stat;		
+	int 	offset_c1;		
+	int 	offset_c2;		
 } TABLEHDR;
 
 
-#define	TAB_DROPPED	0x0001	
+#define	TAB_DROPPED	0x0001		
 
 
 typedef struct tablet_hdr
 {
 	char	firstkey[256];
 	char    tblet_name[128];
-	int	tblet_sstab;	
-	int	offset_c1;	
-	int	offset_c2;	
-	int	offset_c3;	
+	int	tblet_sstab;		
+	int	offset_c1;		
+	int	offset_c2;		
+	int	offset_c3;		
 	int	tabletid;	
 }TABLETHDR;
 
@@ -126,7 +143,7 @@ typedef union infor_hdr
 
 typedef struct sstab_infor
 {
-	int		sstab_stat;	
+	int		sstab_stat;		
 	unsigned int	split_ts;	
 } SSTAB_INFOR;
 
@@ -148,12 +165,32 @@ typedef struct tab_sstab_map
 #define SSTABMAP_CHG	0x0001
 
 
+
+#define SVR_IDX_FILE_HDR	16
+#define SVR_IDX_FILE_BLK	((sizeof(int)*2 + sizeof(pthread_t) + RANGE_PORT_MAX_LEN + RANGE_ADDR_MAX_LEN) * 1024)
+#define SVR_IDX_FILE_SIZE	(SVR_IDX_FILE_HDR + SVR_IDX_FILE_BLK)
+typedef	struct svr_idx_file
+{
+	int		nextrno;		
+	int		freeoff; 	
+	short		stat;
+	char		pad2[6];
+	char		data[SVR_IDX_FILE_BLK];	
+}SVR_IDX_FILE;
+
+#define SVR_STAT_NON_AVAIL_RG 0x0001
+
+
+#define	SVR_IS_BAD	0x0001
+
+
+
 typedef struct insert_meta
 {
 	union infor_hdr	i_hdr;
 	int		sstab_id;
 	int		res_sstab_id;
-	unsigned int	ts_low;		
+	unsigned int	ts_low;				
 	char    	sstab_name[SSTABLE_NAME_MAX_LEN];
 	int		status;
 	int		col_num;	
@@ -163,15 +200,41 @@ typedef struct insert_meta
 	
 } INSMETA;
 
+
+#define	INS_META_1ST	0x0001		
+
 typedef struct select_range
 {
 	INSMETA		left_range;
 	INSMETA		right_range;	
 } SELRANGE;
 
+typedef struct select_where
+{
+	char		magic[RPC_MAGIC_MAX_LEN];
+	int		leftnamelen;
+	int		rightnamelen;
+	char		lefttabletname[128];
+	char		righttabletname[128];
+}SELWHERE;
+
+typedef union context
+{	
+	struct select_range	selrg;
+	struct select_where	selwh;
+}CONTEXT;
 
 
-#define	INS_META_1ST	0x0001	
+#define	SELECT_RANGE_OP		0x0001
+#define	SELECT_WHERE_OP		0x0002
+
+typedef struct select_context
+{
+	int			stat;
+	struct svr_idx_file	rglist;
+	union context		ctx;
+}SELCTX;
+
 
 typedef struct insert_ranger
 {
@@ -185,7 +248,7 @@ typedef struct insert_ranger
 
 typedef struct tab_info
 {
-	struct buf	*t_dnew;	 
+	struct buf	*t_dnew;		 
 	struct buf	*t_dold;	 
 //	TABLEHDR	*t_tabhdr;
 	int		t_tabid;
@@ -221,7 +284,7 @@ typedef struct tab_info
 #define TAB_SCHM_SRCH		0x00000002	
 #define TAB_CRT_NEW_FILE	0x00000004
 #define	TAB_SRCH_DATA		0x00000008	
-#define TAB_SSTAB_SPLIT		0x00000010  
+#define TAB_SSTAB_SPLIT		0x00000010	 
 #define TAB_SSTAB_1ST_ROW_CHG	0x00000020
 #define TAB_KEPT_BUF_VALID	0x00000040	
 #define TAB_INS_DATA		0x00000080
@@ -231,32 +294,13 @@ typedef struct tab_info
 #define TAB_TABLET_CRT_NEW	0x00000800	
 #define TAB_TABLET_KEYROW_CHG	0x00001000	
 #define TAB_DEL_DATA		0x00002000	
-#define	TAB_RETRY_LOOKUP	0x00004000	/* Retry to lookup the metadata. */
+#define	TAB_RETRY_LOOKUP	0x00004000	
 #define	TAB_DO_SPLIT		0x00008000
 #define TAB_RESERV_BUF		0x00010000
 #define TAB_INS_SPLITING_SSTAB	0x00020000	
 
 
 #define TAB_IS_SYSTAB(tabinfo)	(tabinfo->t_stat & TAB_META_SYSTAB)
-
-
-
-#define SVR_IDX_FILE_HDR	16
-#define SVR_IDX_FILE_BLK	((sizeof(int)*2 + sizeof(pthread_t) + RANGE_PORT_MAX_LEN + RANGE_ADDR_MAX_LEN) * 1024)
-#define SVR_IDX_FILE_SIZE	(SVR_IDX_FILE_HDR + SVR_IDX_FILE_BLK)
-typedef	struct svr_idx_file
-{
-	int		nextrno;	
-	int		freeoff; 	
-	short		stat;
-	char		pad2[6];
-	char		data[SVR_IDX_FILE_BLK]; 
-}SVR_IDX_FILE;
-
-#define SVR_STAT_NON_AVAIL_RG 0x0001
-
-
-#define	SVR_IS_BAD	0x0001
 
 
 #define META_CONF_PATH_MAX_LEN   64
@@ -276,7 +320,6 @@ typedef struct master_infor
 	SVR_IDX_FILE	rg_list;
 	HB_DATA		heart_beat_data[MAX_RANGER_NUM];
 }MASTER_INFOR;
-
 
 
 

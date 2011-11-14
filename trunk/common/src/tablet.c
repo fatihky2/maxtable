@@ -69,6 +69,7 @@ tablet_crt(TABLEHDR *tablehdr, char *tabledir, char *rg_addr, char *rp, int minl
 	Assert(tablehdr->tab_tablet == 0);
 
 	tablehdr->tab_tablet = 1;
+
 	
 	build_file_name("tablet", tablet_name, tablehdr->tab_tablet);
 	str1_to_str2(tab_meta_dir, '/', tablet_name);
@@ -459,9 +460,10 @@ tablet_schm_bld_row(char *rp, int rlen, int tabletid, char *tabletname,
 	rowidx += sizeof(ROWFMT);
 
 	
-	 	
+		
 	PUT_TO_BUFFER(rp, rowidx, &tabletid, sizeof(int));
 
+	
 	PUT_TO_BUFFER(rp, rowidx, &port, sizeof(int));
 	
 	 	
@@ -515,6 +517,7 @@ tablet_schm_upd_col(char *newrp, char *oldrp, int colid, char *newcolval, int ne
 		colptr = newrp + ROW_MINLEN_IN_TABLETSCHM;
 
 		int ign = 0;
+
 		
 		PUT_TO_BUFFER(colptr, ign, &coloffset, sizeof(int));
 	    	break;
@@ -733,6 +736,7 @@ tablet_schm_get_1st_or_last_row(TABLEHDR *tablehdr, int tabid, int sstabid, char
 
 	return ((char *)(bp->bblk) + offset);
 }
+
 
 
 void

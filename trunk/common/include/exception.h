@@ -38,23 +38,23 @@ typedef int (* EXC_FUNC_PTR)(int );
 
 typedef struct mt_except
 {
-	int             exc_number;     
+	int             exc_number;	   
 	EXC_FUNC_PTR    exc_func;       
-	jmp_buf         exc_buf;        
+	jmp_buf         exc_buf;	
 } EXCEPT;
 
 typedef struct exc_manage
 {
-	EXCEPT  *ex_start;      
-	EXCEPT  *ex_top;        
-	EXCEPT  *ex_end;        
+	EXCEPT  *ex_start;      	
+	EXCEPT  *ex_top;        	
+	EXCEPT  *ex_end;        	
 } EXC_MANAGE;
 
 
 typedef struct exc_proc
 {
 	EXC_MANAGE      exp_manage;     
-	EXCEPT          exp_stack[EX_BACKOUT_STACKSIZE];     
+	EXCEPT          exp_stack[EX_BACKOUT_STACKSIZE];    
 } EXC_PROC;
 
 struct tss;

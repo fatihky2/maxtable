@@ -19,7 +19,6 @@
 */
 
 
-/* Only for I/O that only include write and read */
 #include "global.h"
 #include "utils.h"
 #include "dskio.h"
@@ -33,7 +32,7 @@ extern	TSS	*Tss;
 int
 dopen(char * name, long flags)
 {
-	int	mode;	/* Mode to be passed to open() call. */
+	int	mode;	
 	int	fd;
 	char	*tempname;
 	
@@ -88,10 +87,7 @@ dstartio(BLKIO * blkiop)
 	}
 
 	dclose(fd);
-	/*
-	** Check that the requested number of bytes have been
-	** read or written
-	*/
+	
 	if ((blkiop->bioflags & DBREAD) && (blkiop->biobp->bstat & BUF_READ_EMPTY) && (status == 0))
 	{
 		return TRUE;
