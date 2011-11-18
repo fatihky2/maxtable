@@ -18,6 +18,7 @@
 ** permissions and limitations under the License.
 */
 #include "global.h"
+#include "master/metaserver.h"
 #include "memcom.h"
 #include "memobj.h"
 #include "tss.h"
@@ -26,6 +27,7 @@
 #include "utils.h"
 #include "trace.h"
 #include "thread.h"
+#include "hkgc.h"
 
 KERNEL *Kernel;
 
@@ -97,9 +99,16 @@ mem_init_alloc_regions()
 
 	Kernel = (KERNEL *)kmem_ptr;
 	MEMSET(Kernel,sizeof(KERNEL));
+
 	kmem_ptr += sizeof(KERNEL);
 	size -= sizeof(KERNEL);
 
+	Kernel->hk_info = (HKGC_INFO *)kmem_ptr;
+	MEMSET(Kernel->hk_info, sizeof(HKGC_INFO));
+
+	kmem_ptr += sizeof(HKGC_INFO);
+	size -= sizeof(HKGC_INFO);
+	
 	
 	Kernel->ke_fragpool_list = (MEMPLIST *)kmem_ptr;
 	Kernel->ke_fragpool_list->mpl_count = 0;
@@ -137,6 +146,8 @@ mem_init_alloc_regions()
 	mp_list_insert((MEMOBJECT *)Kernel->ke_msgdata_objpool, MEMPOOL_OBJECT);
 
 	SPINLOCK_INIT(MSG_OBJ_SPIN);
+	SPINLOCK_INIT(BUF_SPIN);
+	SPINLOCK_INIT(MEM_FRAG_SPIN);
 
 	return TRUE;
 }
@@ -306,6 +317,8 @@ mp_frag_alloc(MEMPOOL *mp, size_t size, char *file, int line)
 //	int yxue_test = ROUNDSIZE(size, sizeof(MEMFRAG));
 	alloc_size = ROUNDSIZE(size, sizeof(MEMFRAG)) / sizeof(MEMFRAG);
 
+	P_SPINLOCK(MEM_FRAG_SPIN);
+
 retry:
 	FOR_QUEUE(FLINK, &mp->mp_free_frags, free_link)
 	{
@@ -382,6 +395,7 @@ retry:
 		}
 	}
 
+	V_SPINLOCK(MEM_FRAG_SPIN);
 	
 	if (addr == NULL)
 	{
@@ -426,6 +440,8 @@ mp_frag_realloc(MEMPOOL *mp, void * addr, size_t size)
 		return addr;	
 	}
 
+	P_SPINLOCK(MEM_FRAG_SPIN);
+	
 	nextmfp = (MEMFRAG *)(QUE_NEXT(mfp));
 	comb_size = (int)(mfp->mf_size + nextmfp->mf_size + 1);
 
@@ -485,6 +501,8 @@ mp_frag_realloc(MEMPOOL *mp, void * addr, size_t size)
 		}
 
 		traceprint("MEMORY REALLOCATED BY ADDRESS == 0x%x\n", addr);
+
+		V_SPINLOCK(MEM_FRAG_SPIN);
 		return addr;
 	}
 
@@ -497,6 +515,8 @@ mp_frag_realloc(MEMPOOL *mp, void * addr, size_t size)
 		MEMCPY(newaddr, addr, mfp->mf_size);
 		mp_frag_free(mp, addr,NULL,0);
 	}
+
+	V_SPINLOCK(MEM_FRAG_SPIN);
 
 	if (TRACECMDLINE(MEM_USAGE))
 	{
@@ -535,6 +555,8 @@ mp_frag_free(MEMPOOL *mp, void *addr, char *file, int line)
 	
 	mfp->mf_flags = 0;
 
+	P_SPINLOCK(MEM_FRAG_SPIN);
+	
 	
 	MEMCOM_UPDATE_USED(mp, -(sizeof(MEMFRAG) * mfp->mf_size));
 	
@@ -584,6 +606,8 @@ mp_frag_free(MEMPOOL *mp, void *addr, char *file, int line)
 
 		mfp->mf_block->mb_frags--;
 	}
+
+	V_SPINLOCK(MEM_FRAG_SPIN);
 
 	if (TRACECMDLINE(MEM_USAGE))
 	{

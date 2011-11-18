@@ -3041,6 +3041,7 @@ meta_rebalancer(TREE *command)
 
 		bufpredirty(bp->bsstab);
 		bufdirty(bp->bsstab);
+		bufunkeep(bp->bsstab);
 		
 		session_close(tabinfo);
 
@@ -3682,6 +3683,7 @@ meta_tablet_update(char * table_name, char * rg_addr, int rg_port)
 	
 		bufpredirty(bp->bsstab);
 		bufdirty(bp->bsstab);
+		bufunkeep(bp->bsstab);
 
 		session_close(tabinfo);
 
@@ -3991,6 +3993,7 @@ meta_check_tablet(char *tabdir, int tabid, char *tabletname, int tabletid)
 		
 	}
 
+	bufunkeep(bp->bsstab);
 	
 	session_close(tabinfo);
 
@@ -4122,7 +4125,8 @@ meta_check_tabletschme(char *tabdir, int tabid)
 		
 	}
 
-
+	bufunkeep(bp->bsstab);
+	
 	session_close(tabinfo);
 
 	MEMFREEHEAP(tabinfo->t_sinfo);

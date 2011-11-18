@@ -61,7 +61,7 @@ extern	int	Kfsport;
 
 char	*RgLogfile;
 char	*RgBackup;
-char	*RgInsdelLogfile;
+extern char	*RgInsdelLogfile;
 
 /* This struct will also be used at cli side */
 typedef struct rg_info
@@ -229,8 +229,9 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 	int		sstab_rlen;
 	int		sstab_idx;
 	char	 	*resp;
-	char		rp[1024];
+	char		*rp;
 	int		rp_idx;
+	int		rlen;
 	char		col_off_tab[COL_OFFTAB_MAX_SIZE];	/* Max of var-column is 16 */
 	int		col_off_idx;
 	int		col_offset;
@@ -241,6 +242,7 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 	COLINFO 	*col_info;
 	char		*resp_buf;
 	int		resp_len;
+	int		buf_spin;
 
 
 	Assert(command);
@@ -252,6 +254,10 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 	tab_name_len = command->sym.command.tabname_len;
 	ins_meta = tabinfo->t_insmeta;
 	col_info = tabinfo->t_colinfo;
+	buf_spin = FALSE;
+	resp_len = 0;
+	resp_buf = NULL;
+	rp = NULL;
 
 	MEMSET(tab_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_dir, MT_RANGE_TABLE, STRLEN(MT_RANGE_TABLE));
@@ -304,6 +310,9 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 		traceprint("tab_dir =%s \n", tab_dir);
 	}
 
+	rlen = BLOCKSIZE - BLK_TAILSIZE - BLKHEADERSIZE - sizeof(int);
+	rp = MEMALLOCHEAP(rlen);
+
 	/* Begin to build row. */
 	row_build_hdr(rp, 0, 0, ins_meta->varcol_num);
 
@@ -339,6 +348,12 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 				col_off_idx -= sizeof(int);
 				*((int *)(col_off_tab + col_off_idx)) = rp_idx;
 			}
+
+			if ((rp_idx + col_len) > rlen)
+			{
+				traceprint("The row to be inserted expand the max size %d of one row.\n", rlen);
+				goto exit;
+			}
 			
 			PUT_TO_BUFFER(rp, rp_idx, col_val, col_len);
 			if (col_offset > 0)
@@ -359,6 +374,7 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 			if (!(col_offset > 0))
 			{
 				traceprint("Hit a row error!\n");
+				MEMFREEHEAP(rp);
 				ex_raise(EX_ANY);
 			}
 			
@@ -381,6 +397,7 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 			if (ins_meta->varcol_num != col_num)
 			{
 				traceprint("Hit a row error!\n");
+				MEMFREEHEAP(rp);
 				ex_raise(EX_ANY);
 			}
 		}		
@@ -389,18 +406,25 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 
 	if (COL_OFFTAB_MAX_SIZE > col_off_idx)
 	{
+		if ((rp_idx + (COL_OFFTAB_MAX_SIZE - col_off_idx)) > rlen)
+		{
+			traceprint("The row to be inserted expand the max size %d of one row.\n", rlen);
+			goto exit;
+		}
+		
 		PUT_TO_BUFFER(rp, rp_idx, (col_off_tab + col_off_idx), 
 					(COL_OFFTAB_MAX_SIZE - col_off_idx));
 		*(int *)(rp + ins_meta->row_minlen) = rp_idx;
 	}
 
+	P_SPINLOCK(BUF_SPIN);
+	buf_spin = TRUE;
 
 	rtn_stat = blkins(tabinfo, rp);
 
 exit:
 
-	resp_len = 0;
-	resp_buf = NULL;
+	
 	
 	if (rtn_stat && (tabinfo->t_stat & TAB_SSTAB_SPLIT))
 	{
@@ -466,9 +490,19 @@ exit:
         	}
 	}
 
+	if (buf_spin)
+	{
+		V_SPINLOCK(BUF_SPIN);
+	}
+	
 	if (resp_buf)
 	{
 		MEMFREEHEAP(resp_buf);
+	}
+
+	if (rp)
+	{
+		MEMFREEHEAP(rp);
 	}
 	
 	return resp;
@@ -496,6 +530,7 @@ rg_seldeltab(TREE *command, TABINFO *tabinfo)
 	int		offset;
 	char   		*col_buf;
 	int 		rlen;
+	int		buf_spin;
 
 
 	Assert(command);
@@ -508,6 +543,7 @@ rg_seldeltab(TREE *command, TABINFO *tabinfo)
 	tab_name_len = command->sym.command.tabname_len;
 	ins_meta = tabinfo->t_insmeta;
 	col_info = tabinfo->t_colinfo;
+	buf_spin = FALSE;
 
 	MEMSET(tab_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_dir, MT_RANGE_TABLE, STRLEN(MT_RANGE_TABLE));
@@ -560,6 +596,9 @@ rg_seldeltab(TREE *command, TABINFO *tabinfo)
 	/* Case delete data.*/
 	if (tabinfo->t_stat & TAB_DEL_DATA)
 	{
+		P_SPINLOCK(BUF_SPIN);
+		buf_spin = TRUE;
+		
 		rtn_stat = blkdel(tabinfo);
 
 		if (rtn_stat)
@@ -573,6 +612,8 @@ rg_seldeltab(TREE *command, TABINFO *tabinfo)
 		bp = blkget(tabinfo);
 //		offset = blksrch(tabinfo, bp);
 
+		/* Just clear the bit 'BUF_KEPT'. */
+		bufunkeep(bp->bsstab);
 		
 		if (tabinfo->t_stat & TAB_RETRY_LOOKUP)
 		{
@@ -640,6 +681,11 @@ exit:
 						tabinfo->t_cur_rowlen);
 
 			MEMFREEHEAP(tabinfo->t_cur_rowp);
+
+			if (buf_spin)
+			{
+				V_SPINLOCK(BUF_SPIN);
+			}
 		}
 		else
 		{
@@ -705,6 +751,7 @@ rg_selrangetab(TREE *command, TABINFO *tabinfo, int fd)
 	rtn_stat = FALSE;
 	sstab_rlen = 0;
 	sstab_idx = 0;
+	bp = NULL;
 	tab_name = command->sym.command.tabname;
 	tab_name_len = command->sym.command.tabname_len;
 	ins_meta = tabinfo->t_insmeta;
@@ -812,6 +859,7 @@ rg_selrangetab(TREE *command, TABINFO *tabinfo, int fd)
 		    || (tabinfo->t_rowinfo->rsstabid != bp->bblk->bsstabid))
 		{
 			traceprint("Hit a buffer error!\n");
+			bufunkeep(bp->bsstab);
 			ex_raise(EX_ANY);
 		}
 		
@@ -969,6 +1017,8 @@ nextblk:
 
 			tabinfo->t_sstab_id = bp->bsstab->bblk->bnextsstabnum;
 
+			bufunkeep(bp->bsstab);
+			
 			bp = blk_getsstable(tabinfo);			
 		}
 		else
@@ -1009,6 +1059,11 @@ nextblk:
 	rtn_stat = TRUE;
 
 exit:
+	if (bp)
+	{
+		bufunkeep(bp->bsstab);
+	}
+	
 	conn_socket_close(connfd);
 
 	conn_socket_close(listenfd);
@@ -1600,6 +1655,7 @@ rg_tabletscan(TABLET_SCANCTX *scanctx)
 	rgsel_cont.rowminlen	= scanctx->rminlen;
 	sstab_scanctx.rgsel	= &rgsel_cont;
 	sstab_scanctx.stat	= 0;
+	bp = NULL;
 
 	/* initialization of sending data buffer. */
 	datablk= (BLOCK *)(sstab_scanctx.rgsel->data);
@@ -1674,6 +1730,8 @@ scan_cont:
 			if (!(sstab_scanctx.stat & SSTABSCAN_BLK_IS_FULL))
 			{
 				/* Finding the next sstable to fill the sending block. */
+				bufunkeep(bp->bsstab);
+				
 				continue;
 			}
 
@@ -1761,7 +1819,10 @@ scan_cont:
 
 	scan_result = TRUE;
 exit:
-
+	if (bp)
+	{
+		bufunkeep(bp->bsstab);
+	}
 	session_close(tabinfo);
 
 	MEMFREEHEAP(tabinfo->t_sinfo);
@@ -2746,7 +2807,8 @@ rg_check_sstab_by_tablet(CHECKTABLE_DATA *chkdata)
 				}			
 			
 			}
-			
+
+			bufunkeep(bp->bsstab);
 			session_close(tabinfo);
 
 			MEMFREEHEAP(tabinfo->t_sinfo);
@@ -2971,7 +3033,8 @@ nextblk:
 				}			
 			
 			}
-			
+
+			bufunkeep(bp->bsstab);
 			session_close(tabinfo);
 
 			MEMFREEHEAP(tabinfo->t_sinfo);

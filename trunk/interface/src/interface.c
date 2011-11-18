@@ -928,7 +928,7 @@ cli_close_range(int sockfd)
 
 
 #define	ROW_OFFSET_ENTRYSIZE	sizeof(int)
-#define	BLK_TAILSIZE		sizeof(time)	
+#define	BLK_TAILSIZE		sizeof(int)	
 #define	ROW_OFFSET_PTR(blkptr)	((int *) (((char *)(blkptr)) +		\
                   (BLOCKSIZE - BLK_TAILSIZE - ROW_OFFSET_ENTRYSIZE)))
 
@@ -945,8 +945,8 @@ cli_get_nextrow(RANGE_QUERYCTX *rgsel_cont)
 	char *rp = rgsel_cont->data + offtab[-(rgsel_cont->cur_rowpos)];
 	int rlen = ROW_GET_LENGTH(rp, rgsel_cont->rowminlen);
 
-	char test[128];
-	MEMSET(test, 128);
+	char test[BLOCKSIZE];
+	MEMSET(test, BLOCKSIZE);
 	MEMCPY(test, rp, rlen);
 	printf("next row: %s \n", (test + rgsel_cont->rowminlen + sizeof(int)));
 

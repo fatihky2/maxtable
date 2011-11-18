@@ -45,7 +45,8 @@
 #define	LOG_DO_SPLIT		3
 #define LOG_INSERT		4
 #define LOG_DELETE		5
-#define CHECKPOINT		6
+#define CHECKPOINT_BEGIN	6
+#define CHECKPOINT_COMMIT	7
 
 typedef struct logrec
 {
@@ -65,8 +66,8 @@ typedef struct logrec
 }LOGREC;
 
 
-#define	CHECKPOINT_BEGIN	0x0001
-#define CHECKPOINT_END		0x0002
+#define	CHECKPOINT_BIT_BEGIN	0x0001
+#define CHECKPOINT_BIT_END	0x0002
 
 
 

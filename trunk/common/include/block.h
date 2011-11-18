@@ -93,7 +93,7 @@ typedef	struct block
 
 
 #define	ROW_OFFSET_ENTRYSIZE	sizeof(int)
-#define	BLK_TAILSIZE		sizeof(time)	
+#define	BLK_TAILSIZE		sizeof(int)	
 #define	BLK_GET_NEXT_ROWNO(blk)	(blk->bnextrno)
 
 

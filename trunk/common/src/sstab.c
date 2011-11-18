@@ -37,7 +37,6 @@
 extern	TSS	*Tss;
 extern	char	*RgLogfile;
 extern	char	*RgBackup;
-extern	char	*RgInsdelLogfile;
 
 #define	SSTAB_NAMEIDX_MASK	(2^32 - 1)
 

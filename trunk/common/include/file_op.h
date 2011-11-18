@@ -87,7 +87,7 @@ kfs_append(int fd, char *buf, int buf_len, char *serverHost, int port);
 
 #define	CLOSE(fd)		kfs_close(fd, Kfsserver, Kfsport)
 
-#define LSEEK(fd, offset flag)	kfs_seek(fd, offset, flag, Kfsserver, Kfsport)
+#define LSEEK(fd, offset, flag)	kfs_seek(fd, offset, flag, Kfsserver, Kfsport)
 
 #define	STAT(dir, state)	stat((dir), (state))
 
@@ -148,6 +148,52 @@ kfs_append(int fd, char *buf, int buf_len, char *serverHost, int port);
 
 #endif
 
+#define	OPEN_LOG(fd, tab_dir, flag)							\
+		do{									\
+			fd = open((tab_dir), (flag | O_CREAT), 0666);			\
+											\
+			if (fd < 0)							\
+			{								\
+				fprintf(stderr, "open file failed for %s\n", strerror(errno));\
+			}								\
+											\
+		}while(0)
+		
+#define	MKDIR_LOG(status, tab_dir, flag)						\
+		do{									\
+			status = mkdir((tab_dir), (flag));				\
+											\
+			if (status < 0) 						\
+			{								\
+				fprintf(stderr, "mkdir failed for %s\n", strerror(errno));\
+			}								\
+		}while(0)
+		
+#define	READ_LOG(fd, buf, len)		read((fd), (buf), (len))
+			
+#define	WRITE_LOG(fd, buf, buf_len)	write((fd), (buf), (buf_len))
+		
+#define	CLOSE_LOG(fd)			close(fd)
+		
+#define LSEEK_LOG(fd, offset, flag)	lseek(fd, offset, flag)
+		
+#define	STAT_LOG(dir, state)		stat((dir), (state))
+		
+#define APPEND_LOG(fd, buf, buf_len, status)						\
+		do{									\
+			int offset = LSEEK(fd, 0, SEEK_END);				\
+											\
+			if ((offset + buf_len) > SSTABLE_SIZE)				\
+			{								\
+				status = 0;						\
+			}								\
+			else								\
+			{								\
+				*(int *)(buf + buf_len - sizeof(int) - sizeof(int)) = offset;\
+				*(int *)(buf + buf_len - sizeof(int)) = offset + buf_len;\
+				status = WRITE(fd, buf, buf_len);			\
+			}								\
+		}while(0)
 
 int
 file_read(char *file_path, char *buf, int file_size);

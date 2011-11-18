@@ -50,6 +50,8 @@ typedef struct buf
 #define	BUF_DESTROY	0x0040
 #define BUF_READ_EMPTY	0x0080		
 #define BUF_RESERVED	0x0100
+#define BUF_IN_HKWASH	0x0200		
+#define	BUF_IN_WASH	0x0400		
 
 
 #define SSTABLE_STATE(bp)	(bp->bsstab->bstat)
