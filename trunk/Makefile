@@ -21,11 +21,11 @@ LIB_OBJS_CPP	= $(patsubst %.cpp,%.o,$(LIB_SRCS_CPP))
 
 ifeq (${MT_BACKEND}, KFS)
 
-all: kfsfacer_o kfsfacer_a client master ranger memTest sample client_lib
+all: kfsfacer_o kfsfacer_a client master ranger memTest sample client_lib clients_lib
 
 else ifeq (${MT_BACKEND}, LOCAL)
 
-all: client master ranger memTest sample client_lib
+all: client master ranger memTest sample client_lib clients_lib
 
 endif
 
@@ -89,6 +89,9 @@ service_sample: service/src/sample.cpp libmtService.a
 client_lib: ${LIB_OBJS_C}
 	$(CC) -shared -fPIC -o libmtClient.so ${LIB_OBJS_C}
 
+clients_lib: ${LIB_OBJS_C}
+	$(AR) libmtcli.a ${LIB_OBJS_C}
+
 clean: 
-	rm -rf startClient startMaster startRanger imql memTest benchmark sample libmtService.a ${LIB_OBJS_C} ${LIB_OBJS_CPP} libmtClient.so kfsfacer.o kfsfacer.a
+	rm -rf startClient startMaster startRanger imql memTest benchmark sample libmtService.a libmtcli.a ${LIB_OBJS_C} ${LIB_OBJS_CPP} libmtClient.so kfsfacer.o kfsfacer.a
 	rm -rf ./table ./index ./rg_server ./rg_table ./meta_table ./rgbackup ./rglog
