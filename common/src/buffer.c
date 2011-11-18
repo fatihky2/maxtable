@@ -75,13 +75,9 @@ bufwait(BUF *bp)
 {
 	while (SSTABLE_STATE(bp) & BUF_WRITING)
 	{
-		sleep(5);
+		sleep(2);
 	}
 
-	if (SSTABLE_STATE(bp) & BUF_DIRTY)
-	{
-		bufawrite(bp);
-	}
 
 	if (SSTABLE_STATE(bp) & BUF_IOERR)
 	{
@@ -96,14 +92,27 @@ bufgrab(TABINFO *tabinfo)
 {
 	BUF	*bp;
 	int	bp_res_cnt;
+	BUF	*tmpbp;
 
 
 	bp_res_cnt = 0;
+	tmpbp = Kernel->ke_buflru->bsstabold;
 retry:
 	bp = Kernel->ke_buflru->bsstabold;
 
-	bufwait(bp);
+	if (SSTABLE_STATE(bp) & BUF_KEPT)
+	{
+		if (bp->bsstabold == tmpbp)
+		{
+			traceprint("All the caches have been kept!\n");
+			Assert(0);
+		}
+		LRUUNLINK(bp);
 
+		MRULINK(bp, Kernel->ke_buflru);
+		goto retry;
+	}
+	
 	if (SSTABLE_STATE(bp) & BUF_RESERVED)
 	{
 		LRUUNLINK(bp);
@@ -121,6 +130,15 @@ retry:
 		goto retry;
 	}
 
+	bufwait(bp);
+		
+	if (SSTABLE_STATE(bp) & BUF_DIRTY)
+	{
+		
+		DIRTYUNLINK(bp);
+		bufwrite(bp);
+	}
+	
 	bufkeep(bp);
 
 	bufunhash(bp);
@@ -176,6 +194,8 @@ bufawrite(BUF *bp)
 	
 	SSTABLE_STATE(bp) |= BUF_WRITING;
 
+//	V_SPINLOCK(BUF_SPIN);
+
 	
 	blkioptr = MEMALLOCHEAP(sizeof(BLKIO));
 
@@ -194,8 +214,6 @@ bufawrite(BUF *bp)
 	}
 
 	SSTABLE_STATE(bp) &= ~(BUF_DIRTY|BUF_WRITING);
-
-//	V_SPINLOCK(BUF_SPIN);
 
 	MEMFREEHEAP(blkioptr);
 
@@ -245,7 +263,8 @@ bufsearch(TABINFO *tabinfo)
 		    && (bufptr->btabid = tabid))
 		{			
 //			V_SPINLOCK(BUF_SPIN);
-			
+			bufkeep(bufptr);
+
 			bufwait(bufptr);
 
 			return (bufptr);
@@ -412,18 +431,11 @@ bufdestroy(BUF *bp)
 void
 bufpredirty(BUF *bp)
 {
-retry:	
-	
 //	P_SPINLOCK(BUF_SPIN);
 
 	if (!(SSTABLE_STATE(bp) & BUF_DIRTY))
 	{
 		SSTABLE_STATE(bp) |= BUF_DIRTY;
-	}
-	else
-	{
-//		V_SPINLOCK(BUF_SPIN);
-		goto retry;
 	}
 
 //	V_SPINLOCK(BUF_SPIN);
@@ -439,7 +451,8 @@ bufdirty(BUF *bp)
 	
 //	P_SPINLOCK(BUF_SPIN);
 
-	if (SSTABLE_STATE(bp) & BUF_DIRTY)
+	if (   (SSTABLE_STATE(bp) & BUF_DIRTY) 
+	    && !(SSTABLE_STATE(bp) & BUF_IN_WASH))
 	{
 		bufdlink(BUF_GET_SSTAB(bp));
 	}
@@ -453,6 +466,18 @@ bufdirty(BUF *bp)
 void
 bufdlink(BUF *bp)
 {
+#ifdef	MT_ASYNC_IO
+
+	
+	if ((bp->bdnew == bp) && (bp->bdold == bp))
+	{
+		bp->bdold = Kernel->ke_bufwash->bdold;
+		bp->bdnew = Kernel->ke_bufwash;
+		Kernel->ke_bufwash->bdnew->bdnew = bp;
+		Kernel->ke_bufwash->bdold = bp;
+		bp->bstat |= BUF_IN_WASH;
+	}
+#else
 	LOCALTSS(tss);
 	TABINFO	*tabinfo;
 
@@ -466,7 +491,7 @@ bufdlink(BUF *bp)
 		tabinfo->t_dnew->bdnew = bp;
 		tabinfo->t_dold = bp;
 	}
-
+#endif
 	return;
 }
 
@@ -477,6 +502,8 @@ bufdunlink(BUF *bp)
 	bp->bdold->bdnew = bp->bdnew;
 	bp->bdold = bp;
 	bp->bdnew = bp;
+
+	bp->bstat &= ~BUF_IN_WASH;
 
 	return;
 }
@@ -493,7 +520,8 @@ buffree(BUF *bp)
 	bp->bsstabid = -1;
 
 	
-	SSTABLE_STATE(bp) &= ~(BUF_NOTHASHED | BUF_DESTROY | BUF_DIRTY | BUF_IOERR);
+	SSTABLE_STATE(bp) &= ~(BUF_NOTHASHED | BUF_DESTROY | BUF_DIRTY 
+				| BUF_IOERR | BUF_KEPT);
 	return;
 }
 

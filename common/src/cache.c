@@ -143,7 +143,9 @@ ca_setup_pool()
 	
 	Kernel->ke_buflru = sbufptr;
 
-	//Kernel->ke_bufwash = sbufptr
+	
+	Kernel->ke_bufwash = sbufptr;
+	Kernel->ke_bufwash->bdnew = Kernel->ke_bufwash->bdold = Kernel->ke_bufwash;
 
 	
 	bp->bsstabold = sbufptr;

@@ -18,6 +18,7 @@
 ** permissions and limitations under the License.
 */
 #include "global.h"
+#include "memcom.h"
 #include <pthread.h>
 #include "master/metaserver.h"
 #include "utils.h"
@@ -26,31 +27,89 @@
 #include "spinlock.h"
 #include "tss.h"
 #include "file_op.h"
+#include "log.h"
 
 
-#define	HKGC_WORK_INTERVAL	10
-
-
-typedef struct hkgc_info
-{
-	int		hk_stat;
-	int		buf_num;
-	BUF		*hk_dirty_buf;
-	SPINLOCK	hk_sstabmap_mutex;	/* mutex for the sstabmap */
-	SIGNAL		hk_sstabmap_cond;
-	TAB_SSTAB_MAP	*hk_sstabmap;		/* sstabmap: just one item. */
-	
-} HKGC_INFO;
-
-
-#define	HKGC_SSTAB_MAP_DIRTY	0x0001	/* Trigger for the sstab map writing. */
-#define HKGC_SSTAB_BUF_DIRTY	0x0002	/* This feature if it need to */
+extern KERNEL *Kernel;
+char	*RgInsdelLogfile;
 
 
 void
-hkgc_write_block()
+hkgc_wash_sstab()
 {
+	int		i;
+	BUF		*sstab;
+	HKGC_INFO	*hk_info;
+	LOGREC		logrec;
+
+
+	hk_info = (HKGC_INFO *)(Kernel->hk_info);
+
+	P_SPINLOCK(BUF_SPIN);	
+	
+	for (i = 0; i < HK_BATCHSIZE; i++)
+	{
+		sstab = Kernel->ke_bufwash->bdnew;
+
+		if (sstab == Kernel->ke_bufwash)
+		{
+			break;
+		}
+
+		(hk_info->buf_num)++;
+
+		hk_info->hk_dirty_buf[i] = sstab;
+
+		sstab->bstat |= (BUF_IN_HKWASH | BUF_WRITING);
+
+		DIRTYUNLINK(sstab);
+	}
+
+	if (hk_info->buf_num)
+	{
+		log_build(&logrec, CHECKPOINT_BEGIN, 0, 0, NULL, NULL, 0, 0, 0);
+		
+		log_insert_insdel(RgInsdelLogfile, &logrec, NULL, 0);
+	}
+
+	V_SPINLOCK(BUF_SPIN);
+	
+	BUF	*bp;
+	for (i = 0; i < hk_info->buf_num; i++)
+	{
+		bp = hk_info->hk_dirty_buf[i];
+		
+		bufawrite(bp);
+
+		hk_info->hk_dirty_buf[i] = NULL;
+
+//		bufunkeep(bp);
+	}
+
+	if (hk_info->buf_num)
+	{
+		P_SPINLOCK(BUF_SPIN);
+
+		log_build(&logrec, CHECKPOINT_COMMIT, 0, 0, NULL, NULL, 0, 0, 0);
+		
+		log_insert_insdel(RgInsdelLogfile, &logrec, NULL, 0);
+
+		V_SPINLOCK(BUF_SPIN);
+	}
+	
+	hk_info->buf_num = 0;
+
 	return;
+}
+
+void
+hkgc_wash()
+{
+	while(TRUE)
+	{
+		sleep(HKGC_WORK_INTERVAL);
+		hkgc_wash_sstab();
+	}
 }
 
 void
@@ -148,7 +207,7 @@ hkgc_init(int opid)
 
 }
 
-void
+void *
 hkgc_boot(void *opid)
 {
 	while(TRUE)
@@ -161,8 +220,7 @@ hkgc_boot(void *opid)
 		    	break;
 			
 		    case TSS_OP_RANGESERVER:
-		    	sleep(HKGC_WORK_INTERVAL);
-			hkgc_write_block();
+		    	hkgc_wash();
 		    	break;
 			
 		    default:
@@ -170,7 +228,7 @@ hkgc_boot(void *opid)
 		}
 	}
 
-	return;
+	return NULL;
 }
 
 

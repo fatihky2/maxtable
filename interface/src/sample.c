@@ -58,7 +58,7 @@ int main(int argc, char *argv[])
 		if (match(argv[1], "insert"))
 		{
 			/* Insert 10000 data rows into table */
-			for(i = 1; i < 10000; i++)
+			for(i = 1; i < 100000; i++)
 			{
 				memset(resp, 0, 256);
 				memset(cmd, 0, 256);
@@ -90,8 +90,16 @@ int main(int argc, char *argv[])
 				sprintf(cmd + cmd_len + 2 * sizeof(int) + keylen + 1, "%s)", val);
 				
 */				
-				
-				sprintf(cmd, "insert into gu(aaaa%d, bbbb%d, %d, cccc%d, dddd%d, eeeee%d, fffff%d, ggggg%d, hhhhh%d)", i,i,i,i,i,i,i,i,i);
+				char	*c = "cccccccccccccccccccccccccccccccccccccccccccccccccccccc";
+				char	*d = "dddddddddddddddddddddddddddddddddddddddddddddddddddddd";
+				char	*e = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+
+				char 	*f = "ffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+				char	*g = "gggggggggggggggggggggggggggggggggggggggggggggggggggggg";
+
+				char	*h = "hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh";
+
+				sprintf(cmd, "insert into gu(aaaa%d, bbbb%d, %d, %s%d, %s%d, %s%d, %s%d, %s%d, %s%d)", i,i,i,c,i,d, i,e, i,f,i,g,i,h,i);
 				//sprintf(cmd, "insert into gu(aaaa%d, bbbb%d)", i,i);
 				if (!cli_commit(connection, cmd, resp, &len))
 				{

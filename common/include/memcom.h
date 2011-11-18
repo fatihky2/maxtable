@@ -144,8 +144,8 @@ typedef struct memfrag
 #define ROUNDSIZE(size, round)	(((size) + ((round) - 1)) & ~((round) - 1))
 
 
-#define MAXSIZE_FRAGPOOL	(MY_MEMPAGESIZE * 1024)
-#define MAX_FRAG_SIZE		(65536 * sizeof(MEMFRAG))	// 2M in 64bit platform
+#define MAXSIZE_FRAGPOOL	(MY_MEMPAGESIZE * 1024 * 16)	// 64M
+#define MAX_FRAG_SIZE		(4 * 65536 * sizeof(MEMFRAG))	// 8M in 64bit platform
 #define MAX_FRAG_ALLOCSIZE 	(MAX_FRAG_SIZE - sizeof(MEMFRAG) - sizeof(MEMBLK))
 
 
@@ -179,7 +179,6 @@ typedef struct memfrag
 	   (((_type) == MEMPOOL_STACK) ? Kernel->ke_fragpool_list : NULL))))
 
 
-
 typedef struct kernel
 {
 	MEMPLIST	*ke_fragpool_list;	
@@ -194,14 +193,16 @@ typedef struct kernel
 	void		*ke_msgdata_objpool;
 	SPINLOCK	ke_buf_spinlock;
 	SPINLOCK	ke_msg_obj_lock;
+	SPINLOCK	ke_mem_frag_lock;
 	struct buf	*ke_buflru;			
 	struct buf	**ke_bufhash;		
 	struct buf	*ke_bufwash;		
-//	struct hkgc_info hkgc_info;
+	struct hkgc_info *hk_info;
 } KERNEL;
 
 #define	BUF_SPIN	(Kernel->ke_buf_spinlock)
 #define MSG_OBJ_SPIN	(Kernel->ke_msg_obj_lock)
+#define	MEM_FRAG_SPIN	(Kernel->ke_mem_frag_lock)
 
 
 

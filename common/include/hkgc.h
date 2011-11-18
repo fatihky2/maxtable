@@ -20,7 +20,30 @@
 #ifndef	HKGC_H_
 #define HKGC_H_
 
-void
+struct buf;
+
+
+#define	HKGC_WORK_INTERVAL	20
+#define	HK_BATCHSIZE		16
+
+typedef struct hkgc_info
+{
+	int		hk_stat;
+	int		buf_num;
+	struct buf	*hk_dirty_buf[HK_BATCHSIZE];
+	
+	SPINLOCK	hk_sstabmap_mutex;	/* mutex for the sstabmap */
+	SIGNAL		hk_sstabmap_cond;
+	TAB_SSTAB_MAP	*hk_sstabmap;		/* sstabmap: just one item. */
+	
+} HKGC_INFO;
+
+
+#define	HKGC_SSTAB_MAP_DIRTY	0x0001	/* Trigger for the sstab map writing. */
+#define HKGC_SSTAB_BUF_DIRTY	0x0002	/* This feature if it need to */
+
+
+void *
 hkgc_boot(void *opid);
 
 #endif

@@ -772,7 +772,8 @@ void startup(int servPort, int opid, char * (*handler_request)(char *req_buf, in
 	
 
 	pthread_t pthread_id;
-//	pthread_t pthread_id2;
+	pthread_t pthread_id2;
+	int	*tmpid;
 	
 	tss_setup(opid);
 
@@ -780,8 +781,12 @@ void startup(int servPort, int opid, char * (*handler_request)(char *req_buf, in
 	args->port = servPort;
 
 	pthread_create(&pthread_id, NULL, msg_recv, (void *)args);
-//	pthread_create(&pthread_id2, NULL, hkgc_boot, (void *)(&opid));
 
+	if (opid == TSS_OP_RANGESERVER)
+	{
+		tmpid = &opid;
+		pthread_create(&pthread_id2, NULL, hkgc_boot, (void *)tmpid);
+	}
 	//start_daemon(listenfd, handler_request);
 	msg_process(handler_request);
 }

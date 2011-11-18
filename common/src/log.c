@@ -165,6 +165,19 @@ log_build(LOGREC *logrec, int logopid, unsigned int oldts, unsigned int newts, c
 	logrec->tabid = tabid;
 	logrec->sstabid = sstabid;
 
+	
+	if (logopid == CHECKPOINT_BEGIN)
+	{
+		char *s1 = "CHECKPOINT_BEGIN\0";
+		MEMCPY(logrec->oldsstabname, s1, STRLEN(s1));
+	}
+
+	if (logopid == CHECKPOINT_COMMIT)
+	{
+		char *s1 = "CHECKPOINT_COMMIT\0";
+		MEMCPY(logrec->oldsstabname, s1, STRLEN(s1));
+	}
+
 	if (oldsstab)
 	{
 		MEMCPY(logrec->oldsstabname, oldsstab,SSTABLE_NAME_MAX_LEN);
@@ -276,7 +289,10 @@ retry:
 	}
 
 	int	idx = 0;
-	PUT_TO_BUFFER(logbuf, idx, rp, rlen);
+	if (rp)
+	{
+		PUT_TO_BUFFER(logbuf, idx, rp, rlen);
+	}
 	PUT_TO_BUFFER(logbuf, idx, logrec, sizeof(LOGREC));
 
 	logrec->rowend_off = rlen;
@@ -286,6 +302,7 @@ retry:
 	status = APPEND(fd, logbuf, logbuflen);
 
 #else
+
 	APPEND(fd, logbuf, logbuflen, status);
 #endif
 
@@ -461,6 +478,7 @@ log_undo_sstab_split(char *logfile_dir, char *backup_dir, int logtype)
 		goto exit;
 	}
 #else
+
 	LSEEK(fd, 0, SEEK_SET);
 #endif
 	WRITE(fd, logfilebuf, sizeof(LOGFILE));
@@ -524,7 +542,7 @@ log_get_rgbackup(char *rgbackup, char *rgip, int rgport)
 
 int
 log_get_latest_rginsedelfile(char *rginsdellogfile, char *rg_ip, int port)
-{	
+{
 	int	slen1;
 	int	slen2;
 	char	logdir[256];
@@ -546,7 +564,7 @@ log_get_latest_rginsedelfile(char *rginsdellogfile, char *rg_ip, int port)
 	
 	MT_ENTRIES	mt_entries;
 
-	MEMSET(&mt_entries, sizeof(MsT_ENTRIES));
+	MEMSET(&mt_entries, sizeof(MT_ENTRIES));
 
 	if (!READDIR(logdir, (char *)&mt_entries))
 	{
@@ -650,19 +668,31 @@ log_redo_insdel(char *insdellogfile)
 #endif
 	int tmp = offset;
 	int row_cnt = 0; 
+	int log_scope_start = FALSE;
 	
 	while(tmp > 0)
 	{
 		logrec = (LOGREC *)(logfilebuf + tmp - sizeof(LOGREC));
 
-		if ((logrec->opid == CHECKPOINT) && (logrec->status & CHECKPOINT_END))
+		if (logrec->opid == CHECKPOINT_COMMIT)
+		{
+			Assert(log_scope_start == FALSE);
+
+			log_scope_start = TRUE;
+
+			tmp = logrec->cur_log_off;
+
+			continue;
+		}
+
+		if ((logrec->opid == CHECKPOINT_BEGIN) && (log_scope_start))
 		{
 			break;
 		}
 
 		tmp = logrec->cur_log_off;
 
-		if (logrec->opid != CHECKPOINT)
+		if (logrec->opid != CHECKPOINT_BEGIN)
 		{
 			minrowlen = logrec->minrowlen;
 
@@ -672,11 +702,9 @@ log_redo_insdel(char *insdellogfile)
 
 	while (row_cnt > 0)
 	{	
-		if (logrec->opid == CHECKPOINT)
+		if ((logrec->opid == CHECKPOINT_BEGIN) || (logrec->opid == CHECKPOINT_COMMIT))
 		{
-			rp = (logfilebuf + logrec->next_log_off);
-
-			logrec = (LOGREC *)(logfilebuf + logrec->next_log_off + ROW_GET_LENGTH(rp, minrowlen));
+			logrec = (LOGREC *)(logfilebuf + logrec->next_log_off);
 			continue;
 		}
 
@@ -725,6 +753,7 @@ log__redo_insdel(LOGREC *logrec, char *rp)
 
 
 	status = FALSE;
+	bp = NULL;
 	tabinfo = MEMALLOCHEAP(sizeof(TABINFO));
 	MEMSET(tabinfo, sizeof(TABINFO));
 
@@ -876,6 +905,7 @@ insfinish:
 
 		if (tabinfo->t_stat & TAB_RETRY_LOOKUP)
 		{
+			bufunkeep(bp->bsstab);
 			return FALSE;
 		}
 
@@ -910,6 +940,7 @@ insfinish:
 		if (tabinfo->t_sinfo->sistate & SI_NODATA)
 		{
 			traceprint("We can not find the row to be deleted.\n");	
+			bufunkeep(bp->bsstab);
 			return FALSE;
 		}
 
@@ -962,6 +993,11 @@ delfinish:
 
 	status = TRUE;
 exit:
+	if (bp)
+	{
+		bufunkeep(bp->bsstab);
+	}
+	
 	session_close(tabinfo);
 
 	if (tabinfo!= NULL)
