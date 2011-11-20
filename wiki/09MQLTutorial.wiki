@@ -6,26 +6,52 @@ MQL is based on the style of traditional relational query language.
   * *DELETE*..................delete table_name (column1_value)
   * *SELECT*..................select table_name (column1_value)
   * *SELECTRANGE*......selectrange table_name (column1_value1, column1_value2)
+  * *SELECTWHERE*......selectwhere table_name where columnX_name(columnX_value1, columnX_value2) and columnY_name(columnY_value1, columnY_value2)
   * *DROP*.....................drop table_name
 
 *Examples*
-  * create table
+  * create table that stores the file metadata.
 {{{
 create table metabase (filename varchar, filesize int, serveraddr varchar)
+return: success or fail
 }}}
   * insert data
 {{{
 insert into metabase (/home/tnsoft/yxue/maxtable/victory.txt, 16000, 192.168.1.152)
+insert into metabase (/home/tnsoft/yxue/maxtable/bsheng.txt, 1600, 192.168.1.152)
+insert into metabase (/home/tnsoft/yxue/maxtable/paul.txt, 17000, 192.168.1.152)
+insert into metabase (/home/tnsoft/yxue/maxtable/jeff.txt, 18000, 192.168.1.152)
+insert into metabase (/home/tnsoft/yxue/maxtable/brian.txt, 1000, 192.168.1.152)
+return: success or fail
 }}}
-  * select data
+  * select data by the default key column
 {{{
 select metabase (/home/tnsoft/yxue/maxtable/victory.txt)
+return: 
+/home/tnsoft/yxue/maxtable/victory.txt, 16000, 192.168.1.152
+}}}
+  * select data by the range user specified
+{{{
+selectrange metabase (/home/tnsoft/yxue/maxtable/bsheng.txt, /home/tnsoft/yxue/maxtable/jeff.txt)
+return:
+/home/tnsoft/yxue/maxtable/bsheng.txt, 1600, 192.168.1.152
+/home/tnsoft/yxue/maxtable/brian.txt, 1000, 192.168.1.152
+/home/tnsoft/yxue/maxtable/jeff.txt, 18000, 192.168.1.152
+}}}
+  * select data by the WHERE clause
+{{{
+selectwhere metebase where filename(*, *) AND filesize(16500, 20000)
+return:
+/home/tnsoft/yxue/maxtable/paul.txt, 17000, 192.168.1.152
+/home/tnsoft/yxue/maxtable/jeff.txt, 18000, 192.168.1.152
 }}}
   * delete data
 {{{
 delete metabase (/home/tnsoft/yxue/maxtable/victory.txt)
+return: success or fail
 }}}
   * drop table
 {{{
 drop metabase
+return: success or fail
 }}}
