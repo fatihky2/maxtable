@@ -14,23 +14,23 @@ Please check the Wiki HowToBuildWithKFSFacer
 # Port to open for client connections
 port=1959
 # KFS meta server location
-kfsserver=127.0.0.1
+kfsserver=192.168.0.100
 kfsport=20000
 }}}
   * Configure for the Ranger server in the file config/region.conf
 {{{
 # Configuration for range server: 
 # Meta server location
-metaserver=127.0.0.1
+metaserver=192.168.0.160
 metaport=1959
 # Ranger address
-rangerserver=127.0.0.1
+rangerserver=192.168.180
 # Port to open for client connections
 rangerport=1949
 # Port to transfer the Bigdata to the client
 bigdataport=1969
 # KFS meta server location
-kfsserver=127.0.0.1
+kfsserver=192.168.0.100
 kfsport=20000
 }}}
 
@@ -38,6 +38,6 @@ kfsport=20000
 {{{
 # Configuration for the client: 
 # Meta server location
-metaserver=127.0.0.1
+metaserver=192.168.0.160
 metaport=1959
 }}}
