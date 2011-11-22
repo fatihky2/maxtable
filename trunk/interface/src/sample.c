@@ -22,13 +22,13 @@ int main(int argc, char *argv[])
 {
 	conn 	*connection;
 	char	resp[256], cmd[256];
-//	char	key[32];
-//	int	keylen;
-//	char	val[32];
-//	int	vallen;
 	int	i, len;
-//	int	cmd_len;
-		
+	char	key[32];
+	int	keylen;
+	char	val[32];
+	int	vallen;
+	int	cmd_len;
+	
 
 	if (argc != 2)
 	{
@@ -49,20 +49,20 @@ int main(int argc, char *argv[])
 			/* Create Table */
 			memset(resp, 0, 256);
 			memset(cmd , 0, 256);
-			sprintf(cmd, "create table gu(id1 varchar, id2 varchar,id3 int, id4 varchar,id5 varchar,id6 varchar,id7 varchar,id8 varchar,id9 varchar)");
-			//sprintf(cmd, "create table gu(id1 varchar, id2 varchar)");
-			cli_commit(connection, cmd, resp, &len);
+			//sprintf(cmd, "create table gu(id1 varchar, id2 varchar,id3 int, id4 varchar,id5 varchar,id6 varchar,id7 varchar,id8 varchar,id9 varchar)");
+			sprintf(cmd, "create table gu(id1 varchar, id2 varchar)");
+			cli_execute(connection, cmd, resp, &len);
 			printf("ret: %s\n", resp);
 		}
 
 		if (match(argv[1], "insert"))
 		{
 			/* Insert 10000 data rows into table */
-			for(i = 1; i < 100000; i++)
+			for(i = 1; i < 10000; i++)
 			{
 				memset(resp, 0, 256);
 				memset(cmd, 0, 256);
-/*				memset(key, 0, 32);
+				memset(key, 0, 32);
 				memset(val, 0, 32);
 
 				sprintf(key, "gggg%d", i);
@@ -88,8 +88,8 @@ int main(int argc, char *argv[])
 
 				
 				sprintf(cmd + cmd_len + 2 * sizeof(int) + keylen + 1, "%s)", val);
+/*				
 				
-*/				
 				char	*c = "cccccccccccccccccccccccccccccccccccccccccccccccccccccc";
 				char	*d = "dddddddddddddddddddddddddddddddddddddddddddddddddddddd";
 				char	*e = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
@@ -100,8 +100,9 @@ int main(int argc, char *argv[])
 				char	*h = "hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh";
 
 				sprintf(cmd, "insert into gu(aaaa%d, bbbb%d, %d, %s%d, %s%d, %s%d, %s%d, %s%d, %s%d)", i,i,i,c,i,d, i,e, i,f,i,g,i,h,i);
+*/
 				//sprintf(cmd, "insert into gu(aaaa%d, bbbb%d)", i,i);
-				if (!cli_commit(connection, cmd, resp, &len))
+				if (!cli_execute(connection, cmd, resp, &len))
 				{
 					printf ("Error! \n");
 
@@ -143,7 +144,7 @@ retry_where:
 			}
 			
 			cli_close_range(sockfd);
-			//cli_commit(connection, cmd, resp, &len);
+			//cli_execute(connection, cmd, resp, &len);
 			printf("Client 1: %s, ret(%d): %s\n", cmd, len, resp);
 			//printf("cmd: %s, col_num: %d, ret(%d): %s, %d, %s\n", cmd, *((int *)(resp + len -4)), len, resp + *((int *)(resp + len -8)), *((int *)(resp + *((int *)(resp + len -12)))), resp + *((int *)(resp + len -16)));
 
@@ -154,10 +155,30 @@ retry_where:
 			/* Select datas from table */
 			for(i = 1; i < 10000; i++)
 			{
+/*
 				memset(resp, 0, 256);
 				memset(cmd, 0, 256);
-				sprintf(cmd, "select gu(aaaa%d)", i);
-				if (!cli_commit(connection, cmd, resp, &len))
+				memset(key, 0, 32);
+				memset(val, 0, 32);
+
+				sprintf(key, "gggg%d", i);
+
+				
+				keylen = strlen(key);
+
+
+				sprintf(cmd, "select gu(");
+
+				cmd_len= strlen(cmd);
+				*(int *)(&cmd[cmd_len]) = keylen;
+				
+				sprintf(cmd + cmd_len + sizeof(int), "%s),", key);
+
+*/				
+				memset(resp, 0, 256);
+				memset(cmd, 0, 256);
+				sprintf(cmd, "select gu(gggg%d)", i);
+				if (!cli_execute(connection, cmd, resp, &len))
 				{
 					printf ("Error! \n");
 
@@ -204,7 +225,7 @@ retry:
 			
 			cli_close_range(sockfd);
 			
-			//cli_commit(connection, cmd, resp, &len);
+			//cli_execute(connection, cmd, resp, &len);
 			printf("Client 1: %s, ret(%d): %s\n", cmd, len, resp);
 		}
 
@@ -218,7 +239,7 @@ retry:
 				memset(resp, 0, 256);
 				memset(cmd, 0, 256);
 				sprintf(cmd, "delete gu(gggg%d)", i);
-				if (!cli_commit(connection, cmd, resp, &len))
+				if (!cli_execute(connection, cmd, resp, &len))
 				{
 					printf ("Error! \n");
 
@@ -234,7 +255,7 @@ retry:
 				memset(resp, 0, 256);
 				memset(cmd, 0, 256);
 				sprintf(cmd, "select gu(gggg%d)", i);
-				if (!cli_commit(connection, cmd, resp, &len))
+				if (!cli_execute(connection, cmd, resp, &len))
 				{
 					printf ("Error! \n");
 
@@ -250,7 +271,7 @@ retry:
 			memset(resp, 0, 256);
 			memset(cmd, 0, 256);
 			sprintf(cmd, "drop gu");
-			if (!cli_commit(connection, cmd, resp, &len))
+			if (!cli_execute(connection, cmd, resp, &len))
 			{
 				printf ("Error! \n");
 

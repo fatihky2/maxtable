@@ -24,7 +24,7 @@ if(1)
 {
 		memset(resp, 0, 256);
 		sprintf(cmd, "create table gu(id1 varchar, id2 int, id3 varchar)");
-		cli_commit(connection, cmd, resp, &len);
+		cli_execute(connection, cmd, resp, &len);
 		printf("ret: %s\n", resp);
 
 		gettimeofday(&tpStart, NULL);
@@ -36,7 +36,7 @@ if(1)
 			memset(cmd, 0, 256);
 			sprintf(cmd, "insert into gu(gggg%d, %d, bbbb%d)", i, i, i);
 
-			cli_commit(connection, cmd, resp, &len);
+			cli_execute(connection, cmd, resp, &len);
 		}
 		
 		gettimeofday(&tpEnd, NULL);
@@ -57,7 +57,7 @@ if(1)
 			memset(cmd, 0, 256);
 			sprintf(cmd, "select gu(gggg%d)", i);
 
-			cli_commit(connection, cmd, resp, &len);
+			cli_execute(connection, cmd, resp, &len);
 		}
 	
 		gettimeofday(&tpEnd, NULL);
