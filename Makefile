@@ -19,6 +19,12 @@ LIB_OBJS_C	= $(patsubst %.c,%.o,$(LIB_SRCS_C))
 LIB_SRCS_CPP	= $(wildcard ${SERVICE_SRC})
 LIB_OBJS_CPP	= $(patsubst %.cpp,%.o,$(LIB_SRCS_CPP))
 
+ifeq (${MT_SCHEME}, KEY_VALUE)
+MT_KEY_VALUE	= -D MT_KEY_VALUE
+else
+MT_KEY_VALUE	=
+endif
+
 ifeq (${MT_BACKEND}, KFS)
 
 all: kfsfacer_o kfsfacer_a client master ranger memTest sample client_lib clients_lib
@@ -44,32 +50,32 @@ kfsfacer_a: kfsfacer.o
 	$(AR) kfsfacer.a kfsfacer.o 
         
 master: ${COMMON_SRC} ${MASTER_SRC}
-	$(CC) $(CFLAGS) $(KFSFLAG) ${COMMON_SRC} ${MASTER_SRC} -L. kfsfacer.a -lstdc++ -D MEMMGR_TEST -D MAXTABLE_BENCH_TEST -D MT_KFS_BACKEND -o startMaster
+	$(CC) $(CFLAGS) $(KFSFLAG) ${COMMON_SRC} ${MASTER_SRC} -L. kfsfacer.a -lstdc++ -D MEMMGR_TEST -D MAXTABLE_BENCH_TEST -D MT_KFS_BACKEND ${MT_KEY_VALUE} -o startMaster
 
 ranger: ${COMMON_SRC} ${REGION_SRC}
-	$(CC) $(CFLAGS) $(KFSFLAG) ${COMMON_SRC} ${REGION_SRC} -L. kfsfacer.a -lstdc++ -D MEMMGR_TEST -D MAXTABLE_BENCH_TEST -D MT_KFS_BACKEND -D MT_ASYNC_IO -o startRanger
+	$(CC) $(CFLAGS) $(KFSFLAG) ${COMMON_SRC} ${REGION_SRC} -L. kfsfacer.a -lstdc++ -D MEMMGR_TEST -D MAXTABLE_BENCH_TEST -D MT_KFS_BACKEND -D MT_ASYNC_IO ${MT_KEY_VALUE} -o startRanger
 
 client: ${COMMON_SRC} ${CLI_SRC}
-	$(CC) $(CFLAGS) $(KFSFLAG) ${COMMON_SRC} ${CLI_SRC} -L. kfsfacer.a -lstdc++ -D MEMMGR_TEST -D MAXTABLE_UNIT_TEST -D MT_KFS_BACKEND -o startClient
-	$(CC) $(CFLAGS) $(KFSFLAG) ${COMMON_SRC} ${CLI_SRC} -L. kfsfacer.a -lstdc++ -D MEMMGR_TEST -D MT_KFS_BACKEND -o imql        
+	$(CC) $(CFLAGS) $(KFSFLAG) ${COMMON_SRC} ${CLI_SRC} -L. kfsfacer.a -lstdc++ -D MEMMGR_TEST -D MAXTABLE_UNIT_TEST -D MT_KFS_BACKEND ${MT_KEY_VALUE} -o startClient
+	$(CC) $(CFLAGS) $(KFSFLAG) ${COMMON_SRC} ${CLI_SRC} -L. kfsfacer.a -lstdc++ -D MEMMGR_TEST -D MT_KFS_BACKEND ${MT_KEY_VALUE} -o imql        
   
 sample: ${COMMON_SRC} ${INTERFACE_SRC}
-	$(CC) $(CFLAGS) $(KFSFLAG) ${COMMON_SRC} ${INTERFACE_SRC} -L. kfsfacer.a -lstdc++ -D MAXTABLE_SAMPLE_TEST -D MT_KFS_BACKEND -o sample
+	$(CC) $(CFLAGS) $(KFSFLAG) ${COMMON_SRC} ${INTERFACE_SRC} -L. kfsfacer.a -lstdc++ -D MAXTABLE_SAMPLE_TEST -D MT_KFS_BACKEND ${MT_KEY_VALUE} -o sample
 
 else ifeq (${MT_BACKEND}, LOCAL)
 
 master: ${COMMON_SRC} ${MASTER_SRC}
-	$(CC) $(CFLAGS) ${COMMON_SRC} ${MASTER_SRC} -D DEBUG -D MEMMGR_TEST -D MAXTABLE_BENCH_TEST -o startMaster
+	$(CC) $(CFLAGS) ${COMMON_SRC} ${MASTER_SRC} -D DEBUG -D MEMMGR_TEST -D MAXTABLE_BENCH_TEST ${MT_KEY_VALUE} -o startMaster
 
 ranger: ${COMMON_SRC} ${REGION_SRC}
-	$(CC) $(CFLAGS) ${COMMON_SRC} ${REGION_SRC} -D DEBUG -D MEMMGR_TEST -D MAXTABLE_BENCH_TEST -D MT_ASYNC_IO -o startRanger
+	$(CC) $(CFLAGS) ${COMMON_SRC} ${REGION_SRC} -D DEBUG -D MEMMGR_TEST -D MAXTABLE_BENCH_TEST -D MT_ASYNC_IO ${MT_KEY_VALUE} -o startRanger
 	
 #client: ${COMMON_SRC} ${CLI_SRC}
 #	$(CC) $(CFLAGS) ${COMMON_SRC} ${CLI_SRC} -D DEBUG -D MEMMGR_TEST -D MAXTABLE_UNIT_TEST -o startClient
 #	$(CC) $(CFLAGS) ${COMMON_SRC} ${CLI_SRC} -D MEMMGR_TEST -o imql
 	
 sample: ${COMMON_SRC} ${INTERFACE_SRC}
-	$(CC) $(CFLAGS) ${COMMON_SRC} ${INTERFACE_SRC} -D MAXTABLE_SAMPLE_TEST -o sample
+	$(CC) $(CFLAGS) ${COMMON_SRC} ${INTERFACE_SRC} -D MAXTABLE_SAMPLE_TEST ${MT_KEY_VALUE} -o sample
 	
 endif
 	

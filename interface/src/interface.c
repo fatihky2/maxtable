@@ -85,7 +85,7 @@ void cli_exit(conn * connection)
 /*
 ** commit one request
 */
-int cli_commit(conn * connection, char * cmd, char * response, int * resp_len)
+int cli_execute(conn * connection, char * cmd, char * response, int * resp_len)
 {
 	LOCALTSS(tss);
 

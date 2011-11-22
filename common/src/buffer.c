@@ -473,7 +473,7 @@ bufdlink(BUF *bp)
 	{
 		bp->bdold = Kernel->ke_bufwash->bdold;
 		bp->bdnew = Kernel->ke_bufwash;
-		Kernel->ke_bufwash->bdnew->bdnew = bp;
+		Kernel->ke_bufwash->bdold->bdnew = bp;
 		Kernel->ke_bufwash->bdold = bp;
 		bp->bstat |= BUF_IN_WASH;
 	}
@@ -488,7 +488,7 @@ bufdlink(BUF *bp)
 	{
 		bp->bdold = tabinfo->t_dold;
 		bp->bdnew = (BUF *) tabinfo;
-		tabinfo->t_dnew->bdnew = bp;
+		tabinfo->t_dold->bdnew = bp;
 		tabinfo->t_dold = bp;
 	}
 #endif
