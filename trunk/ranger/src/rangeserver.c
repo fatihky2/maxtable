@@ -661,7 +661,7 @@ rg_seldeltab(TREE *command, TABINFO *tabinfo)
 
 exit:
 	if (rtn_stat)
-	{
+	{		
 		if (tabinfo->t_stat & TAB_DEL_DATA)
 		{
 			/* Just return a SUCCESS. */
@@ -681,11 +681,6 @@ exit:
 						tabinfo->t_cur_rowlen);
 
 			MEMFREEHEAP(tabinfo->t_cur_rowp);
-
-			if (buf_spin)
-			{
-				V_SPINLOCK(BUF_SPIN);
-			}
 		}
 		else
 		{
@@ -705,6 +700,11 @@ exit:
         	}
 	}
 
+	if (buf_spin)
+	{
+		V_SPINLOCK(BUF_SPIN);
+	}
+	
 	if (col_buf != NULL)
 	{
 		MEMFREEHEAP(col_buf);
