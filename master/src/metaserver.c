@@ -672,6 +672,7 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 	int		res_sstab_id;
 	RANGE_PROF	*rg_prof;
 	int		sstabmap_chg;
+	int		rpc_status;
 
 
 	Assert(command);
@@ -682,6 +683,7 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 	col_buf = NULL;
 	tab_name = command->sym.command.tabname;
 	tab_name_len = command->sym.command.tabname_len;
+	rpc_status = 0;
 
 	MEMSET(tab_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_dir, MT_META_TABLE, STRLEN(MT_META_TABLE));
@@ -700,6 +702,8 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 #endif
 	{
 		traceprint("Table %s is not exist!\n", tab_name);
+
+		rpc_status |= RPC_TABLE_NOT_EXIST;
 		goto exit;
 	}
 	
@@ -1124,12 +1128,13 @@ exit:
 
 	if (rtn_stat)
 	{
-		
-		resp = conn_build_resp_byte(RPC_SUCCESS, col_buf_idx, col_buf);
+		rpc_status |= RPC_SUCCESS;		
+		resp = conn_build_resp_byte(rpc_status, col_buf_idx, col_buf);
 	}
 	else
 	{
-		resp = conn_build_resp_byte(RPC_FAIL, 0, NULL);
+		rpc_status |= RPC_FAIL;
+		resp = conn_build_resp_byte(rpc_status, 0, NULL);
 	}
 
 	if (col_buf != NULL)
@@ -1160,6 +1165,7 @@ meta_droptab(TREE *command)
 	RANGE_PROF	*rg_prof;
 	char		*rg_addr;
 	int		rg_port;
+	int		rpc_status;
 
 
 	Assert(command);
@@ -1168,6 +1174,7 @@ meta_droptab(TREE *command)
 	col_buf = NULL;
 	tab_name = command->sym.command.tabname;
 	tab_name_len = command->sym.command.tabname_len;
+	rpc_status = 0;
 
 	MEMSET(tab_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_dir, MT_META_TABLE, STRLEN(MT_META_TABLE));
@@ -1191,6 +1198,8 @@ meta_droptab(TREE *command)
 #endif
 	{
 		traceprint("Table %s is not exist!\n", tab_name);
+		
+		rpc_status |= RPC_TABLE_NOT_EXIST;
 		goto exit;
 	}
 	
@@ -1317,12 +1326,13 @@ exit:
 	
 	if (rtn_stat)
 	{
-		
-		resp = conn_build_resp_byte(RPC_SUCCESS, col_buf_idx, col_buf);
+		rpc_status |= RPC_SUCCESS;
+		resp = conn_build_resp_byte(rpc_status, col_buf_idx, col_buf);
 	}
 	else
 	{
-		resp = conn_build_resp_byte(RPC_FAIL, 0, NULL);
+		rpc_status |= RPC_FAIL;
+		resp = conn_build_resp_byte(rpc_status, 0, NULL);
 	}
 
 	if (col_buf != NULL)
@@ -1348,11 +1358,13 @@ meta_removtab(TREE *command)
 	TABLEHDR	tab_hdr;
 	char	*resp;
 	int	status;
+	int	rpc_status;
 
 
 	Assert(command);
 
 	rtn_stat = FALSE;
+	rpc_status = 0;
 	tab_name = command->sym.command.tabname;
 	tab_name_len = command->sym.command.tabname_len;
 
@@ -1378,6 +1390,7 @@ meta_removtab(TREE *command)
 #endif
 	{
 		traceprint("Table %s is not exist!\n", tab_name);
+		rpc_status |= RPC_TABLE_NOT_EXIST;
 		goto exit;
 	}
 	
@@ -1419,12 +1432,13 @@ meta_removtab(TREE *command)
 exit:	
 	if (rtn_stat)
 	{
-		
-		resp = conn_build_resp_byte(RPC_SUCCESS, 0, NULL);
+		rpc_status |= RPC_SUCCESS;
+		resp = conn_build_resp_byte(rpc_status, 0, NULL);
 	}
 	else
 	{
-		resp = conn_build_resp_byte(RPC_FAIL, 0, NULL);
+		rpc_status |= RPC_FAIL;
+		resp = conn_build_resp_byte(rpc_status, 0, NULL);
 	}
 
 	return resp;
@@ -1458,6 +1472,7 @@ meta_seldeltab(TREE *command, TABINFO *tabinfo)
 	int		res_sstab_id;
 	char		*rg_addr;
 	int		rg_port;
+	int		rpc_status;
 
 
 	Assert(command);
@@ -1466,6 +1481,7 @@ meta_seldeltab(TREE *command, TABINFO *tabinfo)
 	col_buf= NULL;
 	sstab_rlen = 0;
 	sstab_idx = 0;
+	rpc_status = 0;
 	tab_name = command->sym.command.tabname;
 	tab_name_len = command->sym.command.tabname_len;
 
@@ -1486,6 +1502,7 @@ meta_seldeltab(TREE *command, TABINFO *tabinfo)
 #endif
 	{
 		traceprint("Table %s is not exist.\n", tab_name);
+		rpc_status |= RPC_TABLE_NOT_EXIST;
 		goto exit;
 	}
 	
@@ -1690,12 +1707,13 @@ meta_seldeltab(TREE *command, TABINFO *tabinfo)
 exit:
 	if (rtn_stat)
 	{
-		
-		resp = conn_build_resp_byte(RPC_SUCCESS, col_buf_idx, col_buf);
+		rpc_status |= RPC_SUCCESS;
+		resp = conn_build_resp_byte(rpc_status, col_buf_idx, col_buf);
 	}
 	else
 	{
-		resp = conn_build_resp_byte(RPC_FAIL, 0, NULL);
+		rpc_status |= RPC_FAIL;
+		resp = conn_build_resp_byte(rpc_status, 0, NULL);
 	}
 
 	if (col_buf != NULL)
@@ -1735,6 +1753,7 @@ meta_selrangetab(TREE *command, TABINFO *tabinfo)
 	char		*rg_addr;
 	int		rg_port;
 	int		key_is_expand;
+	int		rpc_status;
 
 
 	Assert(command);
@@ -1743,6 +1762,7 @@ meta_selrangetab(TREE *command, TABINFO *tabinfo)
 	col_buf= NULL;
 	sstab_rlen = 0;
 	sstab_idx = 0;
+	rpc_status = 0;
 	tab_name = command->sym.command.tabname;
 	tab_name_len = command->sym.command.tabname_len;
 
@@ -1763,6 +1783,7 @@ meta_selrangetab(TREE *command, TABINFO *tabinfo)
 #endif
 	{
 		traceprint("Table %s is not exist.\n", tab_name);
+		rpc_status |= RPC_TABLE_NOT_EXIST;
 		goto exit;
 	}
 	
@@ -2019,12 +2040,13 @@ meta_selrangetab(TREE *command, TABINFO *tabinfo)
 exit:
 	if (rtn_stat)
 	{
-		
-		resp = conn_build_resp_byte(RPC_SUCCESS, col_buf_idx, col_buf);
+		rpc_status |= RPC_SUCCESS;
+		resp = conn_build_resp_byte(rpc_status, col_buf_idx, col_buf);
 	}
 	else
 	{
-		resp = conn_build_resp_byte(RPC_FAIL, 0, NULL);
+		rpc_status |= RPC_FAIL;
+		resp = conn_build_resp_byte(rpc_status, 0, NULL);
 	}
 
 	if (col_buf != NULL)
@@ -2058,6 +2080,7 @@ meta_selwheretab(TREE *command, TABINFO *tabinfo)
 	int		namelen;
 	int		key_is_expand;
 	SELWHERE	selwhere;
+	int		rpc_status;
 
 
 	Assert(command);
@@ -2066,6 +2089,7 @@ meta_selwheretab(TREE *command, TABINFO *tabinfo)
 	col_buf= NULL;
 	sstab_rlen = 0;
 	sstab_idx = 0;
+	rpc_status = 0;
 	tab_name = command->sym.command.tabname;
 	tab_name_len = command->sym.command.tabname_len;
 
@@ -2086,6 +2110,7 @@ meta_selwheretab(TREE *command, TABINFO *tabinfo)
 #endif
 	{
 		traceprint("Table %s is not exist.\n", tab_name);
+		rpc_status |= RPC_TABLE_NOT_EXIST;
 		goto exit;
 	}
 	
@@ -2259,12 +2284,13 @@ meta_selwheretab(TREE *command, TABINFO *tabinfo)
 exit:
 	if (rtn_stat)
 	{
-		
-		resp = conn_build_resp_byte(RPC_SUCCESS, col_buf_idx, col_buf);
+		rpc_status |= RPC_SUCCESS;
+		resp = conn_build_resp_byte(rpc_status, col_buf_idx, col_buf);
 	}
 	else
 	{
-		resp = conn_build_resp_byte(RPC_FAIL, 0, NULL);
+		rpc_status |= RPC_FAIL;
+		resp = conn_build_resp_byte(rpc_status, 0, NULL);
 	}
 
 	if (col_buf != NULL)
@@ -2301,11 +2327,13 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 	char		*sstab_rp;
 	int		sstab_rlen;
 	char		*rg_addr;
+	int		rpc_status;
 
 
 	Assert(command);
 
 	rtn_stat = FALSE;
+	rpc_status = 0;
 	tab_name = command->sym.command.tabname;
 	tab_name_len = command->sym.command.tabname_len;
 
@@ -2330,6 +2358,7 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 #endif
 	{
 		traceprint("Table %s is not exist!\n", tab_name);
+		rpc_status |= RPC_TABLE_NOT_EXIST;
 		goto exit;
 	}
 	
@@ -2507,12 +2536,13 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 exit:
 	if (rtn_stat)
 	{
-		
-		resp = conn_build_resp_byte(RPC_SUCCESS, 0, NULL);
+		rpc_status |= RPC_SUCCESS;
+		resp = conn_build_resp_byte(rpc_status, 0, NULL);
 	}
 	else
 	{
-		resp = conn_build_resp_byte(RPC_FAIL, 0, NULL);
+		rpc_status |= RPC_FAIL;
+		resp = conn_build_resp_byte(rpc_status, 0, NULL);
 	}
 
 	return resp;
@@ -2868,12 +2898,14 @@ meta_rebalancer(TREE *command)
 	char		tab_tabletschm_dir[TABLE_NAME_MAX_LEN];
 	int		rtn_stat;
 	char		*tablet_schm_bp;
+	int		rpc_status;
 
 
 	Assert(command);
 	
 	rtn_stat = FALSE;
 	resp = NULL;
+	rpc_status = 0;
 	tab_name = command->sym.command.tabname;
 	tab_name_len = command->sym.command.tabname_len;
 	rbd = NULL;
@@ -2892,6 +2924,7 @@ meta_rebalancer(TREE *command)
 #endif
 	{		
 		traceprint("Table %s is not exist!\n", tab_name);
+		rpc_status |= RPC_TABLE_NOT_EXIST;
 		goto exit;
 	}
 
@@ -3063,11 +3096,13 @@ exit:
 	
 	if (rtn_stat)
 	{
-		resp = conn_build_resp_byte(RPC_SUCCESS, 0, NULL);
+		rpc_status |= RPC_SUCCESS;
+		resp = conn_build_resp_byte(rpc_status, 0, NULL);
 	}
 	else
 	{
-		resp = conn_build_resp_byte(RPC_FAIL, 0, NULL);
+		rpc_status |= RPC_FAIL;
+		resp = conn_build_resp_byte(rpc_status, 0, NULL);
 	}
 	
 	return resp;

@@ -52,6 +52,12 @@ typedef struct _range_query_contex
 #define DATA_EMPTY	0x0004
 
 
+/* Following definition is for the return value of cli_execute(). */
+#define	CLI_FAIL		0x0000
+#define	CLI_SUCCESS		0x0001
+#define	CLI_RPC_FAIL		0x0002
+#define	CLI_TABLE_NOT_EXIST	0x0004
+
 /*
 create one connection between cli and svr, return the connection
 */

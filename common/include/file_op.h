@@ -41,6 +41,9 @@ extern int
 kfs_mkdir(char *tab_dir, char *serverHost, int port);
 
 extern int
+kfs_rmdir(char * tab_dir,char * serverHost,int port);
+
+extern int
 kfs_write(int fd, char *buf, int buf_len, char *serverHost, int port);
 
 extern int
@@ -80,6 +83,16 @@ kfs_append(int fd, char *buf, int buf_len, char *serverHost, int port);
 			fprintf(stderr, "mkdir failed for %s\n", strerror(errno));\
 		}								\
 	}while(0)
+
+#define	RMDIR(status, tab_dir, flag)						\
+	do{									\
+		status = kfs_rmdir((char *)(tab_dir), Kfsserver, Kfsport); 	\
+										\
+		if (status < 0)							\
+		{								\
+			fprintf(stderr, "rmdir failed for %s\n", strerror(errno));\
+		}								\
+	}while(0)		
 
 #define	READ(fd, buf, len)	kfs_read((fd), (char *)(buf), (len), Kfsserver, Kfsport)
 	

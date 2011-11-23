@@ -114,6 +114,27 @@ kfs_mkdir(char *tab_dir, char *serverHost, int port)
 	return stat;
 }
 
+
+int
+kfs_rmdir(char *tab_dir, char *serverHost, int port)
+{
+	KfsClientPtr kfsClient;
+	int	stat;
+
+	kfsClient = getKfsClientFactory()->GetClient(serverHost, port);
+
+	if (!kfsClient) 
+	{
+		cout << "kfs client failed to initialize...exiting" << endl;
+		exit(-1);
+	}
+
+	stat = kfsClient->Rmdir(tab_dir);
+
+	return stat;
+}
+
+
 int
 kfs_write(int fd, char *buf, int buf_len, char *serverHost, int port)
 {
