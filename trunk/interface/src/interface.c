@@ -107,15 +107,18 @@ int cli_execute(conn * connection, char * cmd, char * response, int * resp_len)
 
 	if(!validation_request(cmd))
 	{
-		return FALSE;
+		return CLI_FAIL;
 	}
 
 	if (cli_prt_help(cmd))
 	{
-		return TRUE;
+		return CLI_SUCCESS;
 	}
 
-	rtn_stat = TRUE;
+	rtn_stat = CLI_SUCCESS;
+	rg_resp = NULL;
+	sstab_split_resp = NULL;
+	remove_tab_resp = NULL;
 	sstab_split = FALSE;
 	remove_tab_hit = FALSE;
 	retry_cnt = 0;
@@ -164,10 +167,15 @@ retry:
 	write(connection->connection_fd, send_buf, (send_buf_size + RPC_MAGIC_MAX_LEN));
 
 	resp = conn_recv_resp(connection->connection_fd);
-	if (resp->status_code != RPC_SUCCESS)
+	if (!(resp->status_code & RPC_SUCCESS))
 	{
 		traceprint("\n ERROR in response \n");
-		rtn_stat = FALSE;
+		rtn_stat = CLI_FAIL;
+
+		if (resp->status_code & RPC_TABLE_NOT_EXIST)
+		{
+			rtn_stat |= CLI_TABLE_NOT_EXIST;
+		}
 		goto finish;
 
 	}
@@ -219,7 +227,7 @@ retry:
 				perror("error in create connection with rg server: ");
 
 				MEMFREEHEAP(rg_connection);
-				rtn_stat = FALSE;
+				rtn_stat = CLI_FAIL;
 				goto finish;
 
 			}
@@ -291,7 +299,7 @@ retry:
 			if (retry_cnt > 5)
 			{
 				traceprint("\n Retry Fail\n");
-				rtn_stat = FALSE;
+				rtn_stat = CLI_FAIL | CLI_RPC_FAIL;
 				goto finish;
 			}
 
@@ -301,10 +309,15 @@ retry:
 
                 }
 		
-		if (rg_resp->status_code != RPC_SUCCESS)
+		if (!(rg_resp->status_code & RPC_SUCCESS))
 		{
 			traceprint("\n ERROR in rg_server response \n");
-			rtn_stat = FALSE;
+			rtn_stat = CLI_FAIL;
+
+			if (rg_resp->status_code & RPC_TABLE_NOT_EXIST)
+			{
+				rtn_stat |= CLI_TABLE_NOT_EXIST;
+			}
 			goto finish;
 
 		}
@@ -350,10 +363,15 @@ retry:
 
 			sstab_split_resp = conn_recv_resp(connection->connection_fd);
 			sstab_split = TRUE;
-			if (sstab_split_resp->status_code != RPC_SUCCESS)
+			if (!(sstab_split_resp->status_code & RPC_SUCCESS))
 			{
 				traceprint("\n ERROR in meta_server response \n");
-				rtn_stat = FALSE;
+				rtn_stat = CLI_FAIL;
+
+				if (sstab_split_resp->status_code & RPC_TABLE_NOT_EXIST)
+				{
+					rtn_stat |= CLI_TABLE_NOT_EXIST;
+				}
 				MEMFREEHEAP(new_buf);
 				goto finish;
 
@@ -388,10 +406,15 @@ retry:
 
 			remove_tab_resp = conn_recv_resp(connection->connection_fd);
 			remove_tab_hit = TRUE;
-			if (remove_tab_resp->status_code != RPC_SUCCESS)
+			if (!(remove_tab_resp->status_code & RPC_SUCCESS))
 			{
 				traceprint("\n ERROR in meta_server response \n");
-				rtn_stat = FALSE;
+				rtn_stat = CLI_FAIL;
+
+				if (remove_tab_resp->status_code & RPC_TABLE_NOT_EXIST)
+				{
+					rtn_stat |= CLI_TABLE_NOT_EXIST;
+				}
 				MEMFREEHEAP(new_buf);
 				goto finish;
 
@@ -604,7 +627,7 @@ cli_rgsel_meta(conn * connection, char * cmd, SELCTX *resp_selctx)
 	write(connection->connection_fd, send_buf, (send_buf_size + RPC_MAGIC_MAX_LEN));
 
 	resp = conn_recv_resp(connection->connection_fd);
-	if (resp->status_code != RPC_SUCCESS)
+	if (!(resp->status_code & RPC_SUCCESS))
 	{
 		traceprint("\n ERROR in response \n");
 		rtn_stat = FALSE;
@@ -758,7 +781,7 @@ cli_rgsel_is_bigdata(rg_conn * rg_connection, int *bigdataport)
 		
 	    default:
 
-		if (rg_resp->status_code != RPC_SUCCESS)
+		if (!(rg_resp->status_code & RPC_SUCCESS))
 		{
 			traceprint("\n ERROR in rg_server response \n");
 
@@ -886,7 +909,7 @@ cli_read_range(int sockfd, RANGE_QUERYCTX *rgsel_cont)
 	 		
 	    default:
 
-		if (rg_resp->status_code != RPC_SUCCESS)
+		if (!(rg_resp->status_code & RPC_SUCCESS))
 		{
 			traceprint("\n ERROR in rg_server response \n");
 			rtn_stat = FALSE;
