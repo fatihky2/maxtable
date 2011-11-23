@@ -62,14 +62,14 @@ typedef struct rpcresp
 }RPCRESP;
 
 
-#define RPC_SUCCESS		0x0000	
-#define RPC_CONN_FAIL		0x0001	
-#define RPC_FAIL		0x0002 	
-#define RPC_PARSER_ERR		0x0004
-#define RPC_RETRY		0x0008	
-#define RPC_UNAVAIL		0x0010
-#define RPC_BIGDATA_CONN	0x0020
-#define	RPC_TABLE_NOT_EXIST	0x0040
+#define RPC_SUCCESS		0x0001	
+#define RPC_CONN_FAIL		0x0002	
+#define RPC_FAIL		0x0004 	
+#define RPC_PARSER_ERR		0x0008
+#define RPC_RETRY		0x0010	
+#define RPC_UNAVAIL		0x0020
+#define RPC_BIGDATA_CONN	0x0040
+#define	RPC_TABLE_NOT_EXIST	0x0080
 
 /*
 ** Copy data from the transmission buffer to the location
