@@ -183,11 +183,7 @@ rg_droptab(TREE *command)
 	
 	str1_to_str2(tab_dir, '/', tab_name);
 
-#ifdef MT_KFS_BACKEND
-	if (!EXIST(tab_dir))
-#else
 	if (STAT(tab_dir, &st) != 0)
-#endif
 	{
 		rtn_stat = TRUE;
 		goto exit;		
@@ -265,11 +261,7 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 	
 	str1_to_str2(tab_dir, '/', tab_name);
 
-#ifdef MT_KFS_BACKEND
-	if (!EXIST(tab_dir))
-#else
 	if (STAT(tab_dir, &st) != 0)
-#endif
 	{
 		MKDIR(status, tab_dir, 0755);
 
@@ -294,11 +286,7 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 	MEMSET(ins_meta->sstab_name, SSTABLE_NAME_MAX_LEN);
 	MEMCPY(ins_meta->sstab_name, tab_dir, STRLEN(tab_dir));
 
-#ifdef MT_KFS_BACKEND
-	if (!EXIST(tab_dir))
-#else
 	if (STAT(tab_dir, &st) != 0)
-#endif
 	{
 		/* Flag if it's the first insertion. */
 		ins_meta->status |= INS_META_1ST;
@@ -551,11 +539,7 @@ rg_seldeltab(TREE *command, TABINFO *tabinfo)
 	
 	str1_to_str2(tab_dir, '/', tab_name);
 
-#ifdef MT_KFS_BACKEND
-	if (!EXIST(tab_dir))
-#else
 	if (STAT(tab_dir, &st) != 0)
-#endif
 	{
 		goto exit;
 	}
@@ -571,11 +555,7 @@ rg_seldeltab(TREE *command, TABINFO *tabinfo)
 	MEMSET(ins_meta->sstab_name, SSTABLE_NAME_MAX_LEN);
 	MEMCPY(ins_meta->sstab_name, tab_dir, STRLEN(tab_dir));
 
-#ifdef MT_KFS_BACKEND
-	if (!EXIST(tab_dir))
-#else
 	if (STAT(tab_dir, &st) != 0)
-#endif
 	{
 		goto exit; 
 	}
@@ -764,11 +744,7 @@ rg_selrangetab(TREE *command, TABINFO *tabinfo, int fd)
 	
 	str1_to_str2(tab_dir, '/', tab_name);
 
-#ifdef MT_KFS_BACKEND
-	if (!EXIST(tab_dir))
-#else
 	if (STAT(tab_dir, &st) != 0)
-#endif
 	{
 		goto exit;		
 	}
@@ -784,11 +760,7 @@ rg_selrangetab(TREE *command, TABINFO *tabinfo, int fd)
 	MEMSET(ins_meta->sstab_name, SSTABLE_NAME_MAX_LEN);
 	MEMCPY(ins_meta->sstab_name, tab_dir, STRLEN(tab_dir));
 
-#ifdef MT_KFS_BACKEND
-	if (!EXIST(tab_dir))
-#else
 	if (STAT(tab_dir, &st) != 0)
-#endif
 	{
 		goto exit; 
 	}
@@ -1130,11 +1102,7 @@ rg_selwheretab(TREE *command, SELWHERE *selwhere, int fd)
 	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
 
-#ifdef MT_KFS_BACKEND
-	if (!EXIST(tab_dir))
-#else
 	if (!(STAT(tab_dir, &st) == 0))
-#endif
 	{
 		traceprint("Table %s is not exist.\n", tab_name);
 		goto exit;
@@ -2270,11 +2238,7 @@ rg_crt_rg_insdel_logfile(char *rgip, int rgport)
 
 	str1_to_str2(rglogfile, '/', rgname);
 
-#ifdef MT_KFS_BACKEND
-	if (!EXIST(rglogfile))
-#else
 	if (STAT(rglogfile, &st) != 0)
-#endif
 	{
 		MKDIR(status, rglogfile, 0755);
 	}
@@ -2327,11 +2291,8 @@ rg_setup(char *conf_path)
 	conf_get_value_by_key(port, conf_path, CONF_KFS_PORT);
 
 	Kfsport = m_atoi(port, STRLEN(port));
-	
-	if (!EXIST(MT_RANGE_TABLE))
-#else	
-	if (STAT(MT_RANGE_TABLE, &st) != 0)
 #endif
+	if (STAT(MT_RANGE_TABLE, &st) != 0)
 	{
 		MKDIR(status, MT_RANGE_TABLE, 0755);
 	}	
@@ -2351,11 +2312,7 @@ rg_setup(char *conf_path)
 
 	str1_to_str2(RgLogfile, '/', "log");
 
-#ifdef MT_KFS_BACKEND
-	if (!EXIST(RgLogfile))
-#else
 	if (!(STAT(RgLogfile, &st) == 0))
-#endif
 	{
 		traceprint("Log file %s is not exist.\n", RgLogfile);
 		return;
@@ -2385,11 +2342,7 @@ rg_setup(char *conf_path)
 
 	str1_to_str2(RgBackup, '/', rgname);
 
-#ifdef MT_KFS_BACKEND
-	if (!EXIST(RgBackup))
-#else
 	if (STAT(RgBackup, &st) != 0)
-#endif
 	{
 		traceprint("Backup file %s is not exist.\n", RgBackup);
 		return;
@@ -2496,11 +2449,7 @@ rg_rebalancer(REBALANCE_DATA * rbd)
 	
 	str1_to_str2(tab_dir, '/', rbd->rbd_tabname);
 
-#ifdef MT_KFS_BACKEND
-	if (!EXIST(tab_dir))
-#else
 	if (STAT(tab_dir, &st) != 0)
-#endif
 	{
 		MKDIR(status, tab_dir, 0755);
 
@@ -2617,11 +2566,8 @@ rg_rebalancer(REBALANCE_DATA * rbd)
 		MEMCPY(tab_sstab_dir, tab_dir, STRLEN(tab_dir));
 		str1_to_str2(tab_sstab_dir, '/', rbd->rbd_sstabname);	
 
-#ifdef MT_KFS_BACKEND
-		Assert(!EXIST(tab_sstab_dir));
-#else
 		Assert(STAT(tab_sstab_dir, &st) != 0);
-#endif		
+
 		OPEN(fd1, tab_sstab_dir, (O_CREAT|O_WRONLY|O_TRUNC));
 		
 		if (fd1 < 0)

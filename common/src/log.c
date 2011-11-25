@@ -121,20 +121,26 @@ log_check_delete(LOGFILE *logfile, int logtype, char *backup)
 		if (   (logrec[0].opid == LOG_BEGIN) && (logrec[1].opid == LOG_DO_SPLIT)
 		    && (logrec[2].opid == LOG_END))
 		{
-			char	cmd_str[TABLE_NAME_MAX_LEN];
-			
-			MEMSET(cmd_str, TABLE_NAME_MAX_LEN);
 			char	tmpsstab[TABLE_NAME_MAX_LEN];
 
 			MEMSET(tmpsstab, TABLE_NAME_MAX_LEN);
 			int i = strmnstr(logrec[1].oldsstabname, "/", STRLEN(logrec[1].oldsstabname));
 	
 			MEMCPY(tmpsstab, logrec[1].oldsstabname + i, STRLEN(logrec[1].oldsstabname + i));
-	
-				
+
+			char	cmd_str[TABLE_NAME_MAX_LEN];
+			
+			MEMSET(cmd_str, TABLE_NAME_MAX_LEN);
+			
+#ifdef MT_KFS_BACKEND
+			sprintf(cmd_str, "%s/%s",  backup, tmpsstab);
+			RMDIR(status, cmd_str);
+			if(!status)
+#else			
 			sprintf(cmd_str, "rm -rf %s/%s",  backup, tmpsstab);
 			
 			if (!system(cmd_str))
+#endif
 			{
 				status = TRUE;
 			}
@@ -218,14 +224,21 @@ log_insert_sstab_split(char *logfile_dir, LOGREC *logrec, int logtype)
 
 	if (logrec->opid == LOG_DO_SPLIT)
 	{
-		
 		char	cmd_str[TABLE_NAME_MAX_LEN];
 		
 		MEMSET(cmd_str, TABLE_NAME_MAX_LEN);
-			
+					
+#ifdef MT_KFS_BACKEND
+		int i = strmnstr(logrec->oldsstabname, "/", STRLEN(logrec->oldsstabname));
+		sprintf(cmd_str, "%s", tss->rgbackpfile);
+		sprintf(cmd_str, "%s", logrec->oldsstabname + i);
+
+		if (COPYFILE(logrec->oldsstabname,cmd_str) != 0)
+#else			
 		sprintf(cmd_str, "cp %s %s", logrec->oldsstabname, tss->rgbackpfile);
 		
 		if (system(cmd_str))
+#endif
 		{
 			status = FALSE;
 			goto exit;
@@ -408,8 +421,6 @@ log_undo_sstab_split(char *logfile_dir, char *backup_dir, int logtype)
 			{
 				Assert(logfilebuf->logrec[1].opid == LOG_DO_SPLIT);
 			
-			
-				
 				char	cmd_str[64];
 				
 				MEMSET(cmd_str, 64);
@@ -443,7 +454,26 @@ log_undo_sstab_split(char *logfile_dir, char *backup_dir, int logtype)
 						goto exit;
 					}
 				}
-			
+				
+#ifdef MT_KFS_BACKEND
+				i = strmnstr(srcfile, "/", STRLEN(srcfile));
+				sprintf(cmd_str, "%s", tab_dir);
+				sprintf(cmd_str, "%s", srcfile + i);
+		
+				if (COPYFILE(srcfile, cmd_str) != 0)
+				{
+					status = FALSE;
+					goto exit;
+				}
+
+				int	rtn_stat;
+
+				RMDIR(rtn_stat,srcfile);
+
+				if (rtn_stat < 0)
+
+				
+#else			
 				sprintf(cmd_str, "cp %s %s", srcfile, tab_dir);
 				
 				if (system(cmd_str))
@@ -455,11 +485,12 @@ log_undo_sstab_split(char *logfile_dir, char *backup_dir, int logtype)
 				sprintf(cmd_str, "rm %s", srcfile);
 				
 				if (system(cmd_str))
+#endif
 				{
 					status = FALSE;
 					goto exit;
 				}
-				
+								
 
 			}
 		}

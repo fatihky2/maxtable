@@ -49,8 +49,11 @@ int main(int argc, char *argv[])
 			/* Create Table */
 			memset(resp, 0, 256);
 			memset(cmd , 0, 256);
-			//sprintf(cmd, "create table gu(id1 varchar, id2 varchar,id3 int, id4 varchar,id5 varchar,id6 varchar,id7 varchar,id8 varchar,id9 varchar)");
+#ifdef MT_KEY_VALUE
 			sprintf(cmd, "create table gu(id1 varchar, id2 varchar)");
+#else	
+			sprintf(cmd, "create table gu(id1 varchar, id2 varchar,id3 int, id4 varchar,id5 varchar,id6 varchar,id7 varchar,id8 varchar,id9 varchar)");
+#endif
 			cli_execute(connection, cmd, resp, &len);
 			printf("ret: %s\n", resp);
 		}
@@ -60,6 +63,7 @@ int main(int argc, char *argv[])
 			/* Insert 10000 data rows into table */
 			for(i = 1; i < 10000; i++)
 			{
+#ifdef MT_KEY_VALUE
 				memset(resp, 0, 256);
 				memset(cmd, 0, 256);
 				memset(key, 0, 32);
@@ -88,7 +92,7 @@ int main(int argc, char *argv[])
 
 				
 				sprintf(cmd + cmd_len + 2 * sizeof(int) + keylen + 1, "%s)", val);
-/*				
+#else				
 				
 				char	*c = "cccccccccccccccccccccccccccccccccccccccccccccccccccccc";
 				char	*d = "dddddddddddddddddddddddddddddddddddddddddddddddddddddd";
@@ -100,7 +104,7 @@ int main(int argc, char *argv[])
 				char	*h = "hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh";
 
 				sprintf(cmd, "insert into gu(aaaa%d, bbbb%d, %d, %s%d, %s%d, %s%d, %s%d, %s%d, %s%d)", i,i,i,c,i,d, i,e, i,f,i,g,i,h,i);
-*/
+#endif
 				//sprintf(cmd, "insert into gu(aaaa%d, bbbb%d)", i,i);
 				if (!cli_execute(connection, cmd, resp, &len))
 				{

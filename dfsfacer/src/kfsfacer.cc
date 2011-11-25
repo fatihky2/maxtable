@@ -36,6 +36,14 @@ typedef struct mt_entries
 
 #define	KFS_LOG_FILE_SIZE	(4 * 1024 * 1024)
 
+#define	BLOCKSIZE		(64 * 1024)		
+//#define BLOCKSIZE		(512)
+
+
+#define	BLK_CNT_IN_SSTABLE	64
+#define	SSTABLE_SIZE		(BLK_CNT_IN_SSTABLE * BLOCKSIZE)
+
+
 int 
 kfs_open(char *fname, int flag, char *serverHost, int port)
 {
@@ -208,6 +216,8 @@ kfs_exist(char *tab_dir, char *serverHost, int port)
 	KfsClientPtr kfsClient;
 	int	stat;
 
+
+	stat = -1;
 	kfsClient = getKfsClientFactory()->GetClient(serverHost, port);
 
 	if (!kfsClient) 
@@ -216,7 +226,11 @@ kfs_exist(char *tab_dir, char *serverHost, int port)
 		exit(-1);
 	}
 
-	stat = kfsClient->Exists(tab_dir);
+	if (kfsClient->Exists(tab_dir))
+	{
+		/* 0 stands for the file existing, it will match the stat(). */
+		stat = 0;
+	}
 
 	return stat;
 
@@ -299,6 +313,67 @@ kfs_append(int fd, char *buf, int buf_len, char *serverHost, int port)
 
 	return 1;
 }
+
+
+int
+kfs_copy(char *filename_src, char *filename_dest, char *serverHost, int port)
+{
+	KfsClientPtr kfsClient;
+	int	nread;
+	int	srcfd;
+	int	destfd;
+	int	nwrite;
+	int	len = SSTABLE_SIZE;	/* This routine is for the sstable split backup. */
+	char 	buf[len];
+
+	
+	kfsClient = getKfsClientFactory()->GetClient(serverHost, port);
+
+	if (!kfsClient) 
+	{
+		cout << "kfs client failed to initialize...exiting" << endl;
+		exit(-1);
+	}	
+
+	srcfd = kfsClient->Open(filename_src, O_RDONLY);
+	if (srcfd < 0) 
+	{
+		cout << "kfs: unable to open: " << filename_src << endl;
+		exit(-1);
+	}
+	nread = kfsClient->Read(srcfd, buf, (size_t)len);
+
+	 if (nread != len) 
+	 {
+            cout << "kfs: read error " << filename_src << endl;
+
+	    kfsClient->Close(srcfd);
+            exit(-1);
+        }
+	
+
+	destfd = kfsClient->Create(filename_dest);
+
+	if (destfd < 0) 
+	{
+		cout << "kfs: unable to create: " << filename_dest << endl;
+		exit(-1);
+	}
+	
+	nwrite = kfsClient->Write(destfd, buf, len);
+
+	if (nwrite != len) 
+	{
+		cout << "kfs: write error " << filename_dest << endl;
+	}
+	
+	kfsClient->Close(destfd);
+	kfsClient->Close(srcfd);
+	
+	return 0;
+	
+}
+
 
 /*
 

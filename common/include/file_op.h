@@ -61,6 +61,8 @@ kfs_readdir(char * tab_dir, char* mt_entries, char *serverHost, int port);
 extern int
 kfs_append(int fd, char *buf, int buf_len, char *serverHost, int port);
 
+extern int
+kfs_copy(char * filename_src,char * filename_dest,char * serverHost,int port);
 
 
 #define	OPEN(fd, tab_dir, flag)							\
@@ -84,7 +86,7 @@ kfs_append(int fd, char *buf, int buf_len, char *serverHost, int port);
 		}								\
 	}while(0)
 
-#define	RMDIR(status, tab_dir, flag)						\
+#define	RMDIR(status, tab_dir)						\
 	do{									\
 		status = kfs_rmdir((char *)(tab_dir), Kfsserver, Kfsport); 	\
 										\
@@ -102,13 +104,17 @@ kfs_append(int fd, char *buf, int buf_len, char *serverHost, int port);
 
 #define LSEEK(fd, offset, flag)	kfs_seek(fd, offset, flag, Kfsserver, Kfsport)
 
-#define	STAT(dir, state)	stat((dir), (state))
+#define	STAT(dir, state)	kfs_exist((char *)(dir), Kfsserver, Kfsport)
 
 #define EXIST(dir)		kfs_exist((char *)(dir), Kfsserver, Kfsport)
 
 #define READDIR(dir, mt_entries)	kfs_readdir((char *)dir, mt_entries, Kfsserver, Kfsport)
 
 #define APPEND(fd, buf, buf_len)	kfs_append(fd, buf, buf_len, Kfsserver, Kfsport)
+
+#define COPYFILE(filename_src, filename_dest)					\
+				kfs_copy(filename_src, filename_dest, Kfsserver, Kfsport)
+
 
 #else
 

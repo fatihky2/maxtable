@@ -1311,6 +1311,11 @@ par_col_info(char *cmd, int cmd_len, int querytype)
 			colid++;
 			if (rg_insert)
 			{
+				if (colid > tss->tmeta_hdr->col_num)
+				{
+					traceprint("Colum number is invalid in the insertion.\n");
+					return FALSE;
+				}
 				colinfor = meta_get_colinfor(colid, 
 						      tss->tmeta_hdr->col_num, 
 						      tss->tcol_info);
