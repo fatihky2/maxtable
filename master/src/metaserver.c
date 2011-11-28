@@ -3797,18 +3797,18 @@ meta_failover_rg(char * req_buf)
 					if (resp->status_code == RPC_UNAVAIL)
 					{
 						traceprint("\n rg server is un-available \n");
-						conn_close(fd, NULL, resp);
+						close(fd);
 						goto save_rg;
 
 					}
 					else if (resp->status_code != RPC_SUCCESS)
 					{
 						traceprint("\n We got a non-success response. \n");
-			                        conn_close(fd, NULL, resp);
+			                        close(fd);
 			                        goto save_rg;
 					}
 
-					conn_close(fd, NULL, resp);
+					close(fd);
 
 					rg_addr[i].rg_stat &= ~RANGER_NEED_RECOVERY;
 					rg_addr[i].rg_tablet_num = 0;										
