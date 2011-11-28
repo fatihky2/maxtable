@@ -3341,7 +3341,7 @@ finish:
 		//update meta and rg_list here, put update task to msg list
 	
 		new_msg = (MSG_DATA *)msg_mem_alloc();
-		MEMSET(new_msg, sizeof(MSG_DATA));
+				
 		idx = 0;
 		
 		PUT_TO_BUFFER(new_msg->data, idx, RPC_REQUEST_MAGIC, 
