@@ -33,9 +33,10 @@
 #define RPC_RBD_MAGIC		"rebalan"
 #define RPC_SELECTRANGE_MAGIC	"sel_rg"
 #define RPC_MASTER2RG_HEARTBEAT	"hb_rqst"
-#define RPC_RECOVERY 		"re_cov"
+#define RPC_FAILOVER 		"rgfailo"
 #define RPC_MASTER2RG_NOTIFY	"rsync"
 #define RPC_SELECTWHERE_MAGIC	"sel_wh"
+#define	RPC_RECOVERY		"rg_reco"
 
 
 
@@ -95,6 +96,7 @@ typedef struct rpcresp
 #define RPC_REQ_M2RNOTIFY_OP	0x0010
 #define RPC_REQ_M2RHEARTBEAT_OP	0x0020
 #define	RPC_REQ_SELECWHERE_OP	0x0040
+#define	RPC_REQ_RECOVERY_RG_OP	0x0080
 
 
 char *
@@ -137,7 +139,7 @@ RPCRESP *
 conn_recv_resp_abt(int sockfd);
 
 RPCRESP * 
-conn_recv_resp_meta_hb(int sockfd, char *recv_buf);
+conn_recv_resp_meta(int sockfd, char *recv_buf);
 
 
 void

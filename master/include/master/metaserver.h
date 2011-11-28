@@ -131,6 +131,7 @@ typedef struct rg_prof
 
 #define RANGER_IS_ONLINE	0x0001
 #define RANGER_IS_OFFLINE	0x0002
+#define	RANGER_NEED_RECOVERY	0x0004
 
 
 typedef union infor_hdr

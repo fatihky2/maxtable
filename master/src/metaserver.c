@@ -92,7 +92,7 @@ static void
 meta_heartbeat_setup(RANGE_PROF * rg_addr);
 
 static int
-meta_recovery_rg(char * req_buf);
+meta_failover_rg(char * req_buf);
 
 static int
 meta_get_free_sstab();
@@ -220,20 +220,11 @@ meta_server_setup(char *conf_path)
 
 		for(i = 0; i < Master_infor->rg_list.nextrno; i++)
 		{
-			if (rg_addr[i].rg_stat == RANGER_IS_ONLINE)
+			if (rg_addr[i].rg_stat & RANGER_IS_ONLINE)
 			{
-				char	logfile[TABLE_NAME_MAX_LEN];
-				char	backup[TABLE_NAME_MAX_LEN];
-
-				
-				log_get_sstab_split_logfile(logfile,
-							rg_addr[i].rg_addr, 
-							rg_addr[i].rg_port);
-				log_get_rgbackup(backup, rg_addr[i].rg_addr,
-							rg_addr[i].rg_port);
-				
-				log_undo_sstab_split(logfile, backup, SPLIT_LOG);
-				
+				log_recov_rg(rg_addr[i].rg_addr, 
+						rg_addr[i].rg_port);
+							
 				meta_heartbeat_setup(rg_addr + i);
 			}
 		}
@@ -2610,10 +2601,11 @@ meta_collect_rg(char * req_buf)
 			    			RANGE_ADDR_MAX_LEN))
 			   )
 			{
-				if(rg_addr[i].rg_stat == RANGER_IS_OFFLINE)
+				if(rg_addr[i].rg_stat & RANGER_IS_OFFLINE)
 				{
 					found = TRUE;
-					rg_addr[i].rg_stat = RANGER_IS_ONLINE;
+					rg_addr[i].rg_stat &= ~RANGER_IS_OFFLINE;
+					rg_addr[i].rg_stat |= RANGER_IS_ONLINE;
 					meta_save_rginfo();
 					break;
 				}
@@ -2717,7 +2709,7 @@ meta_rebalan_svr_idx_file(char *tab_dir, REBALANCE_DATA *rbd)
 
 	for(j = 0; j < temp_store->nextrno; j++)
 	{
-		if(rg_prof[j].rg_stat == RANGER_IS_ONLINE)
+		if(rg_prof[j].rg_stat & RANGER_IS_ONLINE)
 		{
 			max_tablet = min_tablet = rg_prof[j].rg_tablet_num;
 			max_rg = min_rg = j;
@@ -2728,7 +2720,7 @@ meta_rebalan_svr_idx_file(char *tab_dir, REBALANCE_DATA *rbd)
 	
 	for(i = j + 1; i < temp_store->nextrno; i++)
 	{
-		if(rg_prof[i].rg_stat == RANGER_IS_ONLINE)
+		if(rg_prof[i].rg_stat & RANGER_IS_ONLINE)
 		{
 			if (rg_prof[i].rg_tablet_num > max_tablet)
 			{
@@ -3059,7 +3051,7 @@ meta_handler(char *req_buf, int fd)
 		return resp;
 	}
 	//update meta and rg list  process
-	if (meta_recovery_rg(req_buf))
+	if (meta_failover_rg(req_buf))
 	{		
 		
 		resp = conn_build_resp_byte(RPC_SUCCESS, 0, NULL);
@@ -3252,7 +3244,7 @@ meta_get_rg()
 
 	for(i = 0; i < temp_store->nextrno; i++)
 	{
-		if(rg_prof[i].rg_stat == RANGER_IS_ONLINE)
+		if(rg_prof[i].rg_stat & RANGER_IS_ONLINE)
 		{
 			min_tablet = rg_prof[i].rg_tablet_num;
 			min_rg = i;
@@ -3269,7 +3261,7 @@ meta_get_rg()
 	for(j = i; j < temp_store->nextrno; j++)
 	{
 		if(   (rg_prof[j].rg_tablet_num < min_tablet)
-		   && (rg_prof[j].rg_stat == RANGER_IS_ONLINE))
+		   && (rg_prof[j].rg_stat & RANGER_IS_ONLINE))
 		{
 			min_tablet = rg_prof[j].rg_tablet_num;
 			min_rg = j;
@@ -3319,7 +3311,7 @@ void * meta_heartbeat(void *args)
 
 		traceprint("\n###### meta sent heart beat to %s/%d. \n", rg_addr->rg_addr, rg_addr->rg_port);
 
-		resp = conn_recv_resp_meta_hb(hb_conn, hb_recv_buf);
+		resp = conn_recv_resp_meta(hb_conn, hb_recv_buf);
 
 		traceprint("\n###### meta recv heart beat from %s/%d. \n", rg_addr->rg_addr, rg_addr->rg_port);
 
@@ -3348,13 +3340,13 @@ finish:
 	
 		//update meta and rg_list here, put update task to msg list
 	
-		new_msg = malloc(sizeof(MSG_DATA));
+		new_msg = (MSG_DATA *)msg_mem_alloc();
 		MEMSET(new_msg, sizeof(MSG_DATA));
 		idx = 0;
 		
 		PUT_TO_BUFFER(new_msg->data, idx, RPC_REQUEST_MAGIC, 
 						RPC_MAGIC_MAX_LEN);
-		PUT_TO_BUFFER(new_msg->data, idx, RPC_RECOVERY, 
+		PUT_TO_BUFFER(new_msg->data, idx, RPC_FAILOVER, 
 						RPC_MAGIC_MAX_LEN);
 		PUT_TO_BUFFER(new_msg->data, idx, rg_addr->rg_addr, 
 						RANGE_ADDR_MAX_LEN);
@@ -3384,7 +3376,7 @@ finish:
 		if(hb_conn > 0)
 			close(hb_conn);
 
-	pthread_detach(pthread_self());
+		pthread_detach(pthread_self());
 
 	return NULL;
 	
@@ -3412,7 +3404,7 @@ meta_transfer_target(char *target_ip, int * target_port)
 
 	for(i = 0; i < temp_store->nextrno; i++)
 	{
-		if(rg_prof[i].rg_stat == RANGER_IS_ONLINE)
+		if(rg_prof[i].rg_stat & RANGER_IS_ONLINE)
 		{
 			min_tablet = rg_prof[i].rg_tablet_num;
 			min_rg = i;
@@ -3429,7 +3421,7 @@ meta_transfer_target(char *target_ip, int * target_port)
 	for(j = i; j < temp_store->nextrno; j++)
 	{
 		if(   (rg_prof[j].rg_tablet_num < min_tablet)
-		   && (rg_prof[j].rg_stat == RANGER_IS_ONLINE))
+		   && (rg_prof[j].rg_stat & RANGER_IS_ONLINE))
 		{
 			min_tablet = rg_prof[j].rg_tablet_num;
 			min_rg = j;
@@ -3734,7 +3726,7 @@ exit:
 
 
 static int
-meta_recovery_rg(char * req_buf)
+meta_failover_rg(char * req_buf)
 {
 	char		*str;
 	int		i;
@@ -3743,7 +3735,7 @@ meta_recovery_rg(char * req_buf)
 	RANGE_PROF	*rg_addr;
 
 	
-	if (!strncasecmp(RPC_RECOVERY, req_buf, STRLEN(RPC_RECOVERY)))
+	if (!strncasecmp(RPC_FAILOVER, req_buf, STRLEN(RPC_FAILOVER)))
 	{
 		str = req_buf + RPC_MAGIC_MAX_LEN;
 
@@ -3753,32 +3745,75 @@ meta_recovery_rg(char * req_buf)
 
 		for(i = 0; i < rglist->nextrno; i++)
 		{
-			if (   !strncasecmp(str, rg_addr[i].rg_addr, RANGE_ADDR_MAX_LEN)
-			    && (rg_addr[i].rg_port == *(int *)(str + RANGE_ADDR_MAX_LEN))
-			    )
+			if (   !strncasecmp(str, rg_addr[i].rg_addr, 
+					RANGE_ADDR_MAX_LEN)
+			    && (rg_addr[i].rg_port == 
+			    		*(int *)(str + RANGE_ADDR_MAX_LEN))
+			   )
 			{
-				if(rg_addr[i].rg_stat == RANGER_IS_ONLINE)
+				if(rg_addr[i].rg_stat & RANGER_IS_ONLINE)
 				{
 					found = TRUE;
-					
-					char	logfile[TABLE_NAME_MAX_LEN];
-					char	backup[TABLE_NAME_MAX_LEN];
 
-					log_get_sstab_split_logfile(logfile, 
-							rg_addr[i].rg_addr, 
-							rg_addr[i].rg_port);
-					log_get_rgbackup(backup, rg_addr[i].rg_addr,
-							rg_addr[i].rg_port);
-				
-					log_undo_sstab_split(logfile, backup, 
-							SPLIT_LOG);
+					//update rg list
+					rg_addr[i].rg_stat &= ~RANGER_IS_ONLINE;
+					rg_addr[i].rg_stat = RANGER_IS_OFFLINE | RANGER_NEED_RECOVERY;
+					//(rglist->nextrno)++;//do not modify this!
 
-					log_get_latest_rginsedelfile(logfile,
-							rg_addr[i].rg_addr, 
-							rg_addr[i].rg_port);
+
+					char	send_buf[256];
+					char	recv_buf[128];
+
+					MEMSET(send_buf, 256);
+					MEMSET(recv_buf, 128);
+		
+					int 		idx = 0;
+					int		fd;
+					RPCRESP 	*resp;
+
+					RANGE_PROF *rg_prof = meta_get_rg();
 					
-					log_redo_insdel(logfile);
+					if(   (rg_prof == NULL) 
+					   || ((fd = conn_open(rg_prof->rg_addr, rg_prof->rg_port)) < 0)
+					   )
+					{
+						traceprint("Fail to create connection for the recovery.\n");
+						goto save_rg;
+					}
+					
+					PUT_TO_BUFFER(send_buf, idx, RPC_REQUEST_MAGIC, 
+								RPC_MAGIC_MAX_LEN);
+					PUT_TO_BUFFER(send_buf, idx, RPC_RECOVERY,
+								RPC_MAGIC_MAX_LEN);
+					PUT_TO_BUFFER(send_buf, idx, rg_addr[i].rg_addr, 
+								RANGE_ADDR_MAX_LEN);
+					PUT_TO_BUFFER(send_buf, idx, &(rg_addr->rg_port), 
+								sizeof(int));
 						
+					write(fd, send_buf, idx);
+
+					resp = conn_recv_resp_meta(fd, recv_buf);
+
+					if (resp->status_code == RPC_UNAVAIL)
+					{
+						traceprint("\n rg server is un-available \n");
+						conn_close(fd, NULL, resp);
+						goto save_rg;
+
+					}
+					else if (resp->status_code != RPC_SUCCESS)
+					{
+						traceprint("\n We got a non-success response. \n");
+			                        conn_close(fd, NULL, resp);
+			                        goto save_rg;
+					}
+
+					conn_close(fd, NULL, resp);
+
+					rg_addr[i].rg_stat &= ~RANGER_NEED_RECOVERY;
+					rg_addr[i].rg_tablet_num = 0;										
+save_rg:
+					meta_save_rginfo();			
 					
 					//update tablet
 					if(rg_addr[i].rg_tablet_num > 0)
@@ -3787,11 +3822,7 @@ meta_recovery_rg(char * req_buf)
 						meta_update(rg_addr[i].rg_addr, 
 							rg_addr[i].rg_port);
 					}
-					//update rg list
-					rg_addr[i].rg_tablet_num = 0;
-					rg_addr[i].rg_stat = RANGER_IS_OFFLINE;
-					//(rglist->nextrno)++;//do not modify this!
-					meta_save_rginfo();
+					
 					break;
 				}
 				else
@@ -3810,7 +3841,7 @@ meta_recovery_rg(char * req_buf)
 
 		for(i = 0; i < rglist->nextrno; i++)
 		{
-			if(rg_addr[i].rg_stat == RANGER_IS_ONLINE)
+			if(rg_addr[i].rg_stat & RANGER_IS_ONLINE)
 				break;
 		}
 		if(i == rglist->nextrno)
@@ -3846,7 +3877,7 @@ meta_ranger_is_online(char *rg_ip, int rg_port)
 		    && (rg_addr[i].rg_port == rg_port)
 		   )
 		{
-			if(rg_addr[i].rg_stat == RANGER_IS_ONLINE)
+			if(rg_addr[i].rg_stat & RANGER_IS_ONLINE)
 			{
 				return TRUE;
 			}
