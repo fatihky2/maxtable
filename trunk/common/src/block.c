@@ -30,6 +30,7 @@
 #include "tablet.h"
 #include "b_search.h"
 #include "timestamp.h"
+#include "log.h"
 
 
 extern TSS	*Tss;
@@ -548,6 +549,19 @@ finish:
 		DIRTYUNLINK(bp);
 		bufwrite(bp);
 		SSTABLE_STATE(bp) &= ~BUF_READ_EMPTY;
+	}
+
+	if ((tss->topid & TSS_OP_RANGESERVER) && (!(tss->tstat & TSS_OP_RECOVERY)))
+	{
+		LOGREC	logrec;
+
+		log_build(&logrec, LOG_INSERT, tabinfo->t_insdel_old_ts_lo,
+					tabinfo->t_insdel_new_ts_lo,
+					tabinfo->t_sstab_name, NULL, 
+					tabinfo->t_row_minlen, tabinfo->t_tabid,
+					tabinfo->t_sstab_id);
+		
+		log_insert_insdel(tss->rginsdellogfile, &logrec, rp, rlen);
 	}
 	
 	bufunkeep(bp->bsstab);

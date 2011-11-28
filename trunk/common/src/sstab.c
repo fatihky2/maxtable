@@ -248,6 +248,12 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 	
 	log_insert_sstab_split(tss->rglogfile, &logrec, SPLIT_LOG);
 
+	if (SSTABLE_STATE(destbuf) & BUF_DIRTY)
+	{		
+		DIRTYUNLINK(destbuf->bsstab);
+		bufwrite(destbuf->bsstab);
+	}
+
 	session_close(tabinfo);
 	
 

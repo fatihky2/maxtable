@@ -459,16 +459,6 @@ exit:
 	{
 		
 		resp = conn_build_resp_byte(RPC_SUCCESS, resp_len, resp_buf);
-
-		LOGREC	logrec;
-
-		log_build(&logrec, LOG_INSERT, tabinfo->t_insdel_old_ts_lo,
-					tabinfo->t_insdel_new_ts_lo,
-					tabinfo->t_sstab_name, NULL, 
-					tabinfo->t_row_minlen, tabinfo->t_tabid,
-					tabinfo->t_sstab_id);
-		
-		log_insert_insdel(RgInsdelLogfile, &logrec, rp, rp_idx);
 	}
 	else
 	{
@@ -2040,6 +2030,7 @@ rg_handler(char *req_buf, int fd)
 	tss->tmeta_hdr = ins_meta;
 	tss->rgbackpfile = RgBackup;
 	tss->rglogfile = RgLogfile;
+	tss->rginsdellogfile = RgInsdelLogfile;
 
 	if (!parser_open(req_buf))
 	{
@@ -2609,15 +2600,18 @@ exit:
 static char *
 rg_recovery(char *rgip, int rgport)
 {
+	LOCALTSS(tss);
 	int		rtn_stat;
 	char		*resp;	
 		
 
 	rtn_stat = FALSE;
-	
+	tss->tstat |= TSS_OP_RECOVERY;
 
 	rtn_stat = log_recov_rg(rgip, rgport);
 
+	tss->tstat &= ~TSS_OP_RECOVERY;
+	
 	if (rtn_stat)
 	{
 		
