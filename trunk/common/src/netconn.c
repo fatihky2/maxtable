@@ -120,7 +120,7 @@ conn_build_resp(char *resp_bp)
 }
 
 RPCRESP *
-conn_build_resp_meta_hb(char *resp_bp, char * recv_buf)
+conn_build_resp_meta(char *resp_bp, char * recv_buf)
 {    
 	int     	data_index;
 	RPCRESP		*resp;
@@ -457,7 +457,7 @@ conn_recv_resp_abt(int sockfd)
 
 
 RPCRESP * 
-conn_recv_resp_meta_hb(int sockfd, char *recv_buf)
+conn_recv_resp_meta(int sockfd, char *recv_buf)
 {
 	char 		*buf;
 	int 		n;
@@ -476,7 +476,7 @@ conn_recv_resp_meta_hb(int sockfd, char *recv_buf)
 
 	if(n > 0)
 	{
-		resp = conn_build_resp_meta_hb(buf, recv_buf);
+		resp = conn_build_resp_meta(buf, recv_buf);
 	}
 	else
 	{
@@ -501,7 +501,7 @@ conn_recv_resp_meta_hb(int sockfd, char *recv_buf)
 			traceprint("Client receive response error for unknown reason!\n");
 			perror("Error in rg server response");
 		}
-		resp = conn_build_resp_meta_hb(NULL, recv_buf);
+		resp = conn_build_resp_meta(NULL, recv_buf);
 		resp->status_code = RPC_UNAVAIL;
 	}
 	
@@ -553,6 +553,10 @@ conn_chk_reqmagic(char *str)
 	else if (!strncasecmp(RPC_SELECTWHERE_MAGIC, str, STRLEN(RPC_SELECTWHERE_MAGIC)))
 	{
 		return RPC_REQ_SELECWHERE_OP;
+	}
+	else if (!strncasecmp(RPC_RECOVERY, str, STRLEN(RPC_RECOVERY)))
+	{
+		return RPC_REQ_RECOVERY_RG_OP;
 	}
 		
 

@@ -111,6 +111,10 @@ log_get_latest_rginsedelfile(char *rginsdellogfile, char *rg_ip, int port);
 int
 log_redo_insdel(char *insdellogfile);
 
+int
+log_recov_rg(char *rgip, int rgport);
+
+
 
 #endif
 

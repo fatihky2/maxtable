@@ -1061,3 +1061,22 @@ exit:
 	return status;
 
 }
+
+int
+log_recov_rg(char *rgip, int rgport)
+{
+	char	logfile[TABLE_NAME_MAX_LEN];
+	char	backup[TABLE_NAME_MAX_LEN];
+
+	log_get_sstab_split_logfile(logfile, rgip, rgport);
+	log_get_rgbackup(backup, rgip, rgport);
+
+	log_undo_sstab_split(logfile, backup, SPLIT_LOG);
+
+	log_get_latest_rginsedelfile(logfile, rgip, rgport);
+
+	log_redo_insdel(logfile);
+
+	return TRUE;
+}
+

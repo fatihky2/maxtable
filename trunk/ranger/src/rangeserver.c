@@ -157,6 +157,10 @@ rg_tabletscan(TABLET_SCANCTX *scanctx);
 static int
 rg_sstabscan(SSTAB_SCANCTX *scanctx);
 
+static char *
+rg_recovery(char *rgip, int rgport);
+
+
 
 char *
 rg_droptab(TREE *command)
@@ -1951,8 +1955,7 @@ rg_handler(char *req_buf, int fd)
 
 		goto finish;
 	}
-
-	if (req_op & RPC_REQ_SELECWHERE_OP)
+	else if (req_op & RPC_REQ_SELECWHERE_OP)
 	{
 		if (!parser_open(req_buf + sizeof(SELWHERE)))
 		{
@@ -1970,16 +1973,17 @@ rg_handler(char *req_buf, int fd)
 
 		goto finish;
 	}
-
 	/* Rebalancer case. */
-	if (req_op & RPC_REQ_REBALANCE_OP)
+	else if (req_op & RPC_REQ_REBALANCE_OP)
 	{
 		return rg_rebalancer((REBALANCE_DATA *)(req_buf - RPC_MAGIC_MAX_LEN));
 	}
-
-
+	else if (req_op & RPC_REQ_RECOVERY_RG_OP)
+	{
+		return rg_recovery((char *)req_buf, *(int *)(req_buf + RANGE_ADDR_MAX_LEN));
+	}
 	/* process with heart beat */
-	if (req_op & RPC_REQ_M2RHEARTBEAT_OP)
+	else if (req_op & RPC_REQ_M2RHEARTBEAT_OP)
 	{
 		traceprint("\n$$$$$$ rg recv heart beat. \n");
 	
@@ -1994,9 +1998,8 @@ rg_handler(char *req_buf, int fd)
 
 		return resp;
 	}
-
 	/* process with rsync notify */
-	if (req_op & RPC_REQ_M2RNOTIFY_OP)
+	else if (req_op & RPC_REQ_M2RNOTIFY_OP)
 	{
 		Assert(rg_rsync(req_buf));
 
@@ -2603,6 +2606,31 @@ exit:
 }
 
 
+static char *
+rg_recovery(char *rgip, int rgport)
+{
+	int		rtn_stat;
+	char		*resp;	
+		
+
+	rtn_stat = FALSE;
+	
+
+	rtn_stat = log_recov_rg(rgip, rgport);
+
+	if (rtn_stat)
+	{
+		
+		resp = conn_build_resp_byte(RPC_SUCCESS, 0, NULL);
+	}
+	else
+	{
+		resp = conn_build_resp_byte(RPC_FAIL, 0, NULL);
+	}
+
+	return resp;
+
+}
 
 static char *
 rg_check_sstab_by_tablet(CHECKTABLE_DATA *chkdata)

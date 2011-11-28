@@ -282,6 +282,9 @@ void msg_process(char * (*handler_request)(char *req_buf, int fd))
 	MSG_DATA *resp_msg;
 
 
+	req_msg = NULL;
+	resp_msg = NULL;
+	
 	while(TRUE)
 	{
 		

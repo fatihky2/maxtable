@@ -844,7 +844,7 @@ cli_open_range(conn * connection, char * cmd, int opid)
 
 		for(i = 0; i < temp_store->nextrno; i++)
 		{
-			if(rg_prof[i].rg_stat == RANGER_IS_ONLINE)
+			if(rg_prof[i].rg_stat & RANGER_IS_ONLINE)
 			{
 				ip = rg_prof[i].rg_addr;
 				port = rg_prof[i].rg_port;
