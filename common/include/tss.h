@@ -108,6 +108,7 @@ typedef struct tssobj
 #define		TSS_OP_CRTTAB		0x0008
 #define		TSS_OP_INSTAB		0x0010
 #define		TSS_OP_SELDELTAB	0x0020
+#define		TSS_OP_RECOVERY		0x0040
 
 TSS *
 tss_alloc(void);
