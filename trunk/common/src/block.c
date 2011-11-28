@@ -541,6 +541,15 @@ finish:
 	}
 	
 	bufdirty(bp);
+
+	/* Must to flush the first insertion into the disk. */
+	if ((SSTABLE_STATE(bp) & BUF_READ_EMPTY) && (SSTABLE_STATE(bp) & BUF_DIRTY))
+	{		
+		DIRTYUNLINK(bp);
+		bufwrite(bp);
+		SSTABLE_STATE(bp) &= ~BUF_READ_EMPTY;
+	}
+	
 	bufunkeep(bp->bsstab);
 		
 	tabinfo->t_sinfo->sistate &= ~SI_INS_DATA;
