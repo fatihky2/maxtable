@@ -2797,7 +2797,7 @@ meta_rebalan_process(REBALANCE_DATA *rbd)
 
 	resp = conn_recv_resp(sockfd);
 
-	if (resp->status_code != RPC_SUCCESS)
+	if ((resp == NULL) || (resp->status_code != RPC_SUCCESS))
 	{
 		rtn_stat = FALSE;
 		traceprint("\n ERROR \n");
@@ -3461,7 +3461,7 @@ int meta_transfer_notify(char * rg_addr, int rg_port)
 	
 	resp = conn_recv_resp(hb_conn);
 	
-	if (resp->status_code != RPC_SUCCESS)
+	if ((resp == NULL) || (resp->status_code != RPC_SUCCESS))
 	{
 		traceprint("\n ERROR when send rsync notify to client \n");
 		rtn_stat = FALSE;

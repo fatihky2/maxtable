@@ -225,7 +225,7 @@ conn_again:
 
 		resp = conn_recv_resp(sockfd);
 
-		if (resp->status_code != RPC_SUCCESS)
+		if ((resp == NULL) || (resp->status_code != RPC_SUCCESS))
 		{
 			printf("\n ERROR \n");
 			goto finish;
@@ -603,7 +603,7 @@ conn_again:
 
 	resp = conn_recv_resp(sockfd);
 
-	if (resp->status_code != RPC_SUCCESS)
+	if ((resp == NULL) || (resp->status_code != RPC_SUCCESS))
 	{
 		printf("\n ERROR \n");
 		goto finish;

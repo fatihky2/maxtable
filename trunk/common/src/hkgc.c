@@ -35,7 +35,7 @@ char	*RgInsdelLogfile;
 
 
 void
-hkgc_wash_sstab()
+hkgc_wash_sstab(int force)
 {
 	int		i;
 	BUF		*sstab;
@@ -45,7 +45,10 @@ hkgc_wash_sstab()
 
 	hk_info = (HKGC_INFO *)(Kernel->hk_info);
 
-	P_SPINLOCK(BUF_SPIN);	
+	if (!force)
+	{
+		P_SPINLOCK(BUF_SPIN);	
+	}
 	
 	for (i = 0; i < HK_BATCHSIZE; i++)
 	{
@@ -72,7 +75,10 @@ hkgc_wash_sstab()
 		log_insert_insdel(RgInsdelLogfile, &logrec, NULL, 0);
 	}
 
-	V_SPINLOCK(BUF_SPIN);
+	if (!force)
+	{
+		V_SPINLOCK(BUF_SPIN);
+	}
 	
 	BUF	*bp;
 	for (i = 0; i < hk_info->buf_num; i++)
@@ -88,13 +94,19 @@ hkgc_wash_sstab()
 
 	if (hk_info->buf_num)
 	{
-		P_SPINLOCK(BUF_SPIN);
-
+		if (!force)
+		{
+			P_SPINLOCK(BUF_SPIN);
+		}
+		
 		log_build(&logrec, CHECKPOINT_COMMIT, 0, 0, NULL, NULL, 0, 0, 0);
 		
 		log_insert_insdel(RgInsdelLogfile, &logrec, NULL, 0);
 
-		V_SPINLOCK(BUF_SPIN);
+		if (!force)
+		{
+			V_SPINLOCK(BUF_SPIN);
+		}
 	}
 	
 	hk_info->buf_num = 0;
@@ -108,7 +120,7 @@ hkgc_wash()
 	while(TRUE)
 	{
 		sleep(HKGC_WORK_INTERVAL);
-		hkgc_wash_sstab();
+		hkgc_wash_sstab(FALSE);
 	}
 }
 

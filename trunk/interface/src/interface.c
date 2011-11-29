@@ -167,6 +167,15 @@ retry:
 	write(connection->connection_fd, send_buf, (send_buf_size + RPC_MAGIC_MAX_LEN));
 
 	resp = conn_recv_resp(connection->connection_fd);
+	
+	if (resp == NULL)
+	{
+		traceprint("\n ERROR in response \n");
+		rtn_stat = CLI_FAIL;
+
+		goto finish;
+	}
+	
 	if (!(resp->status_code & RPC_SUCCESS))
 	{
 		traceprint("\n ERROR in response \n");
@@ -363,6 +372,16 @@ retry:
 
 			sstab_split_resp = conn_recv_resp(connection->connection_fd);
 			sstab_split = TRUE;
+
+			if (sstab_split_resp == NULL)
+			{
+				traceprint("\n ERROR in meta_server response \n");
+				rtn_stat = CLI_FAIL;
+
+				MEMFREEHEAP(new_buf);
+				goto finish;				
+			}
+			
 			if (!(sstab_split_resp->status_code & RPC_SUCCESS))
 			{
 				traceprint("\n ERROR in meta_server response \n");
@@ -406,6 +425,16 @@ retry:
 
 			remove_tab_resp = conn_recv_resp(connection->connection_fd);
 			remove_tab_hit = TRUE;
+
+			if (remove_tab_resp == NULL)
+			{
+				traceprint("\n ERROR in meta_server response \n");
+				rtn_stat = CLI_FAIL;
+
+				MEMFREEHEAP(new_buf);
+				goto finish;
+			}
+			
 			if (!(remove_tab_resp->status_code & RPC_SUCCESS))
 			{
 				traceprint("\n ERROR in meta_server response \n");
@@ -627,7 +656,7 @@ cli_rgsel_meta(conn * connection, char * cmd, SELCTX *resp_selctx)
 	write(connection->connection_fd, send_buf, (send_buf_size + RPC_MAGIC_MAX_LEN));
 
 	resp = conn_recv_resp(connection->connection_fd);
-	if (!(resp->status_code & RPC_SUCCESS))
+	if ((resp == NULL) || (!(resp->status_code & RPC_SUCCESS)))
 	{
 		traceprint("\n ERROR in response \n");
 		rtn_stat = FALSE;

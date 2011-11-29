@@ -306,9 +306,12 @@ retry:
 	{
 		PUT_TO_BUFFER(logbuf, idx, rp, rlen);
 	}
-	PUT_TO_BUFFER(logbuf, idx, logrec, sizeof(LOGREC));
-
+	
 	logrec->rowend_off = rlen;
+
+	MEMCPY(logrec->logmagic, MT_LOG, LOG_MAGIC_LEN);
+
+	PUT_TO_BUFFER(logbuf, idx, logrec, sizeof(LOGREC));
 	
 #ifdef MT_KFS_BACKEND
 
@@ -665,7 +668,7 @@ log_get_latest_rginsedelfile(char *rginsdellogfile, char *rg_ip, int port)
 
 
 int
-log_redo_insdel(char *insdellogfile)
+log_redo_insdel(char *insdellogfile, int scan_first)
 {
 	int		fd;
 	int		status;
@@ -718,6 +721,7 @@ log_redo_insdel(char *insdellogfile)
 
 		if ((logrec->opid == CHECKPOINT_BEGIN) && (log_scope_start))
 		{
+			status = TRUE;
 			break;
 		}
 
@@ -731,15 +735,31 @@ log_redo_insdel(char *insdellogfile)
 		}
 	}
 
+	if (scan_first)
+	{
+		goto exit;
+	}
+
 	while (row_cnt > 0)
 	{	
-		if ((logrec->opid == CHECKPOINT_BEGIN) || (logrec->opid == CHECKPOINT_COMMIT))
+		if (strncasecmp(logrec->logmagic, MT_LOG, STRLEN(MT_LOG)) != 0)
+		{
+			/* INSERT LOG */
+			rp = (char *)logrec;
+			logrec = (LOGREC *)(rp + ROW_GET_LENGTH(rp, minrowlen));
+		}
+		
+		if ((logrec->opid == CHECKPOINT_BEGIN) || (logrec->opid == CHECKPOINT_COMMIT)
+		    || (logrec->opid == LOG_SKIP))
 		{
 			logrec = (LOGREC *)(logfilebuf + logrec->next_log_off);
 			continue;
 		}
 
-		log__redo_insdel(logrec, (logfilebuf + logrec->cur_log_off));
+		Assert(strncasecmp(logrec->logmagic, MT_LOG, STRLEN(MT_LOG)) == 0);
+
+		rp = logfilebuf + logrec->cur_log_off;
+		log__redo_insdel(logrec, rp);
 
 		row_cnt--;
 
@@ -849,18 +869,10 @@ log__redo_insdel(LOGREC *logrec, char *rp)
 		blk_stat = blk_check_sstab_space(tabinfo, bp, rp, rlen, offset);
 
 
-		if (blk_stat & BLK_INS_SPLITTING_SSTAB)
+		if (tabinfo->t_stat & TAB_SSTAB_SPLIT)
 		{
-			bufdestroy(bp);
-
-			return FALSE;
+			Assert(0);			
 		}
-		
-		if (blk_stat & BLK_ROW_NEXT_SSTAB)
-		{
-			goto insfinish;
-		}
-
 		
 		if (blk_stat & BLK_ROW_NEXT_BLK)
 		{
@@ -912,15 +924,6 @@ log__redo_insdel(LOGREC *logrec, char *rp)
 		bp->bblk->bminlen = minlen;
 		
 		BLK_GET_NEXT_ROWNO(bp->bblk)++;
-
-insfinish:
-
-		if (tabinfo->t_stat & TAB_SSTAB_SPLIT)
-		{
-			bp->bsstab->bblk->bstat |= BLK_SSTAB_SPLIT;
-
-			
-		}
 		
 		bufdirty(bp);
 			
@@ -1037,19 +1040,8 @@ exit:
 
 		if (tabinfo->t_insrg)
 		{
-			Assert(tabinfo->t_stat & TAB_SSTAB_SPLIT);
+			Assert(0);
 
-			if (tabinfo->t_insrg->new_sstab_key)
-			{
-				MEMFREEHEAP(tabinfo->t_insrg->new_sstab_key);
-			}
-
-			if (tabinfo->t_insrg->old_sstab_key)
-			{
-				MEMFREEHEAP(tabinfo->t_insrg->old_sstab_key);
-			}
-
-			MEMFREEHEAP(tabinfo->t_insrg);
 		}
 		
 		MEMFREEHEAP(tabinfo);
@@ -1073,9 +1065,34 @@ log_recov_rg(char *rgip, int rgport)
 
 	log_undo_sstab_split(logfile, backup, SPLIT_LOG);
 
-	log_get_latest_rginsedelfile(logfile, rgip, rgport);
+	log_get_latest_rginsedelfile(logfile, rgip, rgport);	
 
-	log_redo_insdel(logfile);
+	if (!log_redo_insdel(logfile, TRUE))
+	{	
+		char prelogfile[TABLE_NAME_MAX_LEN];
+		
+		int idxpos = str1nstr(logfile, "/log\0", STRLEN(logfile));
+	
+		int logfilenum = m_atoi(logfile + idxpos, 
+					STRLEN(logfile) - idxpos);
+
+		Assert(logfilenum > 0);
+		
+		logfilenum--;
+
+		MEMSET(prelogfile, STRLEN(prelogfile));
+		MEMCPY(prelogfile, logfile, idxpos);
+		sprintf(prelogfile + idxpos, "%d", logfilenum);
+
+		/* 
+		** TODO: Just handle two log files to get the scoping of one Disk IO round.
+		**	We need to make sure it can not write two sstable in the interval 
+		**	of HK.
+		*/
+		log_redo_insdel(prelogfile, FALSE);
+	}
+
+	log_redo_insdel(logfile, FALSE);	
 
 	return TRUE;
 }
