@@ -55,7 +55,7 @@ extern	int	Kfsport;
 #define SSTAB_USED	1
 #define SSTAB_RESERVED	2
 
-
+#define	META_RECOVERY_INTERVAL	5
 
 SSTAB_INFOR	*sstab_map;
 
@@ -762,6 +762,14 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 		if (tss->tcur_rgprof == NULL)
 		{
 			traceprint("Can't get the profile of ranger server %s\n", rg_addr);
+
+			CLOSE(fd1);
+			goto exit;
+		}
+
+		if (tss->tcur_rgprof->rg_stat & RANGER_IS_OFFLINE)
+		{
+			traceprint("Ranger server (%s:%d) is OFF-LINE\n", rg_addr, rg_port);
 
 			CLOSE(fd1);
 			goto exit;
@@ -1529,6 +1537,13 @@ meta_seldeltab(TREE *command, TABINFO *tabinfo)
 		goto exit;
 	}
 
+	if (tss->tcur_rgprof->rg_stat & RANGER_IS_OFFLINE)
+	{
+		traceprint("Ranger server (%s:%d) is OFF-LINE\n", rg_addr, rg_port);
+
+		goto exit;
+	}
+
 	//rg_port = tss->tcur_rgprof->rg_port;
 	
 	
@@ -1852,6 +1867,12 @@ meta_selrangetab(TREE *command, TABINFO *tabinfo)
 			goto exit;
 		}
 
+		if (tss->tcur_rgprof->rg_stat & RANGER_IS_OFFLINE)
+		{
+			traceprint("Ranger server (%s:%d) is OFF-LINE\n", rg_addr, rg_port);
+
+			goto exit;
+		}
 		
 		MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
 		MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
@@ -3758,70 +3779,7 @@ meta_failover_rg(char * req_buf)
 					//update rg list
 					rg_addr[i].rg_stat &= ~RANGER_IS_ONLINE;
 					rg_addr[i].rg_stat = RANGER_IS_OFFLINE | RANGER_NEED_RECOVERY;
-					//(rglist->nextrno)++;//do not modify this!
-
-
-					char	send_buf[256];
-					char	recv_buf[128];
-
-					MEMSET(send_buf, 256);
-					MEMSET(recv_buf, 128);
-		
-					int 		idx = 0;
-					int		fd;
-					RPCRESP 	*resp;
-
-					RANGE_PROF *rg_prof = meta_get_rg();
-					
-					if(   (rg_prof == NULL) 
-					   || ((fd = conn_open(rg_prof->rg_addr, rg_prof->rg_port)) < 0)
-					   )
-					{
-						traceprint("Fail to create connection for the recovery.\n");
-						goto save_rg;
-					}
-					
-					PUT_TO_BUFFER(send_buf, idx, RPC_REQUEST_MAGIC, 
-								RPC_MAGIC_MAX_LEN);
-					PUT_TO_BUFFER(send_buf, idx, RPC_RECOVERY,
-								RPC_MAGIC_MAX_LEN);
-					PUT_TO_BUFFER(send_buf, idx, rg_addr[i].rg_addr, 
-								RANGE_ADDR_MAX_LEN);
-					PUT_TO_BUFFER(send_buf, idx, &(rg_addr->rg_port), 
-								sizeof(int));
-						
-					write(fd, send_buf, idx);
-
-					resp = conn_recv_resp_meta(fd, recv_buf);
-
-					if (resp->status_code == RPC_UNAVAIL)
-					{
-						traceprint("\n rg server is un-available \n");
-						close(fd);
-						goto save_rg;
-
-					}
-					else if (resp->status_code != RPC_SUCCESS)
-					{
-						traceprint("\n We got a non-success response. \n");
-			                        close(fd);
-			                        goto save_rg;
-					}
-
-					close(fd);
-
-					rg_addr[i].rg_stat &= ~RANGER_NEED_RECOVERY;
-					rg_addr[i].rg_tablet_num = 0;										
-save_rg:
-					meta_save_rginfo();			
-					
-					//update tablet
-					if(rg_addr[i].rg_tablet_num > 0)
-					{
-						
-						meta_update(rg_addr[i].rg_addr, 
-							rg_addr[i].rg_port);
-					}
+					//(rglist->nextrno)++;//do not modify this!					
 					
 					break;
 				}
@@ -3861,6 +3819,100 @@ save_rg:
 	return TRUE;
 }
 
+void *
+meta_recovery(void *Null)
+{
+	int		i;
+	SVR_IDX_FILE	*rglist;
+	RANGE_PROF	*rg_addr;	
+	
+again:
+	sleep(META_RECOVERY_INTERVAL);
+	rglist = &(Master_infor->rg_list);
+	rg_addr = (RANGE_PROF *)(rglist->data);
+
+	for(i = 0; i < rglist->nextrno; i++)
+	{
+		
+		if(rg_addr[i].rg_stat & RANGER_NEED_RECOVERY)
+		{
+			Assert(rg_addr[i].rg_stat & RANGER_IS_OFFLINE);
+
+			char	send_buf[256];
+			char	recv_buf[128];
+
+			MEMSET(send_buf, 256);
+			MEMSET(recv_buf, 128);
+
+			int 		idx = 0;
+			int		fd;
+			RPCRESP 	*resp;
+
+			RANGE_PROF *rg_prof = meta_get_rg();
+			
+			if(   (rg_prof == NULL) 
+			   || ((fd = conn_open(rg_prof->rg_addr, rg_prof->rg_port)) < 0)
+			   )
+			{
+				traceprint("Fail to create connection for the recovery.\n");
+				goto save_rg;
+			}
+			
+			PUT_TO_BUFFER(send_buf, idx, RPC_REQUEST_MAGIC, 
+						RPC_MAGIC_MAX_LEN);
+			PUT_TO_BUFFER(send_buf, idx, RPC_RECOVERY,
+						RPC_MAGIC_MAX_LEN);
+			PUT_TO_BUFFER(send_buf, idx, rg_addr[i].rg_addr, 
+						RANGE_ADDR_MAX_LEN);
+			PUT_TO_BUFFER(send_buf, idx, &(rg_addr[i].rg_port), 
+						sizeof(int));
+				
+			write(fd, send_buf, idx);
+
+			resp = conn_recv_resp_meta(fd, recv_buf);
+
+			if (resp->status_code == RPC_UNAVAIL)
+			{
+				traceprint("\n rg server is un-available \n");
+				conn_close(fd, NULL, NULL);
+				goto save_rg;
+
+			}
+			else if (resp->status_code != RPC_SUCCESS)
+			{
+				traceprint("\n We got a non-success response. \n");
+	                        conn_close(fd, NULL, NULL);
+	                        goto save_rg;
+			}
+
+			conn_close(fd, NULL, NULL);
+
+			rg_addr[i].rg_stat &= ~RANGER_NEED_RECOVERY;
+													
+																	
+save_rg:
+			meta_save_rginfo();			
+			
+			//update tablet
+			if(rg_addr[i].rg_tablet_num > 0)
+			{				
+				meta_update(rg_addr[i].rg_addr, rg_addr[i].rg_port);
+			}
+
+			rg_addr[i].rg_tablet_num = 0;
+			
+			break;
+
+			
+		}
+		
+		
+	}
+
+	goto again;
+	
+	return NULL;
+}
 
 int
 meta_ranger_is_online(char *rg_ip, int rg_port)
