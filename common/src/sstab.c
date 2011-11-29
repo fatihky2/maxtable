@@ -32,6 +32,7 @@
 #include "file_op.h"
 #include "timestamp.h"
 #include "log.h"
+#include "hkgc.h"
 
 
 extern	TSS	*Tss;
@@ -214,6 +215,7 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 		SRCH_INFO_INIT(tabinfo->t_sinfo, key, keylen, srctabinfo->t_key_colid, 
 				srctabinfo->t_key_coltype, srctabinfo->t_key_coloff);
 
+		tabinfo->t_stat |= TAB_LOG_SKIP_LOG;
 		blkins(tabinfo, rp);
 	}
 	else
@@ -247,12 +249,6 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 			srctabinfo->t_sstab_name, destbuf->bsstab_name, 0, 0, 0);
 	
 	log_insert_sstab_split(tss->rglogfile, &logrec, SPLIT_LOG);
-
-	if (SSTABLE_STATE(destbuf) & BUF_DIRTY)
-	{		
-		DIRTYUNLINK(destbuf->bsstab);
-		bufwrite(destbuf->bsstab);
-	}
 
 	session_close(tabinfo);
 	

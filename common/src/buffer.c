@@ -34,7 +34,7 @@ extern TSS	*Tss;
 
 
 
-
+int	bufwrite_cnt = 0;
 
 
 void
@@ -216,6 +216,8 @@ bufawrite(BUF *bp)
 	SSTABLE_STATE(bp) &= ~(BUF_DIRTY|BUF_WRITING);
 
 	MEMFREEHEAP(blkioptr);
+
+	bufwrite_cnt++;
 
 	return;
 }

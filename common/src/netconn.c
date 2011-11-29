@@ -223,14 +223,16 @@ conn_destroy_resp_byte(char* resp)
 void
 conn_destroy_resp(RPCRESP* resp)
 {
-	Assert(resp);
-
-	if (resp->result_length)
+	if (resp)
 	{
-		MEMFREEHEAP(resp->result);
+
+		if (resp->result_length)
+		{
+			MEMFREEHEAP(resp->result);
+		}
+		
+		MEMFREEHEAP(resp);
 	}
-	
-	MEMFREEHEAP(resp);
 }
 
 RPCREQ *

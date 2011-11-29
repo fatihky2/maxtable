@@ -46,4 +46,8 @@ typedef struct hkgc_info
 void *
 hkgc_boot(void *opid);
 
+void
+hkgc_wash_sstab(int force);
+
+
 #endif

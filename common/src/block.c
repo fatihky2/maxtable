@@ -31,6 +31,7 @@
 #include "b_search.h"
 #include "timestamp.h"
 #include "log.h"
+#include "hkgc.h"
 
 
 extern TSS	*Tss;
@@ -537,8 +538,7 @@ finish:
 	if (tabinfo->t_stat & TAB_SSTAB_SPLIT)
 	{
 		bp->bsstab->bblk->bstat |= BLK_SSTAB_SPLIT;
-
-		
+		tabinfo->t_stat |= TAB_LOG_SKIP_LOG;		
 	}
 	
 	bufdirty(bp);
@@ -554,14 +554,27 @@ finish:
 	if ((tss->topid & TSS_OP_RANGESERVER) && (!(tss->tstat & TSS_OP_RECOVERY)))
 	{
 		LOGREC	logrec;
+		int	logid;
 
-		log_build(&logrec, LOG_INSERT, tabinfo->t_insdel_old_ts_lo,
+		/*
+		**	While one row insertion hit the split issue, the overview of log as follows:
+		**	1. | ChkPoint_begin|Chkpoint_end| LOG_SKIP |LOG_SKIP|  ChkPoint_begin|Chkpoint_end|
+		**	2. | ChkPoint_begin|Chkpoint_end| LOG_SKIP | ChkPoint_begin|Chkpoint_end|
+		*/
+		logid = (tabinfo->t_stat & TAB_LOG_SKIP_LOG)? LOG_SKIP : LOG_INSERT;
+
+		log_build(&logrec, logid, tabinfo->t_insdel_old_ts_lo,
 					tabinfo->t_insdel_new_ts_lo,
 					tabinfo->t_sstab_name, NULL, 
 					tabinfo->t_row_minlen, tabinfo->t_tabid,
 					tabinfo->t_sstab_id);
 		
 		log_insert_insdel(tss->rginsdellogfile, &logrec, rp, rlen);
+
+		if (tabinfo->t_stat & TAB_SSTAB_SPLIT)
+		{
+			hkgc_wash_sstab(TRUE);
+		}
 	}
 	
 	bufunkeep(bp->bsstab);
@@ -795,11 +808,9 @@ blk_check_sstab_space(TABINFO *tabinfo, BUF *bp, char *rp, int rlen,
 					break;
 				}
 
-				if (SSTABLE_STATE(bp) & BUF_DIRTY)
+				if (!(tss->tstat & TSS_OP_RECOVERY))
 				{
-					
-					DIRTYUNLINK(bp->bsstab);
-					bufwrite(bp->bsstab);
+					hkgc_wash_sstab(TRUE);
 				}
 				
 				sstab_split(tabinfo, bp, rp);
@@ -872,10 +883,9 @@ blk_check_sstab_space(TABINFO *tabinfo, BUF *bp, char *rp, int rlen,
 						break;
 					}
 
-					if (SSTABLE_STATE(bp) & BUF_DIRTY)
+					if (!(tss->tstat & TSS_OP_RECOVERY))
 					{
-						DIRTYUNLINK(bp->bsstab);
-						bufwrite(bp->bsstab);
+						hkgc_wash_sstab(TRUE);
 					}
 					
 					sstab_split(tabinfo, bp, rp);

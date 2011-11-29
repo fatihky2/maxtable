@@ -1916,6 +1916,7 @@ rg_handler(char *req_buf, int fd)
 	tab_hdr		= NULL;
 	col_info	= NULL;
 	resp 		= NULL;
+	tss->rglogfile 	= RgLogfile;
 	
 	if ((req_op = rg_get_meta(req_buf, &ins_meta, &sel_rg, &tab_hdr, 
 					&col_info)) == 0)
@@ -1970,6 +1971,7 @@ rg_handler(char *req_buf, int fd)
 	}
 	else if (req_op & RPC_REQ_RECOVERY_RG_OP)
 	{
+		req_buf += RPC_MAGIC_MAX_LEN;
 		return rg_recovery((char *)req_buf, *(int *)(req_buf + RANGE_ADDR_MAX_LEN));
 	}
 	/* process with heart beat */
@@ -2028,8 +2030,7 @@ rg_handler(char *req_buf, int fd)
 	/* Initialize the meta data for build RESDOM. */
 	tss->tcol_info = col_info;
 	tss->tmeta_hdr = ins_meta;
-	tss->rgbackpfile = RgBackup;
-	tss->rglogfile = RgLogfile;
+	tss->rgbackpfile = RgBackup;	
 	tss->rginsdellogfile = RgInsdelLogfile;
 
 	if (!parser_open(req_buf))
@@ -2383,7 +2384,7 @@ rg_regist()
 
 	resp = conn_recv_resp(sockfd);
 
-	if (resp->status_code != RPC_SUCCESS)
+	if ((resp == NULL) || (resp->status_code != RPC_SUCCESS))
 	{
 		traceprint("\n ERROR \n");
 	}
@@ -2410,7 +2411,7 @@ rg_rebalan_process_sender(REBALANCE_DATA * rbd, char *rg_addr, int port)
 
 	resp = conn_recv_resp(sockfd);
 
-	if (resp->status_code != RPC_SUCCESS)
+	if ((resp == NULL) || (resp->status_code != RPC_SUCCESS))
 	{
 		rtn_stat = FALSE;
 		traceprint("\n ERROR \n");

@@ -181,7 +181,7 @@ retry_where:
 */				
 				memset(resp, 0, 256);
 				memset(cmd, 0, 256);
-				sprintf(cmd, "select gu(gggg%d)", i);
+				sprintf(cmd, "select gu(aaaa%d)", i);
 				if (!cli_execute(connection, cmd, resp, &len))
 				{
 					printf ("Error! \n");

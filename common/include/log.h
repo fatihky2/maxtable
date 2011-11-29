@@ -47,9 +47,17 @@
 #define LOG_DELETE		5
 #define CHECKPOINT_BEGIN	6
 #define CHECKPOINT_COMMIT	7
+#define	LOG_SKIP		8
+
+
+#define	LOG_MAGIC_LEN		8
+#define	MT_LOG			"MT_LOG"
+#define	INSDEL_LOG_MAGIC	"INSDEL"
+#define	CHKPOINT_LOG_MAGIC	"CHKPNT"
 
 typedef struct logrec
 {
+	char		logmagic[LOG_MAGIC_LEN];
 	int		opid;
 	int		status;
 	unsigned int	oldts;
@@ -109,7 +117,7 @@ int
 log_get_latest_rginsedelfile(char *rginsdellogfile, char *rg_ip, int port);
 
 int
-log_redo_insdel(char *insdellogfile);
+log_redo_insdel(char *insdellogfile, int scan_first);
 
 int
 log_recov_rg(char *rgip, int rgport);
