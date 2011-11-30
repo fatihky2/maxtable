@@ -237,6 +237,7 @@ blksrch(TABINFO *tabinfo, BUF *bp)
 	{
 		blkidx = bp->bblk->bblkno;
 		last_offset = bp->bblk->bfreeoff;
+		tabinfo->t_sinfo->sistate |= SI_NODATA;
 		goto finish;
 	}
 
@@ -435,7 +436,10 @@ blkins(TABINFO *tabinfo, char *rp)
 	
 	bp = blkget(tabinfo);
 
-	if (tabinfo->t_stat & TAB_RETRY_LOOKUP)
+	
+
+	if ((tabinfo->t_stat & TAB_RETRY_LOOKUP) 
+	    || !(tabinfo->t_sinfo->sistate & SI_NODATA))
 	{
 		bufunkeep(bp->bsstab);
 		return FALSE;

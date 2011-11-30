@@ -3850,9 +3850,13 @@ again:
 
 			RANGE_PROF *rg_prof = meta_get_rg();
 			
-			if(   (rg_prof == NULL) 
-			   || ((fd = conn_open(rg_prof->rg_addr, rg_prof->rg_port)) < 0)
-			   )
+			if (rg_prof == NULL) 
+			{
+				traceprint("Can not get the ranger server for the recovery.\n");
+				goto save_rg;
+			}
+			
+			if ((fd = conn_open(rg_prof->rg_addr, rg_prof->rg_port)) < 0)
 			{
 				traceprint("Fail to connect to server (%s:%d) for the recovery.\n", rg_prof->rg_addr, rg_prof->rg_port);
 				goto save_rg;
