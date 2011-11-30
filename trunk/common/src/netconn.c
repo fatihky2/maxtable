@@ -793,11 +793,7 @@ void startup(int servPort, int opid, char * (*handler_request)(char *req_buf, in
 		tmpid = &opid;
 		pthread_create(&pthread_id2, NULL, hkgc_boot, (void *)tmpid);
 	}
-	else if (opid == TSS_OP_METASERVER)
-	{
-		tmpid = &opid;
-		//pthread_create(&pthread_id2, NULL, meta_recovery, (void *)tmpid);;
-	}
+	
 	//start_daemon(listenfd, handler_request);
 	msg_process(handler_request);
 }

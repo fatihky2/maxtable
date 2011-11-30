@@ -3820,7 +3820,7 @@ meta_failover_rg(char * req_buf)
 }
 
 void *
-meta_recovery(void *Null)
+meta_recovery()
 {
 	int		i;
 	SVR_IDX_FILE	*rglist;
@@ -3854,7 +3854,7 @@ again:
 			   || ((fd = conn_open(rg_prof->rg_addr, rg_prof->rg_port)) < 0)
 			   )
 			{
-				traceprint("Fail to create connection for the recovery.\n");
+				traceprint("Fail to connect to server (%s:%d) for the recovery.\n", rg_prof->rg_addr, rg_prof->rg_port);
 				goto save_rg;
 			}
 			
@@ -4264,6 +4264,7 @@ exit:
 int main(int argc, char *argv[])
 {
 	char *conf_path;
+	pthread_t pthread_id;
 
 
 	mem_init_alloc_regions();
@@ -4274,6 +4275,9 @@ int main(int argc, char *argv[])
 
 	meta_server_setup(conf_path);
 
+
+	pthread_create(&pthread_id, NULL, meta_recovery, NULL);;
+	
 	startup(Master_infor->port, TSS_OP_METASERVER, meta_handler);
 
 	return TRUE;
