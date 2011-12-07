@@ -16,13 +16,15 @@
 #include "row.h"
 
 
+MT_CLI_CONTEXT *cli_context = NULL;
+
 extern	TSS	*Tss;
 
 extern int 
 sel_resp_rejoin(char * src_buf, char * dest_buf, int src_len, int * dest_len, char *index_buf, int querytype);
 
 static int 
-cli_prt_help(char *cmd);
+mt_cli_prt_help(char *cmd);
 
 int validation_request(char * request)
 {
@@ -30,15 +32,40 @@ int validation_request(char * request)
     return TRUE;
 }
 
+void
+mt_cli_context_crt()
+{
+	assert (cli_context == NULL);
+	
+	mem_init_alloc_regions();
+	tss_setup(TSS_OP_CLIENT);
+
+	cli_context = MEMALLOCHEAP(sizeof(MT_CLI_CONTEXT));
+	SPINLOCK_ATTR_INIT(cli_context->mutexattr);
+	SPINLOCK_ATTR_SETTYPE(cli_context->mutexattr, PTHREAD_MUTEX_RECURSIVE);
+	SPINLOCK_INIT(cli_context->mutex, &(cli_context->mutexattr));
+}
+
+
+void
+mt_cli_context_destroy()
+{
+	SPINLOCK_DESTROY(cli_context->mutex);
+	MEMFREEHEAP(cli_context);
+	cli_context = NULL;
+	tss_release();
+	mem_free_alloc_regions();	
+}
+
 
 /*
 ** create one connection between cli and svr, return the connection
 */
-int cli_connection(char * meta_ip, int meta_port, conn ** connection)
+int 
+mt_cli_connection(char * meta_ip, int meta_port, conn ** connection)
 {
-	mem_init_alloc_regions();
-	tss_setup(TSS_OP_CLIENT);
-
+	P_SPINLOCK(cli_context->mutex);
+	
 	conn * new_conn = (conn *)MEMALLOCHEAP(sizeof(conn));
 	new_conn->meta_server_port = meta_port;
 	strcpy(new_conn->meta_server_ip, meta_ip);
@@ -47,25 +74,29 @@ int cli_connection(char * meta_ip, int meta_port, conn ** connection)
 	{
 		perror("error in create connection: ");
 		MEMFREEHEAP(new_conn);
+		V_SPINLOCK(cli_context->mutex);
 		return FALSE;
 	}
-	
+
 	new_conn->status = ESTABLISHED;
 	new_conn->rg_list_len = 0;
 
 	*connection = new_conn;
 
+	V_SPINLOCK(cli_context->mutex);
 	return TRUE;
 }
 
 /*
 ** close one connection between cli and svr
 */
-void cli_exit(conn * connection)
+void 
+mt_cli_exit(conn * connection)
 {
 	int i;
 
-
+	P_SPINLOCK(cli_context->mutex);
+	
 	close(connection->connection_fd);
 	
 	for(i = 0; i < connection->rg_list_len; i++)
@@ -79,16 +110,15 @@ void cli_exit(conn * connection)
 	}
 	MEMFREEHEAP(connection);
 
-	mem_free_alloc_regions();
+	V_SPINLOCK(cli_context->mutex);
 }
 
 /*
 ** commit one request
 */
-int cli_execute(conn * connection, char * cmd, char * response, int * resp_len)
+int 
+mt_cli_execute(conn * connection, char * cmd, char * response, int * resp_len)
 {
-	LOCALTSS(tss);
-
 	char		send_buf[LINE_BUF_SIZE];
 	char		send_rg_buf[LINE_BUF_SIZE];
 	char		tab_name[64];
@@ -103,15 +133,22 @@ int cli_execute(conn * connection, char * cmd, char * response, int * resp_len)
 	int		sstab_split;
 	int		remove_tab_hit;
 	int		retry_cnt;
+	int		meta_retry;
 	
 
+	P_SPINLOCK(cli_context->mutex);
+
+	LOCALTSS(tss);
+	
 	if(!validation_request(cmd))
 	{
+		V_SPINLOCK(cli_context->mutex);
 		return CLI_FAIL;
 	}
 
-	if (cli_prt_help(cmd))
+	if (mt_cli_prt_help(cmd))
 	{
+		V_SPINLOCK(cli_context->mutex);
 		return CLI_SUCCESS;
 	}
 
@@ -122,6 +159,7 @@ int cli_execute(conn * connection, char * cmd, char * response, int * resp_len)
 	sstab_split = FALSE;
 	remove_tab_hit = FALSE;
 	retry_cnt = 0;
+	meta_retry = 0;
 
 	//querytype = par_get_query(cmd, &querytype_index);
 	if(!parser_open(cmd))
@@ -129,6 +167,7 @@ int cli_execute(conn * connection, char * cmd, char * response, int * resp_len)
 		parser_close();
 		tss->tstat |= TSS_PARSER_ERR;
 		traceprint("PARSER ERR: Please input the command again by the 'help' signed.\n");
+		V_SPINLOCK(cli_context->mutex);
 		return FALSE;
 	}
 
@@ -174,6 +213,22 @@ retry:
 		rtn_stat = CLI_FAIL;
 
 		goto finish;
+	}
+
+	
+	if (resp->status_code & RPC_RETRY)
+	{
+		traceprint("\n Waiting for the retry the meta server\n");
+		
+		if(meta_retry)
+		{
+			rtn_stat = CLI_FAIL;
+			goto finish;
+		}
+
+		sleep(5);
+		
+		meta_retry++;
 	}
 	
 	if (!(resp->status_code & RPC_SUCCESS))
@@ -526,11 +581,13 @@ finish:
 
 	parser_close();    
 
+	V_SPINLOCK(cli_context->mutex);
 	return rtn_stat;
 }
 
 
-int sel_resp_rejoin(char * src_buf, char * dest_buf, int src_len, int * dest_len, char *index_buf, int querytype)
+int 
+sel_resp_rejoin(char * src_buf, char * dest_buf, int src_len, int * dest_len, char *index_buf, int querytype)
 {
 	char col_off_tab[COL_OFFTAB_MAX_SIZE];
 	int col_off_idx = COL_OFFTAB_MAX_SIZE;
@@ -611,35 +668,42 @@ int sel_resp_rejoin(char * src_buf, char * dest_buf, int src_len, int * dest_len
 
 
 int
-cli_rgsel_meta(conn * connection, char * cmd, SELCTX *resp_selctx)
+mt_cli_rgsel_meta(conn * connection, char * cmd, SELCTX *resp_selctx)
 {
-	LOCALTSS(tss);
-
 	char		send_buf[LINE_BUF_SIZE];
 	char		tab_name[64];
 	int		send_buf_size;
 	RPCRESP		*resp;
 	int		querytype;
 	int		rtn_stat;
+	int		meta_retry;
 	
 
+	P_SPINLOCK(cli_context->mutex);
+
+	LOCALTSS(tss);
+	
 	if(!validation_request(cmd))
 	{
+		V_SPINLOCK(cli_context->mutex);
 		return FALSE;
 	}
 
-	if (cli_prt_help(cmd))
+	if (mt_cli_prt_help(cmd))
 	{
+		V_SPINLOCK(cli_context->mutex);
 		return FALSE;
 	}
 
 	rtn_stat = TRUE;
+	meta_retry = 0;
 
 	if(!parser_open(cmd))
 	{
 		parser_close();
 		tss->tstat |= TSS_PARSER_ERR;
 		traceprint("PARSER ERR: Please input the command again by the 'help' signed.\n");
+		V_SPINLOCK(cli_context->mutex);
 		return FALSE;
 	}
 
@@ -656,6 +720,23 @@ cli_rgsel_meta(conn * connection, char * cmd, SELCTX *resp_selctx)
 	write(connection->connection_fd, send_buf, (send_buf_size + RPC_MAGIC_MAX_LEN));
 
 	resp = conn_recv_resp(connection->connection_fd);
+
+	
+	if ((resp != NULL) && (resp->status_code & RPC_RETRY))
+	{
+		traceprint("\n Waiting for the retry the meta server\n");
+		
+		if(meta_retry)
+		{
+			rtn_stat = FALSE;
+			goto finish;
+		}
+
+		sleep(5);
+		
+		meta_retry++;
+	}
+	
 	if ((resp == NULL) || (!(resp->status_code & RPC_SUCCESS)))
 	{
 		traceprint("\n ERROR in response \n");
@@ -679,20 +760,22 @@ finish:
 
 	conn_destroy_resp(resp);
 	
-	parser_close();    
+	parser_close();
 
+	V_SPINLOCK(cli_context->mutex);
 	return TRUE;
 }
 
 
 rg_conn *
-cli_rgsel_ranger(conn * connection, char * cmd, SELCTX *selctx, char *ip, int port)
+mt_cli_rgsel_ranger(conn * connection, char * cmd, SELCTX *selctx, char *ip, int port)
 {
 	char		send_rg_buf[LINE_BUF_SIZE];
 	int		rtn_stat;
 	rg_conn		*rg_connection;
 	int 		i;
 
+	P_SPINLOCK(cli_context->mutex);
 
 	for(i = 0; i < connection->rg_list_len; i++)
 	{
@@ -718,6 +801,7 @@ cli_rgsel_ranger(conn * connection, char * cmd, SELCTX *selctx, char *ip, int po
 
 			MEMFREEHEAP(rg_connection);
 			rtn_stat = FALSE;
+			V_SPINLOCK(cli_context->mutex);
 			return NULL;
 
 		}
@@ -764,7 +848,7 @@ cli_rgsel_ranger(conn * connection, char * cmd, SELCTX *selctx, char *ip, int po
 			(sizeof(SELWHERE) + send_buf_size + RPC_MAGIC_MAX_LEN));
 	}
 
-	
+	V_SPINLOCK(cli_context->mutex);
 	return rg_connection;
 	
 
@@ -772,12 +856,13 @@ cli_rgsel_ranger(conn * connection, char * cmd, SELCTX *selctx, char *ip, int po
 
 
 int
-cli_rgsel_is_bigdata(rg_conn * rg_connection, int *bigdataport)
+mt_cli_rgsel_is_bigdata(rg_conn * rg_connection, int *bigdataport)
 {
 	RPCRESP		*rg_resp;
 	int		rtn_stat;
 	
-	
+
+	P_SPINLOCK(cli_context->mutex);
 	rg_resp = conn_recv_resp_abt(rg_connection->connection_fd);
 
 	switch (rg_resp->status_code)
@@ -827,12 +912,13 @@ cli_rgsel_is_bigdata(rg_conn * rg_connection, int *bigdataport)
 	
 	}
 
+	V_SPINLOCK(cli_context->mutex);
 	return rtn_stat;
 }
 
 
 int
-cli_open_range(conn * connection, char * cmd, int opid)
+mt_cli_open_range(conn * connection, char * cmd, int opid)
 {
 	SELCTX		*selctx;
 	rg_conn		*rg_connection;
@@ -843,6 +929,7 @@ cli_open_range(conn * connection, char * cmd, int opid)
 	int		port;
 
 
+	P_SPINLOCK(cli_context->mutex);
 	selctx = MEMALLOCHEAP(sizeof(SELCTX));
 
 	if (opid == SELECT_RANGE_OP)
@@ -854,7 +941,7 @@ cli_open_range(conn * connection, char * cmd, int opid)
 		selctx->stat = SELECT_WHERE_OP;
 	}
 	
-	cli_rgsel_meta(connection, cmd, selctx);
+	mt_cli_rgsel_meta(connection, cmd, selctx);
 
 	if (opid == SELECT_RANGE_OP)
 	{
@@ -882,9 +969,9 @@ cli_open_range(conn * connection, char * cmd, int opid)
 		}
 	}
 
-	rg_connection = cli_rgsel_ranger(connection, cmd, selctx, ip, port);
+	rg_connection = mt_cli_rgsel_ranger(connection, cmd, selctx, ip, port);
 
-	if (!cli_rgsel_is_bigdata(rg_connection, &bigdataport))
+	if (!mt_cli_rgsel_is_bigdata(rg_connection, &bigdataport))
 	{
 		MEMFREEHEAP(selctx);
 		return -1;
@@ -900,16 +987,18 @@ cli_open_range(conn * connection, char * cmd, int opid)
 		conn_cnt++;
 	}
 
+	V_SPINLOCK(cli_context->mutex);
 	return sockfd;
 }
 
 int
-cli_read_range(int sockfd, RANGE_QUERYCTX *rgsel_cont)
+mt_cli_read_range(int sockfd, RANGE_QUERYCTX *rgsel_cont)
 {
 	RPCRESP		*rg_resp;
 	int		rtn_stat;
 	
-	
+
+	P_SPINLOCK(cli_context->mutex);
 	rg_resp = conn_recv_resp_abt(sockfd);
 
 	switch (rg_resp->status_code)
@@ -955,14 +1044,14 @@ cli_read_range(int sockfd, RANGE_QUERYCTX *rgsel_cont)
 	
 	}
 
+	V_SPINLOCK(cli_context->mutex);
 	return rtn_stat;
 }
 
 void
-cli_write_range(int sockfd)
+mt_cli_write_range(int sockfd)
 {
 	char	send_buf[8];
-
 
 	MEMSET(send_buf, 8);
 
@@ -973,7 +1062,7 @@ cli_write_range(int sockfd)
 
 
 void
-cli_close_range(int sockfd)
+mt_cli_close_range(int sockfd)
 {
 	close(sockfd);
 }
@@ -985,7 +1074,7 @@ cli_close_range(int sockfd)
                   (BLOCKSIZE - BLK_TAILSIZE - ROW_OFFSET_ENTRYSIZE)))
 
 char *
-cli_get_nextrow(RANGE_QUERYCTX *rgsel_cont)
+mt_cli_get_nextrow(RANGE_QUERYCTX *rgsel_cont)
 {
 	if (rgsel_cont->cur_rowpos > rgsel_cont->end_rowpos)
 	{
@@ -1008,13 +1097,13 @@ cli_get_nextrow(RANGE_QUERYCTX *rgsel_cont)
 }
 
 char *
-cli_get_firstrow(RANGE_QUERYCTX *rgsel_cont)
+mt_cli_get_firstrow(RANGE_QUERYCTX *rgsel_cont)
 {
 	return NULL;
 }
 
 static int
-cli_prt_help(char *cmd)
+mt_cli_prt_help(char *cmd)
 {
 	if (!strncasecmp("help", cmd, 4))
 	{

@@ -4,6 +4,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include "spinlock.h"
+
 
 //#define	BLOCKSIZE		(64 * 1024)
 #define	BLOCKSIZE		512
@@ -46,13 +48,18 @@ typedef struct _range_query_contex
 	char	data[BLOCKSIZE];
 }RANGE_QUERYCTX;
 
+typedef struct mt_cli_context
+{
+	LOCKATTR mutexattr;
+	SPINLOCK mutex;
+}MT_CLI_CONTEXT;
 
 #define	DATA_CONT	0x0001	
 #define DATA_DONE	0x0002
 #define DATA_EMPTY	0x0004
 
 
-/* Following definition is for the return value of cli_execute(). */
+/* Following definition is for the return value of mt_cli_execute(). */
 #define	CLI_FAIL		0x0001
 #define	CLI_SUCCESS		0x0002
 #define	CLI_RPC_FAIL		0x0004
@@ -61,33 +68,39 @@ typedef struct _range_query_contex
 /*
 create one connection between cli and svr, return the connection
 */
-extern int  cli_connection(char * meta_ip, int meta_port, conn ** connection);
+extern int  mt_cli_connection(char * meta_ip, int meta_port, conn ** connection);
 
 /*
 close one connection between cli and svr
 */
-extern void cli_exit(conn * connection);
+extern void mt_cli_exit(conn * connection);
 
 /*
 commit one request
 */
-extern int cli_execute(conn * connection, char * cmd, char * response, int * length);
+extern int mt_cli_execute(conn * connection, char * cmd, char * response, int * length);
 
 
 extern int
-cli_open_range(conn * connection, char * cmd, int opid);
+mt_cli_open_range(conn * connection, char * cmd, int opid);
 
 extern int
-cli_read_range(int sockfd, RANGE_QUERYCTX *rgsel_cont);
+mt_cli_read_range(int sockfd, RANGE_QUERYCTX *rgsel_cont);
 
 extern void
-cli_write_range(int sockfd);
+mt_cli_write_range(int sockfd);
 
 extern void
-cli_close_range(int sockfd);
+mt_cli_close_range(int sockfd);
 
 extern char *
-cli_get_nextrow(RANGE_QUERYCTX *rgsel_cont);
+mt_cli_get_nextrow(RANGE_QUERYCTX *rgsel_cont);
+
+extern void
+mt_cli_context_crt();
+
+extern void
+mt_cli_context_destroy();
 
 
 #endif

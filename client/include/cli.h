@@ -21,6 +21,6 @@
 #define CLI_H_
 
 int
-cli_prt_help(char *cmd);
+mt_cli_prt_help(char *cmd);
 
 #endif

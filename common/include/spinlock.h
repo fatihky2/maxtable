@@ -25,10 +25,16 @@
 
 typedef	pthread_mutex_t	SPINLOCK;
 typedef pthread_cond_t	SIGNAL;
+typedef pthread_mutexattr_t 	LOCKATTR;
+
 
 //#define	SPINLOCK	pthread_mutex_t
 
-#define	SPINLOCK_INIT(lock)	pthread_mutex_init(&lock, NULL)
+#define SPINLOCK_ATTR_INIT(attr)	pthread_mutexattr_init(&attr)
+
+#define SPINLOCK_ATTR_SETTYPE(attr, type)	pthread_mutexattr_settype(&attr, type)
+
+#define	SPINLOCK_INIT(lock, attr)	pthread_mutex_init(&lock, attr)
 
 #define	P_SPINLOCK(lock)	pthread_mutex_lock(&lock)
 
