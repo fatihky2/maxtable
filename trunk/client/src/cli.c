@@ -69,7 +69,7 @@ typedef struct cli_infor
 CLI_INFOR * Cli_infor = NULL;
 
 void
-cli_infor_init(char* conf_path)
+mt_cli_infor_init(char* conf_path)
 {
 	char	metaport[32];
 
@@ -102,7 +102,7 @@ cli_cmd_normalize(char *cmd)
 }
 
 int
-cli_prt_help(char *cmd)
+mt_cli_prt_help(char *cmd)
 {
 	if (!strncasecmp("help", cmd, 4))
 	{
@@ -174,7 +174,7 @@ cli_deamon()
 			break;
 		}
 		
-		if (cli_prt_help(cli_str))
+		if (mt_cli_prt_help(cli_str))
 		{
 			continue;
 		}
@@ -553,7 +553,7 @@ cli_test_main(char *cmd)
 	    return FALSE;
 	}
 
-	if (cli_prt_help(cli_str))
+	if (mt_cli_prt_help(cli_str))
 	{
 		return TRUE;
 	}

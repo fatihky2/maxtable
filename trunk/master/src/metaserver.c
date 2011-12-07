@@ -774,6 +774,13 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 			CLOSE(fd1);
 			goto exit;
 		}
+		else if (tss->tcur_rgprof->rg_stat & RANGER_IS_SUSPECT)
+		{
+			traceprint("Ranger server (%s:%d) is SUSPECT\n", rg_addr, rg_port);
+
+			CLOSE(fd1);
+			goto exit;
+		}
 
 		//rg_port = tss->tcur_rgprof->rg_port;
 
@@ -1106,7 +1113,14 @@ exit:
 	}
 	else
 	{
-		rpc_status |= RPC_FAIL;
+		if (tss->tcur_rgprof->rg_stat & RANGER_IS_SUSPECT)
+		{
+			rpc_status |= RPC_RETRY;
+		}
+		else
+		{
+			rpc_status |= RPC_FAIL;
+		}
 		resp = conn_build_resp_byte(rpc_status, 0, NULL);
 	}
 
@@ -1543,6 +1557,12 @@ meta_seldeltab(TREE *command, TABINFO *tabinfo)
 
 		goto exit;
 	}
+	else if (tss->tcur_rgprof->rg_stat & RANGER_IS_SUSPECT)
+	{
+		traceprint("Ranger server (%s:%d) is SUSPECT\n", rg_addr, rg_port);
+
+		goto exit;
+	}
 
 	//rg_port = tss->tcur_rgprof->rg_port;
 	
@@ -1674,7 +1694,14 @@ exit:
 	}
 	else
 	{
-		rpc_status |= RPC_FAIL;
+		if (tss->tcur_rgprof->rg_stat & RANGER_IS_SUSPECT)
+		{
+			rpc_status |= RPC_RETRY;
+		}
+		else
+		{
+			rpc_status |= RPC_FAIL;
+		}
 		resp = conn_build_resp_byte(rpc_status, 0, NULL);
 	}
 
@@ -1873,6 +1900,12 @@ meta_selrangetab(TREE *command, TABINFO *tabinfo)
 
 			goto exit;
 		}
+		else if (tss->tcur_rgprof->rg_stat & RANGER_IS_SUSPECT)
+		{
+			traceprint("Ranger server (%s:%d) is SUSPECT\n", rg_addr, rg_port);
+
+			goto exit;
+		}
 		
 		MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
 		MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
@@ -2009,7 +2042,15 @@ exit:
 	}
 	else
 	{
-		rpc_status |= RPC_FAIL;
+		if (tss->tcur_rgprof->rg_stat & RANGER_IS_SUSPECT)
+		{
+			rpc_status |= RPC_RETRY;
+		}
+		else
+		{
+			rpc_status |= RPC_FAIL;
+		}
+		
 		resp = conn_build_resp_byte(rpc_status, 0, NULL);
 	}
 
@@ -3339,15 +3380,32 @@ void * meta_heartbeat(void *args)
 		if (resp->status_code == RPC_UNAVAIL)
 		{
 			traceprint("\n rg server is un-available \n");
-			//conn_destroy_resp(resp);
-			goto finish;
+
+			if (rg_addr->rg_stat & RANGER_IS_SUSPECT)
+			{
+				//conn_destroy_resp(resp);
+				goto finish;
+			}
+
+			rg_addr->rg_stat |= RANGER_IS_SUSPECT;
 
 		}
 		else if (resp->status_code != RPC_SUCCESS)
 		{
 			traceprint("\n We got a non-success response. \n");
-                        //conn_destroy_resp(resp);
-                        goto finish;
+
+			if (rg_addr->rg_stat & RANGER_IS_SUSPECT)
+			{
+                        	//conn_destroy_resp(resp);
+                        	goto finish;
+			}
+
+			rg_addr->rg_stat |= RANGER_IS_SUSPECT;
+		}
+
+		if ((resp->status_code & RPC_SUCCESS) && (rg_addr->rg_stat & RANGER_IS_SUSPECT))
+		{
+			rg_addr->rg_stat &= ~RANGER_IS_SUSPECT;
 		}
 
 		//conn_destroy_resp(resp);
@@ -3395,8 +3453,10 @@ finish:
 		pthread_mutex_unlock(&mutex);
 
 		if(hb_conn > 0)
+		{
 			close(hb_conn);
-
+		}
+		
 		pthread_detach(pthread_self());
 
 	return NULL;
@@ -3776,8 +3836,10 @@ meta_failover_rg(char * req_buf)
 				{
 					found = TRUE;
 
+					Assert(rg_addr[i].rg_stat & RANGER_IS_SUSPECT);
+
 					//update rg list
-					rg_addr[i].rg_stat &= ~RANGER_IS_ONLINE;
+					rg_addr[i].rg_stat &= ~(RANGER_IS_ONLINE | RANGER_IS_SUSPECT);
 					rg_addr[i].rg_stat = RANGER_IS_OFFLINE | RANGER_NEED_RECOVERY;
 					//(rglist->nextrno)++;//do not modify this!					
 					

@@ -42,7 +42,9 @@ int main(int argc, char *argv[])
 		return 0;
 	}
 
-	if(cli_connection("127.0.0.1", 1959, &connection))
+	mt_cli_context_crt();
+
+	if(mt_cli_connection("127.0.0.1", 1959, &connection))
 	{
 		if (match(argv[1], "create"))
 		{
@@ -54,7 +56,7 @@ int main(int argc, char *argv[])
 #else	
 			sprintf(cmd, "create table gu(id1 varchar, id2 varchar,id3 int, id4 varchar,id5 varchar,id6 varchar,id7 varchar,id8 varchar,id9 varchar)");
 #endif
-			cli_execute(connection, cmd, resp, &len);
+			mt_cli_execute(connection, cmd, resp, &len);
 			printf("ret: %s\n", resp);
 		}
 
@@ -106,7 +108,7 @@ int main(int argc, char *argv[])
 				sprintf(cmd, "insert into gu(aaaa%d, bbbb%d, %d, %s%d, %s%d, %s%d, %s%d, %s%d, %s%d)", i,i,i,c,i,d, i,e, i,f,i,g,i,h,i);
 #endif
 				//sprintf(cmd, "insert into gu(aaaa%d, bbbb%d)", i,i);
-				if (!cli_execute(connection, cmd, resp, &len))
+				if (!mt_cli_execute(connection, cmd, resp, &len))
 				{
 					printf ("Error! \n");
 
@@ -123,7 +125,7 @@ int main(int argc, char *argv[])
 			memset(cmd, 0, 256);
 			sprintf(cmd, "selectwhere gu where id1(aaaa7, aaaa9) and id2(bbbb6, bbbb8)");
 //			sprintf(cmd, "selectwhere gu where id2(bbbb3, bbbb8)");
-			int sockfd = cli_open_range(connection, cmd, SELECT_WHERE_OP);
+			int sockfd = mt_cli_open_range(connection, cmd, SELECT_WHERE_OP);
 
 			RANGE_QUERYCTX rgsel_cont;
 
@@ -131,24 +133,24 @@ int main(int argc, char *argv[])
 
 retry_where:
 
-			cli_read_range(sockfd, &rgsel_cont);
+			mt_cli_read_range(sockfd, &rgsel_cont);
 
 			if (!(rgsel_cont.status & DATA_EMPTY))
 			{
 				do
 				{
-					test_rp = cli_get_nextrow(&rgsel_cont);
+					test_rp = mt_cli_get_nextrow(&rgsel_cont);
 				} while(test_rp != NULL);
 
 				if (rgsel_cont.status & DATA_CONT)
 				{
-					cli_write_range(sockfd);					
+					mt_cli_write_range(sockfd);					
 					goto retry_where;
 				}
 			}
 			
-			cli_close_range(sockfd);
-			//cli_execute(connection, cmd, resp, &len);
+			mt_cli_close_range(sockfd);
+			//mt_cli_execute(connection, cmd, resp, &len);
 			printf("Client 1: %s, ret(%d): %s\n", cmd, len, resp);
 			//printf("cmd: %s, col_num: %d, ret(%d): %s, %d, %s\n", cmd, *((int *)(resp + len -4)), len, resp + *((int *)(resp + len -8)), *((int *)(resp + *((int *)(resp + len -12)))), resp + *((int *)(resp + len -16)));
 
@@ -182,7 +184,7 @@ retry_where:
 				memset(resp, 0, 256);
 				memset(cmd, 0, 256);
 				sprintf(cmd, "select gu(aaaa%d)", i);
-				if (!cli_execute(connection, cmd, resp, &len))
+				if (!mt_cli_execute(connection, cmd, resp, &len))
 				{
 					printf ("Error! \n");
 
@@ -203,7 +205,7 @@ retry_where:
 //			sprintf(cmd, "selectrange gu(gggg10, *)");
 //			sprintf(cmd, "selectrange gu(*, *)");
 
-			int sockfd = cli_open_range(connection, cmd, SELECT_RANGE_OP);
+			int sockfd = mt_cli_open_range(connection, cmd, SELECT_RANGE_OP);
 
 			RANGE_QUERYCTX rgsel_cont;
 
@@ -211,25 +213,25 @@ retry_where:
 
 retry:
 
-			cli_read_range(sockfd, &rgsel_cont);
+			mt_cli_read_range(sockfd, &rgsel_cont);
 
 			if (!(rgsel_cont.status & DATA_EMPTY))
 			{
 				do
 				{
-					test_rp = cli_get_nextrow(&rgsel_cont);
+					test_rp = mt_cli_get_nextrow(&rgsel_cont);
 				} while(test_rp != NULL);
 
 				if (rgsel_cont.status & DATA_CONT)
 				{
-					cli_write_range(sockfd);					
+					mt_cli_write_range(sockfd);					
 					goto retry;
 				}
 			}
 			
-			cli_close_range(sockfd);
+			mt_cli_close_range(sockfd);
 			
-			//cli_execute(connection, cmd, resp, &len);
+			//mt_cli_execute(connection, cmd, resp, &len);
 			printf("Client 1: %s, ret(%d): %s\n", cmd, len, resp);
 		}
 
@@ -243,7 +245,7 @@ retry:
 				memset(resp, 0, 256);
 				memset(cmd, 0, 256);
 				sprintf(cmd, "delete gu(gggg%d)", i);
-				if (!cli_execute(connection, cmd, resp, &len))
+				if (!mt_cli_execute(connection, cmd, resp, &len))
 				{
 					printf ("Error! \n");
 
@@ -259,7 +261,7 @@ retry:
 				memset(resp, 0, 256);
 				memset(cmd, 0, 256);
 				sprintf(cmd, "select gu(gggg%d)", i);
-				if (!cli_execute(connection, cmd, resp, &len))
+				if (!mt_cli_execute(connection, cmd, resp, &len))
 				{
 					printf ("Error! \n");
 
@@ -275,7 +277,7 @@ retry:
 			memset(resp, 0, 256);
 			memset(cmd, 0, 256);
 			sprintf(cmd, "drop gu");
-			if (!cli_execute(connection, cmd, resp, &len))
+			if (!mt_cli_execute(connection, cmd, resp, &len))
 			{
 				printf ("Error! \n");
 
@@ -286,9 +288,10 @@ retry:
 			printf("cmd: %s, %s\n", cmd, resp);
 		}
 		
-		cli_exit(connection);
+		mt_cli_exit(connection);
 	}
-	
+
+	mt_cli_context_destroy();
 	return 0;
 }
 
