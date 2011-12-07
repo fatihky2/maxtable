@@ -3344,6 +3344,7 @@ void * meta_heartbeat(void *args)
 	int 		rg_index = rg_addr->rg_index;
 	char 		*hb_recv_buf;
 	MSG_DATA	*new_msg;
+	int		sleeptime;
 
 	//wait 5s to make sure rg server's network service is ready
 	sleep(5);
@@ -3358,9 +3359,10 @@ void * meta_heartbeat(void *args)
 
 	}
 
+	sleeptime = HEARTBEAT_INTERVAL;
 	while(TRUE)
 	{
-		sleep(HEARTBEAT_INTERVAL);
+		sleep(sleeptime);
 		MEMSET(send_buf, 256);
 		
 		idx = 0;
@@ -3388,6 +3390,7 @@ void * meta_heartbeat(void *args)
 			}
 
 			rg_addr->rg_stat |= RANGER_IS_SUSPECT;
+			sleeptime = 3;
 
 		}
 		else if (resp->status_code != RPC_SUCCESS)
@@ -3401,11 +3404,13 @@ void * meta_heartbeat(void *args)
 			}
 
 			rg_addr->rg_stat |= RANGER_IS_SUSPECT;
+			sleeptime = 3;
 		}
 
 		if ((resp->status_code & RPC_SUCCESS) && (rg_addr->rg_stat & RANGER_IS_SUSPECT))
 		{
 			rg_addr->rg_stat &= ~RANGER_IS_SUSPECT;
+			sleeptime = HEARTBEAT_INTERVAL;
 		}
 
 		//conn_destroy_resp(resp);
