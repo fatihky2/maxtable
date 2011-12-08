@@ -36,8 +36,9 @@ TOKENS  MT_Tokens[] =
 	{REMOVE,	"remove"},
 	{REBALANCE,	"rebalance"},
 	{SELECTRANGE,	"selectrange"},
-	{MCC,		"mcc"},
+	{MCCTABLE,	"mcc checktable"},
 	{SELECTWHERE,	"selectwhere"},
+	{MCCRANGER,	"mcc checkranger"},
 };
 
 int

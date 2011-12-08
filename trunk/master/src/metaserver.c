@@ -109,8 +109,11 @@ meta_collect_rg(char * req_buf);
 static void
 meta_save_rginfo();
 
-char *
+static char *
 meta_checkdata(TREE *command);
+
+static char *
+meta_checkranger(TREE *command);
 
 void
 meta_bld_rglist(char *filepath)
@@ -3234,14 +3237,23 @@ parse_again:
 	    case ADDSSTAB:
 	    	resp = meta_addsstab(command, tabinfo);
 	    	break;
+		
 	    case DROP:
 	    	resp = meta_droptab(command);
 	    	break;
+		
 	    case REMOVE:
 	    	resp = meta_removtab(command);
 	    	break;
-	    case MCC:
+		
+	    case MCCTABLE:
 	    	resp = meta_checkdata(command);
+		break;
+		
+	    case MCCRANGER:
+	    	resp = meta_checkranger(command);
+	    	break;
+		
 	    case REBALANCE:
 	    	resp = meta_rebalancer(command);
 	    	break;
@@ -4244,7 +4256,7 @@ meta_check_tabletschme(char *tabdir, int tabid)
 
 
 
-char *
+static char *
 meta_checkdata(TREE *command)
 {
 	char		*tab_name;
@@ -4331,6 +4343,62 @@ exit:
 	return resp;
 }
 
+
+
+
+static char *
+meta_checkranger(TREE *command)
+{
+	int		rtn_stat;
+	char		*resp;
+	RANGE_PROF	*rg_prof;
+	int		i;
+	SVR_IDX_FILE 	*temp_store;
+
+
+	Assert(command);
+
+	rtn_stat = FALSE;	
+	
+	temp_store = &(Master_infor->rg_list);
+	rg_prof = (RANGE_PROF *)(temp_store->data);
+
+	for(i = 0; i < temp_store->nextrno; i++)
+	{
+		if (rg_prof[i].rg_stat & RANGER_IS_ONLINE)
+		{
+			traceprint("Ranger %d (%s:%d) is ON-LINE\n", i, rg_prof[i].rg_addr, rg_prof[i].rg_port);
+		}
+		else if (rg_prof[i].rg_stat & RANGER_IS_OFFLINE)
+		{
+			traceprint("Ranger %d (%s:%d) is OFF-LINE\n", i, rg_prof[i].rg_addr, rg_prof[i].rg_port);
+		}
+		else if (rg_prof[i].rg_stat & RANGER_IS_SUSPECT)
+		{
+			traceprint("Ranger %d (%s:%d) is SUSPECT\n", i, rg_prof[i].rg_addr, rg_prof[i].rg_port);
+		}
+		else
+		{
+			traceprint("Ranger %d (%s:%d) is invalid-state\n", i, rg_prof[i].rg_addr, rg_prof[i].rg_port);
+		}
+	}
+
+	/* TODO: tablet location checking. */
+	
+	rtn_stat = TRUE;
+
+	if (rtn_stat)
+	{
+		
+		resp = conn_build_resp_byte(RPC_SUCCESS, 0, NULL);
+	}
+	else
+	{
+		resp = conn_build_resp_byte(RPC_FAIL, 0, NULL);
+	}
+
+	return resp;
+}
 
 int main(int argc, char *argv[])
 {
