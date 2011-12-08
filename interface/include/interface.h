@@ -7,8 +7,8 @@
 #include "spinlock.h"
 
 
-//#define	BLOCKSIZE		(64 * 1024)
-#define	BLOCKSIZE		512
+#define	BLOCKSIZE		(64 * 1024)
+//#define	BLOCKSIZE		512
 
 
 
