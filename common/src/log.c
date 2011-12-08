@@ -581,6 +581,7 @@ log_get_latest_rginsedelfile(char *rginsdellogfile, char *rg_ip, int port)
 	int	slen2;
 	char	logdir[256];
 	char	rgname[64];
+	int	status;
 
 
 	MEMSET(rginsdellogfile, 256);
@@ -629,7 +630,10 @@ log_get_latest_rginsedelfile(char *rginsdellogfile, char *rg_ip, int port)
 				MEMCPY(rginsdellogfile, mt_entries.tabname[i], slen1);
 			}
 		}	
-	}
+
+		/* No insdel log case. */
+		status = (slen2 == 0)? FALSE : TRUE;
+	} 
 	
 #else
 	DIR *pDir ;
@@ -657,11 +661,19 @@ log_get_latest_rginsedelfile(char *rginsdellogfile, char *rg_ip, int port)
 				MEMCPY(rginsdellogfile, ent->d_name, slen1);
 			}
 		}	
+
+		/* No insdel log case. */
+                status = (slen2 == 0)? FALSE : TRUE;
 	}
 #endif
 
 	str1_to_str2(logdir, '/', rginsdellogfile);
 	MEMCPY(rginsdellogfile, logdir, STRLEN(logdir));
+
+	if (status == FALSE)
+	{
+		return FALSE;
+	}
 	
 	return TRUE;
 }
@@ -1073,7 +1085,10 @@ log_recov_rg(char *rgip, int rgport)
 
 	log_undo_sstab_split(logfile, backup, SPLIT_LOG);
 
-	log_get_latest_rginsedelfile(logfile, rgip, rgport);	
+	if (!log_get_latest_rginsedelfile(logfile, rgip, rgport))
+	{
+		return TRUE;
+	}
 
 	if (!log_redo_insdel(logfile, TRUE))
 	{	
