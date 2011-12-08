@@ -3367,6 +3367,7 @@ void * meta_heartbeat(void *args)
 	if((hb_conn = conn_open(rg_addr->rg_addr, rg_addr->rg_port)) < 0)
 	{
 		perror("error in create connection to rg server when meta server start heart beat: ");
+		rg_addr->rg_stat |= RANGER_IS_SUSPECT;
 		goto finish;
 
 	}
@@ -3386,6 +3387,8 @@ void * meta_heartbeat(void *args)
 		write(hb_conn, send_buf, idx);
 
 		traceprint("\n###### meta sent heart beat to %s/%d. \n", rg_addr->rg_addr, rg_addr->rg_port);
+
+		signal(SIGPIPE, SIG_IGN);
 
 		resp = conn_recv_resp_meta(hb_conn, hb_recv_buf);
 
@@ -3865,7 +3868,6 @@ meta_failover_rg(char * req_buf)
 				else
 				{
 					traceprint("\n error, rg server to be off-line is already off line \n");
-					Assert(1);
 				}
 			}
 		}
@@ -3915,7 +3917,7 @@ again:
 		
 		if(rg_addr[i].rg_stat & RANGER_NEED_RECOVERY)
 		{
-			Assert(rg_addr[i].rg_stat & RANGER_IS_OFFLINE);
+			//Assert(rg_addr[i].rg_stat & RANGER_IS_OFFLINE);
 
 			char	send_buf[256];
 			char	recv_buf[128];
