@@ -187,11 +187,15 @@ cli_deamon()
 		}
 
 		querytype = ((TREE *)(tss->tcmd_parser))->sym.command.querytype;
-		MEMSET(tab_name, 64);
-		MEMCPY(tab_name, 
-			((TREE *)(tss->tcmd_parser))->sym.command.tabname,
-			((TREE *)(tss->tcmd_parser))->sym.command.tabname_len);
 
+		if (querytype != MCCRANGER)
+		{
+			MEMSET(tab_name, 64);
+			MEMCPY(tab_name, 
+				((TREE *)(tss->tcmd_parser))->sym.command.tabname,
+				((TREE *)(tss->tcmd_parser))->sym.command.tabname_len);
+		}
+		
 		/* Each command must send the request to metadata server first. */
 		Cli_infor->cli_status = CLI_CONN_MASTER;
 
@@ -456,8 +460,12 @@ conn_again:
 
 		    	break;
 
-		    case MCC:
+		    case MCCTABLE:
 			meta_again = FALSE;
+			meta_only = TRUE;
+		    	break;
+		    case MCCRANGER:
+		    	meta_again = FALSE;
 			meta_only = TRUE;
 		    	break;
 		    case REBALANCE:
@@ -826,10 +834,13 @@ conn_again:
 		}
 	    	break;
 
-	    case MCC:
+	    case MCCTABLE:
 		meta_again = FALSE;
 		meta_only = TRUE;
 		break;
+
+	    case MCCRANGER:
+	    	break;
 		
 	    case REBALANCE:
 	    	meta_only = TRUE;
@@ -893,7 +904,7 @@ int main(int argc, char **argv)
 	cli_conf_path = CLI_DEFAULT_CONF_PATH;
 	conf_get_path(argc, argv, &cli_conf_path);
 
-	cli_infor_init(cli_conf_path);
+	mt_cli_infor_init(cli_conf_path);
 
 	tss_setup(TSS_OP_CLIENT);
 	
@@ -999,7 +1010,7 @@ int main(int argc, char **argv)
 	cli_conf_path = CLI_DEFAULT_CONF_PATH;
 	conf_get_path(argc, argv, &cli_conf_path);
 
-	cli_infor_init(cli_conf_path);
+	mt_cli_infor_init(cli_conf_path);
 
 	tss_setup(TSS_OP_CLIENT);
 		

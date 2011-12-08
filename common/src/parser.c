@@ -244,9 +244,7 @@ parser_open(char *s_str)
 	        
 	        break;
 
-	    case SELECT:
-		
-		
+	    case SELECT:		
 		tss->topid |= TSS_OP_SELDELTAB;
 		rtn_stat = par_seldel_tab((s_str + s_idx), SELECT);
 
@@ -265,15 +263,24 @@ parser_open(char *s_str)
 	    case ADDSSTAB:
 	    	rtn_stat = par_addsstab(s_str + s_idx, ADDSSTAB);
 	    	break;
+		
 	    case DROP:
 	    	rtn_stat = par_dropremovrebalanmcc_tab(s_str + s_idx, DROP);
 	    	break;
+		
 	    case REMOVE:
 	    	rtn_stat = par_dropremovrebalanmcc_tab(s_str + s_idx, REMOVE);
 	    	break;
-	    case MCC:
-	    	rtn_stat = par_dropremovrebalanmcc_tab(s_str + s_idx, MCC);
+		
+	    case MCCTABLE:
+	    	rtn_stat = par_dropremovrebalanmcc_tab(s_str + s_idx, MCCTABLE);
 	    	break;
+		
+	    case MCCRANGER:
+	    	/* Fake table name "ranger" */
+	    	rtn_stat = par_dropremovrebalanmcc_tab("ranger\0", MCCRANGER);
+	    	break;
+		
 	    case REBALANCE:
 	    	rtn_stat = par_dropremovrebalanmcc_tab(s_str + s_idx, REBALANCE);
 	    	break;
@@ -518,7 +525,8 @@ double_parse:
 	if(   (!strncasecmp("create", start, len))
 	   || (!strncasecmp("insert", start, len))
 	   || (!strncasecmp("add", start, len))
-	   || (!strncasecmp("addsstab", start, len)))
+	   || (!strncasecmp("addsstab", start, len))
+	   || (!strncasecmp("mcc", start, len)))
 	{
 		start[len++] = ' ';
 		goto double_parse;

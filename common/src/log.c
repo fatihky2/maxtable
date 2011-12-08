@@ -703,6 +703,14 @@ log_redo_insdel(char *insdellogfile, int scan_first)
 	int tmp = offset;
 	int row_cnt = 0; 
 	int log_scope_start = FALSE;
+
+	if (tmp == 0)
+	{
+		traceprint("No log to be recovery in the log file %s.\n", insdellogfile);
+		status = TRUE;
+		goto exit;
+	}
+	
 	
 	while(tmp > 0)
 	{
@@ -1076,8 +1084,8 @@ log_recov_rg(char *rgip, int rgport)
 		int logfilenum = m_atoi(logfile + idxpos, 
 					STRLEN(logfile) - idxpos);
 
-		Assert(logfilenum > 0);
-		
+		Assert (logfilenum == 0);
+				
 		logfilenum--;
 
 		MEMSET(prelogfile, STRLEN(prelogfile));
