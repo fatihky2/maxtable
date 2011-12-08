@@ -63,7 +63,7 @@ int main(int argc, char *argv[])
 		if (match(argv[1], "insert"))
 		{
 			/* Insert 10000 data rows into table */
-			for(i = 1; i < 10000; i++)
+			for(i = 1; i < 10000000; i++)
 			{
 #ifdef MT_KEY_VALUE
 				memset(resp, 0, 256);

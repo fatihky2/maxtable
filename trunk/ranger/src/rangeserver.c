@@ -3056,6 +3056,8 @@ main(int argc, char *argv[])
 	
 	conf_get_path(argc, argv, &conf_path);
 
+	tss_setup(TSS_OP_RANGESERVER);
+
 	rg_setup(conf_path);
 
 	//Trace = MEM_USAGE;

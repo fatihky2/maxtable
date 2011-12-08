@@ -780,8 +780,7 @@ void startup(int servPort, int opid, char * (*handler_request)(char *req_buf, in
 	pthread_t pthread_id;
 	pthread_t pthread_id2;
 	int	*tmpid;
-	
-	tss_setup(opid);
+
 
 	msg_recv_args * args = MEMALLOCHEAP(sizeof(msg_recv_args));
 	args->port = servPort;

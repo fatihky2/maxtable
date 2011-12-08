@@ -4412,6 +4412,8 @@ int main(int argc, char *argv[])
 	conf_path = META_DEFAULT_CONF_PATH;
 	conf_get_path(argc, argv, &conf_path);
 
+	tss_setup(TSS_OP_METASERVER);
+	
 	meta_server_setup(conf_path);
 
 
