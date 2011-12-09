@@ -103,6 +103,9 @@ meta_update();
 static RANGE_PROF *
 meta_get_rg();
 
+static RANGE_PROF *
+meta_get_rg_by_ip_port(char *rgip, int rgport);
+
 static int
 meta_collect_rg(char * req_buf);
 
@@ -150,6 +153,8 @@ meta_server_setup(char *conf_path)
 		Master_infor->port = META_DEFAULT_PORT;
 	}
 
+	SPINLOCK_INIT(Master_infor->rglist_spinlock, NULL);
+	
 #ifdef MT_KFS_BACKEND
 	MEMSET(Kfsserver, 32);
 	conf_get_value_by_key(Kfsserver, conf_path, CONF_KFS_IP);
@@ -645,6 +650,7 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 	RANGE_PROF	*rg_prof;
 	int		sstabmap_chg;
 	int		rpc_status;
+	int		rg_suspect;
 
 
 	Assert(command);
@@ -656,6 +662,7 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 	tab_name = command->sym.command.tabname;
 	tab_name_len = command->sym.command.tabname_len;
 	rpc_status = 0;
+	rg_suspect = FALSE;	
 
 	MEMSET(tab_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_dir, MT_META_TABLE, STRLEN(MT_META_TABLE));
@@ -782,6 +789,8 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 			traceprint("Ranger server (%s:%d) is SUSPECT\n", rg_addr, rg_port);
 
 			CLOSE(fd1);
+
+			rg_suspect = TRUE;
 			goto exit;
 		}
 
@@ -1116,7 +1125,7 @@ exit:
 	}
 	else
 	{
-		if (tss->tcur_rgprof->rg_stat & RANGER_IS_SUSPECT)
+		if (rg_suspect)
 		{
 			rpc_status |= RPC_RETRY;
 		}
@@ -1449,6 +1458,7 @@ meta_seldeltab(TREE *command, TABINFO *tabinfo)
 	char		*rg_addr;
 	int		rg_port;
 	int		rpc_status;
+	int		rg_suspect;
 
 
 	Assert(command);
@@ -1460,6 +1470,7 @@ meta_seldeltab(TREE *command, TABINFO *tabinfo)
 	rpc_status = 0;
 	tab_name = command->sym.command.tabname;
 	tab_name_len = command->sym.command.tabname_len;
+	rg_suspect = FALSE; 
 
 	MEMSET(tab_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_dir, MT_META_TABLE, STRLEN(MT_META_TABLE));
@@ -1564,6 +1575,7 @@ meta_seldeltab(TREE *command, TABINFO *tabinfo)
 	{
 		traceprint("Ranger server (%s:%d) is SUSPECT\n", rg_addr, rg_port);
 
+		rg_suspect = TRUE;	
 		goto exit;
 	}
 
@@ -1697,7 +1709,7 @@ exit:
 	}
 	else
 	{
-		if (tss->tcur_rgprof->rg_stat & RANGER_IS_SUSPECT)
+		if (rg_suspect)
 		{
 			rpc_status |= RPC_RETRY;
 		}
@@ -1746,6 +1758,7 @@ meta_selrangetab(TREE *command, TABINFO *tabinfo)
 	int		rg_port;
 	int		key_is_expand;
 	int		rpc_status;
+	int		rg_suspect; 	
 
 
 	Assert(command);
@@ -1757,6 +1770,7 @@ meta_selrangetab(TREE *command, TABINFO *tabinfo)
 	rpc_status = 0;
 	tab_name = command->sym.command.tabname;
 	tab_name_len = command->sym.command.tabname_len;
+	rg_suspect = FALSE;
 
 	MEMSET(tab_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_dir, MT_META_TABLE, STRLEN(MT_META_TABLE));
@@ -1906,7 +1920,7 @@ meta_selrangetab(TREE *command, TABINFO *tabinfo)
 		else if (tss->tcur_rgprof->rg_stat & RANGER_IS_SUSPECT)
 		{
 			traceprint("Ranger server (%s:%d) is SUSPECT\n", rg_addr, rg_port);
-
+			rg_suspect = TRUE;
 			goto exit;
 		}
 		
@@ -2045,7 +2059,7 @@ exit:
 	}
 	else
 	{
-		if (tss->tcur_rgprof->rg_stat & RANGER_IS_SUSPECT)
+		if (rg_suspect)
 		{
 			rpc_status |= RPC_RETRY;
 		}
@@ -2666,9 +2680,22 @@ meta_collect_rg(char * req_buf)
 			    			RANGE_ADDR_MAX_LEN))
 			   )
 			{
+				found = TRUE;
+				
 				if(rg_addr[i].rg_stat & RANGER_IS_OFFLINE)
 				{
-					found = TRUE;
+					P_SPINLOCK(Master_infor->rglist_spinlock);
+
+					if(rg_addr[i].rg_stat & RANGER_NEED_RECOVERY)
+					{
+						rg_addr[i].rg_stat |= RANGER_RESTART;
+
+						V_SPINLOCK(Master_infor->rglist_spinlock);
+
+						break;
+					}
+					
+					V_SPINLOCK(Master_infor->rglist_spinlock);
 					rg_addr[i].rg_stat &= ~RANGER_IS_OFFLINE;
 					rg_addr[i].rg_stat |= RANGER_IS_ONLINE;
 					meta_save_rginfo();
@@ -2679,9 +2706,10 @@ meta_collect_rg(char * req_buf)
 					traceprint("\n rg server with same ip and port is already on line \n");
 					
 					start_heartbeat = FALSE;
-					found = TRUE;
 					break;
 				}
+
+				
 			}
 		}
 
@@ -3345,6 +3373,35 @@ meta_get_rg()
 	return rg_prof + min_rg;
 }
 
+static RANGE_PROF *
+meta_get_rg_by_ip_port(char *rgip, int rgport)
+
+{
+	char		*str;
+	int		i;
+	SVR_IDX_FILE	*rglist;
+	int		found, start_heartbeat;
+	RANGE_PROF	*rg_addr;
+
+	
+	
+	rglist = &(Master_infor->rg_list);
+	found = FALSE;
+	start_heartbeat = TRUE;
+	rg_addr = (RANGE_PROF *)(rglist->data);
+
+	for(i = 0; i < rglist->nextrno; i++)
+	{
+		if (   !strncasecmp(rgip, rg_addr[i].rg_addr, RANGE_ADDR_MAX_LEN)
+		    && (rg_addr[i].rg_port == rgport)
+		   )
+		{
+			return (rg_addr + i);
+		}
+	}
+
+	return NULL;
+}
 
 void * meta_heartbeat(void *args)
 {
@@ -3372,6 +3429,8 @@ void * meta_heartbeat(void *args)
 
 	}
 
+	signal (SIGPIPE,SIG_IGN);
+
 	sleeptime = HEARTBEAT_INTERVAL;
 	while(TRUE)
 	{
@@ -3383,12 +3442,10 @@ void * meta_heartbeat(void *args)
 					RPC_MAGIC_MAX_LEN);
 		PUT_TO_BUFFER(send_buf, idx, RPC_MASTER2RG_HEARTBEAT,
 					RPC_MAGIC_MAX_LEN);
-			
+		
 		write(hb_conn, send_buf, idx);
 
 		traceprint("\n###### meta sent heart beat to %s/%d. \n", rg_addr->rg_addr, rg_addr->rg_port);
-
-		signal(SIGPIPE, SIG_IGN);
 
 		resp = conn_recv_resp_meta(hb_conn, hb_recv_buf);
 
@@ -3852,9 +3909,11 @@ meta_failover_rg(char * req_buf)
 			    		*(int *)(str + RANGE_ADDR_MAX_LEN))
 			   )
 			{
+				found = TRUE;
+				
 				if(rg_addr[i].rg_stat & RANGER_IS_ONLINE)
 				{
-					found = TRUE;
+					
 
 					Assert(rg_addr[i].rg_stat & RANGER_IS_SUSPECT);
 
@@ -3875,7 +3934,6 @@ meta_failover_rg(char * req_buf)
 		if (!found)
 		{
 			traceprint("\n error, rg server to be off_line is not exist in rg list \n");
-			Assert(1);
 		}
 
 		for(i = 0; i < rglist->nextrno; i++)
@@ -3917,8 +3975,11 @@ again:
 		
 		if(rg_addr[i].rg_stat & RANGER_NEED_RECOVERY)
 		{
-			//Assert(rg_addr[i].rg_stat & RANGER_IS_OFFLINE);
+			P_SPINLOCK(Master_infor->rglist_spinlock);
+			
+			Assert((rg_addr[i].rg_stat & RANGER_IS_OFFLINE) | (rg_addr[i].rg_stat & RANGER_RESTART));
 
+			
 			char	send_buf[256];
 			char	recv_buf[128];
 
@@ -3929,18 +3990,31 @@ again:
 			int		fd;
 			RPCRESP 	*resp;
 
-			RANGE_PROF *rg_prof = meta_get_rg();
+			RANGE_PROF *rg_prof;
+
+			if (rg_addr[i].rg_stat & RANGER_RESTART)
+			{
+				rg_prof = rg_addr + i;
+
+				Assert(rg_prof);
+			}
+			else
+			{
+				rg_prof = meta_get_rg();
+			}
 			
 			if (rg_prof == NULL) 
 			{
 				traceprint("Can not get the ranger server for the recovery.\n");
-				goto save_rg;
+				V_SPINLOCK(Master_infor->rglist_spinlock);
+				goto again;
 			}
 			
 			if ((fd = conn_open(rg_prof->rg_addr, rg_prof->rg_port)) < 0)
 			{
 				traceprint("Fail to connect to server (%s:%d) for the recovery.\n", rg_prof->rg_addr, rg_prof->rg_port);
-				goto save_rg;
+				V_SPINLOCK(Master_infor->rglist_spinlock);
+				goto again;
 			}
 			
 			PUT_TO_BUFFER(send_buf, idx, RPC_REQUEST_MAGIC, 
@@ -3960,22 +4034,31 @@ again:
 			{
 				traceprint("\n rg server is un-available \n");
 				conn_close(fd, NULL, NULL);
-				goto save_rg;
+				V_SPINLOCK(Master_infor->rglist_spinlock);
+				goto again;
 
 			}
 			else if (resp->status_code != RPC_SUCCESS)
 			{
 				traceprint("\n We got a non-success response. \n");
 	                        conn_close(fd, NULL, NULL);
-	                        goto save_rg;
+				V_SPINLOCK(Master_infor->rglist_spinlock);
+	                        goto again;
 			}
 
 			conn_close(fd, NULL, NULL);
 
 			rg_addr[i].rg_stat &= ~RANGER_NEED_RECOVERY;
-													
-																	
-save_rg:
+
+			if (rg_prof->rg_stat & RANGER_RESTART)
+			{
+				Assert((rg_addr + i) == rg_prof);
+
+				rg_addr[i].rg_stat &= ~(RANGER_IS_OFFLINE | RANGER_RESTART);
+
+				rg_addr[i].rg_stat |= RANGER_IS_ONLINE;
+			}
+
 			meta_save_rginfo();			
 			
 			//update tablet
@@ -3985,6 +4068,8 @@ save_rg:
 			}
 
 			rg_addr[i].rg_tablet_num = 0;
+
+			V_SPINLOCK(Master_infor->rglist_spinlock);
 			
 			break;
 
@@ -4370,16 +4455,36 @@ meta_checkranger(TREE *command)
 		if (rg_prof[i].rg_stat & RANGER_IS_ONLINE)
 		{
 			traceprint("Ranger %d (%s:%d) is ON-LINE\n", i, rg_prof[i].rg_addr, rg_prof[i].rg_port);
+			rtn_stat = TRUE;
 		}
-		else if (rg_prof[i].rg_stat & RANGER_IS_OFFLINE)
+
+		if (rg_prof[i].rg_stat & RANGER_IS_OFFLINE)
 		{
 			traceprint("Ranger %d (%s:%d) is OFF-LINE\n", i, rg_prof[i].rg_addr, rg_prof[i].rg_port);
+			rtn_stat = TRUE;
 		}
-		else if (rg_prof[i].rg_stat & RANGER_IS_SUSPECT)
+
+		if (rg_prof[i].rg_stat & RANGER_IS_SUSPECT)
 		{
 			traceprint("Ranger %d (%s:%d) is SUSPECT\n", i, rg_prof[i].rg_addr, rg_prof[i].rg_port);
+			rtn_stat = TRUE;
 		}
-		else
+
+		
+		if (rg_prof[i].rg_stat & RANGER_NEED_RECOVERY)
+		{
+			traceprint("Ranger %d (%s:%d) need to recovry\n", i, rg_prof[i].rg_addr, rg_prof[i].rg_port);
+			rtn_stat = TRUE;
+		}
+
+		
+		if (rg_prof[i].rg_stat & RANGER_RESTART)
+		{
+			traceprint("Ranger %d (%s:%d) has been restart.\n", i, rg_prof[i].rg_addr, rg_prof[i].rg_port);
+			rtn_stat = TRUE;
+		}
+		
+		if (!rtn_stat)
 		{
 			traceprint("Ranger %d (%s:%d) is invalid-state\n", i, rg_prof[i].rg_addr, rg_prof[i].rg_port);
 		}
@@ -4387,8 +4492,6 @@ meta_checkranger(TREE *command)
 
 	/* TODO: tablet location checking. */
 	
-	rtn_stat = TRUE;
-
 	if (rtn_stat)
 	{
 		

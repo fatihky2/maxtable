@@ -25,10 +25,7 @@
 #include "global.h"
 #include "conf.h"
 #include "netconn.h"
-
-
-
-
+#include "spinlock.h"
 
 
 struct srch_info;
@@ -321,6 +318,7 @@ typedef struct master_infor
 {
 	char		conf_path[META_CONF_PATH_MAX_LEN];
 	int		port;
+	SPINLOCK	rglist_spinlock;
 	SVR_IDX_FILE	rg_list;
 	HB_DATA		heart_beat_data[MAX_RANGER_NUM];
 }MASTER_INFOR;
