@@ -50,6 +50,7 @@
 #include "compact.h"
 #include "b_search.h"
 #include "log.h"
+#include "m_socket.h"
 
 
 extern TSS	*Tss;
@@ -856,7 +857,7 @@ rg_selrangetab(TREE *command, TABINFO *tabinfo, int fd)
 	resp = conn_build_resp_byte(RPC_BIGDATA_CONN, sizeof(int),
 					(char *)(&(Range_infor->bigdataport)));
 	resp_size = conn_get_resp_size((RPCRESP *)resp);	
-	write(fd, resp, resp_size);
+	tcp_put_data(fd, resp, resp_size);
 	conn_destroy_resp_byte(resp);
 
 	int	connfd;
@@ -945,7 +946,7 @@ rg_selrangetab(TREE *command, TABINFO *tabinfo, int fd)
 		
 		resp_size = conn_get_resp_size((RPCRESP *)resp);
 		  
-		write(connfd, resp, resp_size);			
+		tcp_put_data(connfd, resp, resp_size);			
 
 		conn_destroy_resp_byte(resp);	
 
@@ -996,7 +997,7 @@ nextblk:
 		
 			resp_size = conn_get_resp_size((RPCRESP *)resp);
 			  
-			write(connfd, resp, resp_size);			
+			tcp_put_data(connfd, resp, resp_size);			
 
 			conn_destroy_resp_byte(resp);	
 
@@ -1186,7 +1187,7 @@ rg_selwheretab(TREE *command, SELWHERE *selwhere, int fd)
 	resp = conn_build_resp_byte(RPC_BIGDATA_CONN, sizeof(int),
 					(char *)(&(Range_infor->bigdataport)));
 	resp_size = conn_get_resp_size((RPCRESP *)resp);	
-	write(fd, resp, resp_size);
+	tcp_put_data(fd, resp, resp_size);
 	conn_destroy_resp_byte(resp);
 
 	int	connfd;
@@ -1339,7 +1340,7 @@ finish:
 
 	resp_size = conn_get_resp_size((RPCRESP *)resp);
 	  
-	write(connfd, resp, resp_size);			
+	tcp_put_data(connfd, resp, resp_size);			
 
 	conn_destroy_resp_byte(resp);	
 
@@ -1709,7 +1710,7 @@ scan_cont:
 		
 			resp_size = conn_get_resp_size((RPCRESP *)resp);
 			  
-			write(scanctx->connfd, resp, resp_size);			
+			tcp_put_data(scanctx->connfd, resp, resp_size);			
 
 			conn_destroy_resp_byte(resp);	
 
@@ -1759,7 +1760,7 @@ scan_cont:
 			
 				resp_size = conn_get_resp_size((RPCRESP *)resp);
 				  
-				write(scanctx->connfd, resp, resp_size);			
+				tcp_put_data(scanctx->connfd, resp, resp_size);			
 
 				conn_destroy_resp_byte(resp);	
 
@@ -2380,7 +2381,7 @@ rg_regist()
 
 	Assert(idx == (2 * RPC_MAGIC_MAX_LEN + RANGE_ADDR_MAX_LEN + RANGE_PORT_MAX_LEN));
 	
-	write(sockfd, send_buf, idx);
+	tcp_put_data(sockfd, send_buf, idx);
 
 	resp = conn_recv_resp(sockfd);
 
@@ -2405,7 +2406,7 @@ rg_rebalan_process_sender(REBALANCE_DATA * rbd, char *rg_addr, int port)
 	
 	sockfd = conn_open(rg_addr, port);
 
-	status = write(sockfd, rbd, sizeof(REBALANCE_DATA));
+	status = tcp_put_data(sockfd, (char *)rbd, sizeof(REBALANCE_DATA));
 
 	Assert (status == sizeof(REBALANCE_DATA));
 

@@ -1,5 +1,5 @@
 /*
-** session.c 2011-09-04 xueyingfei
+** m_socket.c 2011-09-04 xueyingfei
 **
 ** Copyright Transoft Corp.
 **
@@ -23,6 +23,10 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <pthread.h>
+#include "list.h"
+#include "thread.h"
+#include "utils.h"
+#include "netconn.h"
 #include "m_socket.h"
 
 int
@@ -37,7 +41,8 @@ m_recvdata(int socket, char *recvbp, int count)
 	}
 
 restart:
-	rlen = recv(socket, recvbp, count, 0);
+	//rlen = recv(socket, recvbp, count, 0);
+	rlen = read(socket, recvbp, count);
 
 	switch (rlen)
 	{
@@ -74,7 +79,8 @@ m_senddata(int socket, char *sendbp, int count)
 
 	
 retry:
-	if ((slen = send(socket, sendbp, count, 0)) < 0)
+//	if ((slen = send(socket, sendbp, count, 0)) < 0)
+	if ((slen = write(socket, sendbp, count)) < 0)
 	{
 		switch (errno)
 		{
@@ -108,3 +114,95 @@ retry:
 	return slen;
 }
 
+int
+tcp_get_data(int socket, char *recvbp, int count)
+{
+	int	n;
+	int	got;
+	int	need;
+
+
+	Assert(count < (MSG_SIZE + 1));
+
+retry:
+	n = m_recvdata(socket, recvbp, count);
+//	n = read(socket, recvbp, count);
+
+	if (n < 0)
+	{
+		//printf("errno = %d\n", errno);
+		return n;			
+	}
+
+	if (n < RPC_MAGIC_MAX_LEN)
+	{
+		/* TODO: further research. */
+		traceprint("TCP: suspect read data (len = %d).\n", n);
+		goto retry;
+	}
+
+	need = *(int *)(recvbp + RPC_DATA_LOCATION);
+
+	if (n > need)
+	{
+		Assert(0);
+	}
+	
+	need -= n;
+
+	got = n;
+	
+	if (need == 0)
+	{
+		return got;
+	}
+
+	recvbp += n;
+	n = 0;
+	while(need)
+	{
+		n = m_recvdata(socket, recvbp, need);
+
+		if (n < 0)
+		{
+			//printf("errno = %d\n", errno);
+			return n;			
+		}
+										
+		recvbp += n;
+		need -= n;
+	}
+
+	got += n;
+
+	return got;
+}
+
+int
+tcp_put_data(int socket, char *sendbp, int count)
+{
+	int	n;
+	int	put;
+
+	
+	put = 0;
+	Assert(count > RPC_MAGIC_MAX_LEN);
+
+	*(int *)(sendbp + RPC_DATA_LOCATION) = count;
+
+	while (count)
+	{
+		n = m_senddata(socket, sendbp, count);
+//		n = write(socket, sendbp, count);
+                
+		if(n >= 0)
+		{
+			sendbp += n;
+                 	count -= n;
+			put += n;
+		}
+        }
+
+	return put;
+	//return m_senddata(socket, sendbp, count);
+}

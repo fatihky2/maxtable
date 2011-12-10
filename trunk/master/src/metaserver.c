@@ -46,6 +46,7 @@
 #include "rebalancer.h"
 #include "thread.h"
 #include "log.h"
+#include "m_socket.h"
 
 extern	TSS	*Tss;
 extern	char	Kfsserver[32];
@@ -2886,7 +2887,7 @@ meta_rebalan_process(REBALANCE_DATA *rbd)
 
 	//rbd->rbd_min_tablet_rgport = rg_prof->rg_port;
 
-	write(sockfd, rbd, sizeof(REBALANCE_DATA));
+	tcp_put_data(sockfd, (char *)rbd, sizeof(REBALANCE_DATA));
 
 	resp = conn_recv_resp(sockfd);
 
@@ -3377,7 +3378,6 @@ static RANGE_PROF *
 meta_get_rg_by_ip_port(char *rgip, int rgport)
 
 {
-	char		*str;
 	int		i;
 	SVR_IDX_FILE	*rglist;
 	int		found, start_heartbeat;
@@ -3415,8 +3415,8 @@ void * meta_heartbeat(void *args)
 	MSG_DATA	*new_msg;
 	int		sleeptime;
 
-	//wait 5s to make sure rg server's network service is ready
-	sleep(5);
+	//wait 10s to make sure rg server's network service is ready
+	sleep(10);
 
 	hb_recv_buf = Master_infor->heart_beat_data[rg_index].recv_data;
 
@@ -3443,7 +3443,7 @@ void * meta_heartbeat(void *args)
 		PUT_TO_BUFFER(send_buf, idx, RPC_MASTER2RG_HEARTBEAT,
 					RPC_MAGIC_MAX_LEN);
 		
-		write(hb_conn, send_buf, idx);
+		tcp_put_data(hb_conn, send_buf, idx);
 
 		traceprint("\n###### meta sent heart beat to %s/%d. \n", rg_addr->rg_addr, rg_addr->rg_port);
 
@@ -3615,7 +3615,7 @@ int meta_transfer_notify(char * rg_addr, int rg_port)
 	PUT_TO_BUFFER(send_buf, idx, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
 	PUT_TO_BUFFER(send_buf, idx, RPC_MASTER2RG_NOTIFY, RPC_MAGIC_MAX_LEN);
 				
-	write(hb_conn, send_buf, idx);
+	tcp_put_data(hb_conn, send_buf, idx);
 	
 	resp = conn_recv_resp(hb_conn);
 	
@@ -4026,7 +4026,7 @@ again:
 			PUT_TO_BUFFER(send_buf, idx, &(rg_addr[i].rg_port), 
 						sizeof(int));
 				
-			write(fd, send_buf, idx);
+			tcp_put_data(fd, send_buf, idx);
 
 			resp = conn_recv_resp_meta(fd, recv_buf);
 
