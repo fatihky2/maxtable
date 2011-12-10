@@ -19,4 +19,10 @@ m_recvdata(int socket, char *recvbp, int count);
 int
 m_senddata(int socket, char *sendbp, int count);
 
+int
+tcp_get_data(int socket, char *recvbp, int count);
+
+int
+tcp_put_data(int socket, char *sendbp, int count);
+
 #endif

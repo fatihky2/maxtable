@@ -31,6 +31,7 @@
 #include "block.h"
 #include "thread.h"
 #include "hkgc.h"
+#include "m_socket.h"
 
 
 extern	TSS	*Tss;
@@ -643,7 +644,7 @@ _read_again:
 
 		resp_size = conn_get_resp_size((RPCRESP *)resp);
   
-		write(connfd, resp, resp_size);
+		tcp_put_data(connfd, resp, resp_size);
 		close(connfd);
 
 		conn_destroy_req(req);

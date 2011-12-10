@@ -14,6 +14,7 @@
 #include "type.h"
 #include "interface.h"
 #include "row.h"
+#include "m_socket.h"
 
 
 MT_CLI_CONTEXT *cli_context = NULL;
@@ -203,7 +204,7 @@ retry:
 	MEMCPY(send_buf, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
 	MEMCPY(send_buf + RPC_MAGIC_MAX_LEN, cmd, send_buf_size);
 			
-	write(connection->connection_fd, send_buf, (send_buf_size + RPC_MAGIC_MAX_LEN));
+	tcp_put_data(connection->connection_fd, send_buf, (send_buf_size + RPC_MAGIC_MAX_LEN));
 
 	resp = conn_recv_resp(connection->connection_fd);
 	
@@ -324,7 +325,7 @@ retry:
 			MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN, resp->result, RPC_MAGIC_MAX_LEN);
 			MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN + RPC_MAGIC_MAX_LEN, cmd, send_buf_size);
 
-			write(rg_connection->connection_fd, send_rg_buf, 
+			tcp_put_data(rg_connection->connection_fd, send_rg_buf, 
 		        		(RPC_MAGIC_MAX_LEN + send_buf_size + RPC_MAGIC_MAX_LEN));
 		}
 		else
@@ -333,7 +334,7 @@ retry:
 			MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN, resp->result, resp->result_length);
 			MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN + resp->result_length, cmd, send_buf_size);
 
-			write(rg_connection->connection_fd, send_rg_buf, 
+			tcp_put_data(rg_connection->connection_fd, send_rg_buf, 
 					(resp->result_length + send_buf_size + RPC_MAGIC_MAX_LEN));
 		}
 		
@@ -421,7 +422,7 @@ retry:
 
 			MEMFREEHEAP(sstab_key);
 
-			write(connection->connection_fd, send_buf, 
+			tcp_put_data(connection->connection_fd, send_buf, 
 						(new_size + RPC_MAGIC_MAX_LEN));
 
 
@@ -474,7 +475,7 @@ retry:
 			MEMCPY(send_buf, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
 			MEMCPY(send_buf + RPC_MAGIC_MAX_LEN, new_buf, new_size);
 
-			write(connection->connection_fd, send_buf, 
+			tcp_put_data(connection->connection_fd, send_buf, 
 						(new_size + RPC_MAGIC_MAX_LEN));
 
 
@@ -717,7 +718,7 @@ mt_cli_rgsel_meta(conn * connection, char * cmd, SELCTX *resp_selctx)
 	MEMCPY(send_buf, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
 	MEMCPY(send_buf + RPC_MAGIC_MAX_LEN, cmd, send_buf_size);
 			
-	write(connection->connection_fd, send_buf, (send_buf_size + RPC_MAGIC_MAX_LEN));
+	tcp_put_data(connection->connection_fd, send_buf, (send_buf_size + RPC_MAGIC_MAX_LEN));
 
 	resp = conn_recv_resp(connection->connection_fd);
 
@@ -828,7 +829,7 @@ mt_cli_rgsel_ranger(conn * connection, char * cmd, SELCTX *selctx, char *ip, int
 		MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN + sizeof(SELRANGE), cmd, 
 			send_buf_size);
 		
-		write(rg_connection->connection_fd, send_rg_buf, 
+		tcp_put_data(rg_connection->connection_fd, send_rg_buf, 
 			(sizeof(SELRANGE) + send_buf_size + RPC_MAGIC_MAX_LEN));
 	}
 	else if (selctx->stat == SELECT_WHERE_OP)
@@ -844,7 +845,7 @@ mt_cli_rgsel_ranger(conn * connection, char * cmd, SELCTX *selctx, char *ip, int
 		MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN + sizeof(SELWHERE), cmd, 
 			send_buf_size);
 		
-		write(rg_connection->connection_fd, send_rg_buf, 
+		tcp_put_data(rg_connection->connection_fd, send_rg_buf, 
 			(sizeof(SELWHERE) + send_buf_size + RPC_MAGIC_MAX_LEN));
 	}
 

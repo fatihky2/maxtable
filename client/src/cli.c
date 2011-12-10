@@ -29,6 +29,7 @@
 #include "memcom.h"
 #include "strings.h"
 #include "trace.h"
+#include "m_socket.h"
 
 
 extern	TSS	*Tss;
@@ -224,8 +225,8 @@ conn_again:
 			MEMFREEHEAP(send_rg_bp);
 			send_rg_bp = NULL;
 		}
-			
-		write(sockfd, send_buf, (send_buf_size + RPC_MAGIC_MAX_LEN));
+
+		tcp_put_data(sockfd, send_buf, (send_buf_size + RPC_MAGIC_MAX_LEN));
 
 		resp = conn_recv_resp(sockfd);
 
@@ -606,8 +607,8 @@ conn_again:
 		MEMFREEHEAP(send_rg_bp);
 		send_rg_bp = NULL;
 	}
-		
-	write(sockfd, send_buf, (send_buf_size + RPC_MAGIC_MAX_LEN));
+
+	tcp_put_data(sockfd, send_buf, (send_buf_size + RPC_MAGIC_MAX_LEN));
 
 	resp = conn_recv_resp(sockfd);
 

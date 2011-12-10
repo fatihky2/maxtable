@@ -23,7 +23,8 @@
 #include "global.h"
 
 
-#define RPC_MAGIC_MAX_LEN	8
+#define RPC_DATA_LOCATION	8
+#define RPC_MAGIC_MAX_LEN	12
 #define RPC_REQUEST_MAGIC "rpcrqst"
 #define RPC_RESPONSE_MAGIC "rpcresp"
 

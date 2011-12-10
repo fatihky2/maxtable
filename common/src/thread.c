@@ -157,6 +157,40 @@ void * msg_recv(void *args)
 				if((sockfd = events[i].data.fd)<0)	
 				  continue;
 				MEMSET(buf, MSG_SIZE);
+
+
+				n = tcp_get_data(sockfd, buf, MSG_SIZE);
+
+				if (n < RPC_MAGIC_MAX_LEN)
+				{					
+					switch (n)
+					{
+					    case MT_READDISCONNECT:
+					    	close(sockfd);
+						break;
+						
+					    case MT_READQUIT:
+					    	close(sockfd);
+						printf("client close connect!\n");
+						break;
+						
+					    case MT_READERROR:
+					    	perror("error in read");
+						break;
+						
+					    default:
+					    	Assert(0);
+					    	break;
+					}
+
+					traceprint("TCP: get data error in step 1: ret(%d)\n", n);
+
+					goto finish;
+				}
+
+				Assert(n > RPC_MAGIC_MAX_LEN);
+
+#if 0						
 				if((n = read(sockfd, buf, MSG_SIZE))==-1)
 				{
 					if(errno==ECONNRESET)
@@ -172,74 +206,84 @@ void * msg_recv(void *args)
 				else
 				{
 					printf("read %d->[%s]\n", n, buf);
+#endif
 
-					if (!strncasecmp(RPC_RBD_MAGIC, buf, STRLEN(RPC_RBD_MAGIC)))
-					{
-						int	block_left = sizeof(REBALANCE_DATA);
-						char * buffer = malloc(block_left);
-						MEMCPY(buffer, buf, n);
-						char * block_buffer = buffer + n;
-						block_left -= n;
-						int read_cnt = 0;
-						while(block_left)
+				if (!strncasecmp(RPC_RBD_MAGIC, buf, STRLEN(RPC_RBD_MAGIC)))
+				{
+					int block_left = sizeof(REBALANCE_DATA);
+					char * buffer = malloc(block_left);
+					MEMCPY(buffer, buf, n);
+					block_left -= n;
+					
+					n = tcp_get_data(sockfd, buffer + n, block_left);
+
+					if (n != block_left)
+					{					
+						switch (n)
 						{
-							n = m_recvdata(sockfd, block_buffer, MSG_SIZE);
-
-							if (   (n == MT_READERROR) || (n == MT_READDISCONNECT)
-							    || (n == MT_READQUIT))
-							{
-								printf("errno = %d\n", errno);
-								break;
-								
-							}
-															
-							block_buffer += n;
-							block_left -= n;
-							read_cnt++;
+						    case MT_READDISCONNECT:
+						    	close(sockfd);
+							break;
+							
+						    case MT_READQUIT:
+						    	close(sockfd);
+							printf("client close connect!\n");
+							break;
+							
+						    case MT_READERROR:
+						    	perror("error in read");
+							break;
+							
+						    default:
+						    	Assert(0);
+						    	break;
 						}
+					}
 
-						new_msg = msg_mem_alloc();
-						MEMCPY(new_msg->data, buf, STRLEN(RPC_RBD_MAGIC));
-						new_msg->fd = sockfd;
-						new_msg->n_size = sizeof(REBALANCE_DATA);
-						new_msg->block_buffer = buffer;
-						new_msg->next = NULL;
-					}
-					else if (n > MSG_SIZE)
-					{
-						/* TODO : for the big data transferring. */
-						Assert(0);
-					}
-					else						
-					{
-						new_msg = msg_mem_alloc();
-						MEMCPY(new_msg->data, buf, n);
-						new_msg->fd = sockfd;
-						new_msg->n_size = n;
-						new_msg->block_buffer = NULL;
-						new_msg->next = NULL;
-					}
-			
-					pthread_mutex_lock(&mutex);
-					if (msg_list_head == NULL)
-					{
-						msg_list_head = new_msg;
-						msg_list_tail = new_msg;
-					} 
-					else
-					{
-						msg_list_tail->next = new_msg;
-						msg_list_tail = new_msg;
-					}
-					msg_list_len++;
-			
-					pthread_cond_signal(&cond);
-					pthread_mutex_unlock(&mutex);
+					new_msg = msg_mem_alloc();
+					MEMCPY(new_msg->data, buf, STRLEN(RPC_RBD_MAGIC));
+					new_msg->fd = sockfd;
+					new_msg->n_size = sizeof(REBALANCE_DATA);
+					new_msg->block_buffer = buffer;
+					new_msg->next = NULL;
 				}
+				else if (n > MSG_SIZE)
+				{
+					/* TODO : for the big data transferring. */
+					Assert(0);
+				}
+				else						
+				{
+					new_msg = msg_mem_alloc();
+					MEMCPY(new_msg->data, buf, n);
+					new_msg->fd = sockfd;
+					new_msg->n_size = n;
+					new_msg->block_buffer = NULL;
+					new_msg->next = NULL;
+				}
+		
+				pthread_mutex_lock(&mutex);
+				if (msg_list_head == NULL)
+				{
+					msg_list_head = new_msg;
+					msg_list_tail = new_msg;
+				} 
+				else
+				{
+					msg_list_tail->next = new_msg;
+					msg_list_tail = new_msg;
+				}
+				msg_list_len++;
+		
+				pthread_cond_signal(&cond);
+				pthread_mutex_unlock(&mutex);
+#if 0
+				}
+#endif
 
+finish:
 				if(msg_list_len > MAX_MSG_LIST)
 					fprintf(stderr, "big error, msg list length exceeds the max len!\n");
-
 			}
 
 			else if(events[i].events & EPOLLOUT)
