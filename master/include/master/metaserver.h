@@ -311,14 +311,27 @@ typedef struct tab_info
 
 typedef struct hb_data
 {
-	char recv_data[HB_DATA_SIZE];
+	int	hb_stat;
+	char	recv_data[HB_DATA_SIZE];
 }HB_DATA;
+
+/* Place holder: following definition is for the hb_stat. */
+#define	HB_IS_OFF	0x0000		/* heartbeat is down. */
+#define	HB_IS_ON	0x0001		/* heartbeat setup. */
+
+#define HB_RANGER_IS_ON(hb_data)	((hb_data)->hb_stat & HB_IS_ON)
+
+#define HB_SET_RANGER_ON(hb_data)	((hb_data)->hb_stat = (((hb_data)->hb_stat & ~HB_IS_OFF) | HB_IS_ON))
+
+#define HB_SET_RANGER_OFF(hb_data)	((hb_data)->hb_stat = (((hb_data)->hb_stat & ~HB_IS_ON) | HB_IS_OFF))
+
 
 typedef struct master_infor
 {
 	char		conf_path[META_CONF_PATH_MAX_LEN];
 	int		port;
-	SPINLOCK	rglist_spinlock;
+	LOCKATTR 	mutexattr;
+	SPINLOCK	rglist_spinlock;	
 	SVR_IDX_FILE	rg_list;
 	HB_DATA		heart_beat_data[MAX_RANGER_NUM];
 }MASTER_INFOR;

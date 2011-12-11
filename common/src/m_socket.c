@@ -41,7 +41,7 @@ m_recvdata(int socket, char *recvbp, int count)
 	}
 
 restart:
-	//rlen = recv(socket, recvbp, count, 0);
+//	rlen = recv(socket, recvbp, count, 0);
 	rlen = read(socket, recvbp, count);
 
 	switch (rlen)
@@ -200,6 +200,10 @@ tcp_put_data(int socket, char *sendbp, int count)
 			sendbp += n;
                  	count -= n;
 			put += n;
+		}
+		else
+		{
+			break;
 		}
         }
 

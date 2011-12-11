@@ -154,7 +154,9 @@ meta_server_setup(char *conf_path)
 		Master_infor->port = META_DEFAULT_PORT;
 	}
 
-	SPINLOCK_INIT(Master_infor->rglist_spinlock, NULL);
+	SPINLOCK_ATTR_INIT(Master_infor->mutexattr);
+	SPINLOCK_ATTR_SETTYPE(Master_infor->mutexattr, PTHREAD_MUTEX_RECURSIVE);
+	SPINLOCK_INIT(Master_infor->rglist_spinlock, &(Master_infor->mutexattr));
 	
 #ifdef MT_KFS_BACKEND
 	MEMSET(Kfsserver, 32);
@@ -229,6 +231,7 @@ meta_server_setup(char *conf_path)
 
 		for(i = 0; i < Master_infor->rg_list.nextrno; i++)
 		{
+			/* Metaserver is crash, all the online ranger server will be recovery. */
 			if (rg_addr[i].rg_stat & RANGER_IS_ONLINE)
 			{
 				log_recov_rg(rg_addr[i].rg_addr, 
@@ -272,6 +275,8 @@ meta_save_rginfo()
 	int     fd;
 
 
+	P_SPINLOCK(Master_infor->rglist_spinlock);
+	
 	MEMSET(rang_server, 256);
 	MEMCPY(rang_server, MT_META_REGION, STRLEN(MT_META_REGION));
 	str1_to_str2(rang_server, '/', "rangeserverlist");
@@ -281,6 +286,8 @@ meta_save_rginfo()
 	WRITE(fd, &(Master_infor->rg_list), SVR_IDX_FILE_SIZE);
 
 	CLOSE(fd);
+
+	V_SPINLOCK(Master_infor->rglist_spinlock);
 }
 
 
@@ -2661,92 +2668,104 @@ meta_collect_rg(char * req_buf)
 	SVR_IDX_FILE	*rglist;
 	int		found, start_heartbeat;
 	RANGE_PROF	*rg_addr;
+	int		rginfo_save;
 
 	
-	if (!strncasecmp(RPC_RG2MASTER_REPORT, req_buf, 
-				STRLEN(RPC_RG2MASTER_REPORT)))
+	if (strncasecmp(RPC_RG2MASTER_REPORT, req_buf, 
+				STRLEN(RPC_RG2MASTER_REPORT)) != 0)
 	{
-		str = req_buf + RPC_MAGIC_MAX_LEN;
+		return FALSE;
+	}
+	
+	str = req_buf + RPC_MAGIC_MAX_LEN;
 
-		rglist = &(Master_infor->rg_list);
-		found = FALSE;
-		start_heartbeat = TRUE;
-		rg_addr = (RANGE_PROF *)(rglist->data);
+	rglist = &(Master_infor->rg_list);
+	rginfo_save = FALSE;
+	found = FALSE;
+	start_heartbeat = TRUE;
+	rg_addr = (RANGE_PROF *)(rglist->data);
 
-		for(i = 0; i < rglist->nextrno; i++)
+	for(i = 0; i < rglist->nextrno; i++)
+	{
+		if (   !strncasecmp(str, rg_addr[i].rg_addr, RANGE_ADDR_MAX_LEN)
+		    && (rg_addr[i].rg_port == *(int *)(str + RANGE_ADDR_MAX_LEN))
+		   )
 		{
-			if (   !strncasecmp(str, rg_addr[i].rg_addr, 
-						RANGE_ADDR_MAX_LEN)
-			    && (rg_addr[i].rg_port == *(int *)(str +
-			    			RANGE_ADDR_MAX_LEN))
-			   )
+			found = TRUE;
+			
+			if(rg_addr[i].rg_stat & RANGER_IS_OFFLINE)
 			{
-				found = TRUE;
-				
-				if(rg_addr[i].rg_stat & RANGER_IS_OFFLINE)
+				P_SPINLOCK(Master_infor->rglist_spinlock);
+
+				if(rg_addr[i].rg_stat & RANGER_NEED_RECOVERY)
 				{
-					P_SPINLOCK(Master_infor->rglist_spinlock);
+					rg_addr[i].rg_stat |= RANGER_RESTART;
 
-					if(rg_addr[i].rg_stat & RANGER_NEED_RECOVERY)
-					{
-						rg_addr[i].rg_stat |= RANGER_RESTART;
-
-						V_SPINLOCK(Master_infor->rglist_spinlock);
-
-						break;
-					}
-					
 					V_SPINLOCK(Master_infor->rglist_spinlock);
-					rg_addr[i].rg_stat &= ~RANGER_IS_OFFLINE;
-					rg_addr[i].rg_stat |= RANGER_IS_ONLINE;
-					meta_save_rginfo();
+
 					break;
+				}
+				
+				V_SPINLOCK(Master_infor->rglist_spinlock);
+				rg_addr[i].rg_stat &= ~RANGER_IS_OFFLINE;
+				rg_addr[i].rg_stat |= RANGER_IS_ONLINE;
+
+				rginfo_save = TRUE;
+				
+				break;
+			}
+			else if(rg_addr[i].rg_stat & RANGER_IS_ONLINE)
+			{
+				if (HB_RANGER_IS_ON(&(Master_infor->heart_beat_data[i])))
+				{
+					traceprint("\n rg server with same ip and port is already on line \n");
+					start_heartbeat = FALSE;
 				}
 				else
 				{
-					traceprint("\n rg server with same ip and port is already on line \n");
-					
-					start_heartbeat = FALSE;
-					break;
+					start_heartbeat = TRUE;
 				}
-
-				
+				break;
 			}
-		}
 
-		if (!found)
-		{
-			MEMCPY(rg_addr[i].rg_addr, str, RANGE_ADDR_MAX_LEN);
-			rg_addr[i].rg_port = *(int *)(str + RANGE_ADDR_MAX_LEN);
-			rg_addr[i].rg_stat = RANGER_IS_ONLINE;
-			rg_addr[i].rg_tablet_num = 0;
-			rg_addr[i].rg_index = i;
-
-			(rglist->nextrno)++;
-
-			meta_crt_rg_logbackup_file(rg_addr[i].rg_addr,
-							rg_addr[i].rg_port);
 			
-			meta_save_rginfo();
-
-		}
-
-		if(start_heartbeat)
-		{			
-			meta_heartbeat_setup(rg_addr + i);
-		}
-
-		if(rglist->stat & SVR_STAT_NON_AVAIL_RG)
-		{
-			
-			// meta_update("", -1);
-			rglist->stat &= ~SVR_STAT_NON_AVAIL_RG;
-			meta_save_rginfo();
 		}
 	}
-	else
+
+
+	if (!found)
 	{
-		return FALSE;
+		MEMCPY(rg_addr[i].rg_addr, str, RANGE_ADDR_MAX_LEN);
+		rg_addr[i].rg_port = *(int *)(str + RANGE_ADDR_MAX_LEN);
+		rg_addr[i].rg_stat = RANGER_IS_ONLINE;
+		rg_addr[i].rg_tablet_num = 0;
+		rg_addr[i].rg_index = i;
+
+		(rglist->nextrno)++;
+
+		meta_crt_rg_logbackup_file(rg_addr[i].rg_addr,
+						rg_addr[i].rg_port);
+		
+		rginfo_save = TRUE;
+
+	}
+
+	if(start_heartbeat)
+	{			
+		meta_heartbeat_setup(rg_addr + i);
+	}
+
+	if(rglist->stat & SVR_STAT_NON_AVAIL_RG)
+	{
+		
+		// meta_update("", -1);
+		rglist->stat &= ~SVR_STAT_NON_AVAIL_RG;
+		rginfo_save = TRUE;
+	}
+
+	if (rginfo_save)
+	{
+		meta_save_rginfo();
 	}
 
 	return TRUE;
@@ -3431,6 +3450,9 @@ void * meta_heartbeat(void *args)
 
 	signal (SIGPIPE,SIG_IGN);
 
+	/* In memory information. */
+	HB_SET_RANGER_ON(&(Master_infor->heart_beat_data[rg_index]));
+	
 	sleeptime = HEARTBEAT_INTERVAL;
 	while(TRUE)
 	{
@@ -3461,7 +3483,9 @@ void * meta_heartbeat(void *args)
 				goto finish;
 			}
 
+			P_SPINLOCK(Master_infor->rglist_spinlock);
 			rg_addr->rg_stat |= RANGER_IS_SUSPECT;
+			V_SPINLOCK(Master_infor->rglist_spinlock);
 			sleeptime = 3;
 
 		}
@@ -3475,13 +3499,17 @@ void * meta_heartbeat(void *args)
                         	goto finish;
 			}
 
+			P_SPINLOCK(Master_infor->rglist_spinlock);
 			rg_addr->rg_stat |= RANGER_IS_SUSPECT;
+			V_SPINLOCK(Master_infor->rglist_spinlock);
 			sleeptime = 3;
 		}
 
 		if ((resp->status_code & RPC_SUCCESS) && (rg_addr->rg_stat & RANGER_IS_SUSPECT))
 		{
+			P_SPINLOCK(Master_infor->rglist_spinlock);
 			rg_addr->rg_stat &= ~RANGER_IS_SUSPECT;
+			V_SPINLOCK(Master_infor->rglist_spinlock);
 			sleeptime = HEARTBEAT_INTERVAL;
 		}
 
@@ -3495,7 +3523,10 @@ void * meta_heartbeat(void *args)
 finish:
 	
 		//update meta and rg_list here, put update task to msg list
-	
+
+		HB_SET_RANGER_OFF(&(Master_infor->heart_beat_data[rg_index]));
+		traceprint("\n HEARTBEAT hit error. \n");
+		
 		new_msg = (MSG_DATA *)msg_mem_alloc();
 				
 		idx = 0;
@@ -3891,70 +3922,77 @@ meta_failover_rg(char * req_buf)
 	SVR_IDX_FILE	*rglist;
 	int		found;
 	RANGE_PROF	*rg_addr;
+	int		rginfo_save;
 
 	
-	if (!strncasecmp(RPC_FAILOVER, req_buf, STRLEN(RPC_FAILOVER)))
-	{
-		str = req_buf + RPC_MAGIC_MAX_LEN;
-
-		rglist = &(Master_infor->rg_list);
-		found = FALSE;
-		rg_addr = (RANGE_PROF *)(rglist->data);
-
-		for(i = 0; i < rglist->nextrno; i++)
-		{
-			if (   !strncasecmp(str, rg_addr[i].rg_addr, 
-					RANGE_ADDR_MAX_LEN)
-			    && (rg_addr[i].rg_port == 
-			    		*(int *)(str + RANGE_ADDR_MAX_LEN))
-			   )
-			{
-				found = TRUE;
-				
-				if(rg_addr[i].rg_stat & RANGER_IS_ONLINE)
-				{
-					
-
-					Assert(rg_addr[i].rg_stat & RANGER_IS_SUSPECT);
-
-					//update rg list
-					rg_addr[i].rg_stat &= ~(RANGER_IS_ONLINE | RANGER_IS_SUSPECT);
-					rg_addr[i].rg_stat = RANGER_IS_OFFLINE | RANGER_NEED_RECOVERY;
-					//(rglist->nextrno)++;//do not modify this!					
-					
-					break;
-				}
-				else
-				{
-					traceprint("\n error, rg server to be off-line is already off line \n");
-				}
-			}
-		}
-
-		if (!found)
-		{
-			traceprint("\n error, rg server to be off_line is not exist in rg list \n");
-		}
-
-		for(i = 0; i < rglist->nextrno; i++)
-		{
-			if(rg_addr[i].rg_stat & RANGER_IS_ONLINE)
-				break;
-		}
-		if(i == rglist->nextrno)
-		{
-			
-			Master_infor->rg_list.stat |= SVR_STAT_NON_AVAIL_RG;
-			meta_save_rginfo();
-		}
-
-		
-	}
-	else
+	if (strncasecmp(RPC_FAILOVER, req_buf, STRLEN(RPC_FAILOVER)) != 0)
 	{
 		return FALSE;
 	}
+	
+	
+	str = req_buf + RPC_MAGIC_MAX_LEN;
+	rginfo_save = FALSE;
 
+	rglist = &(Master_infor->rg_list);
+	found = FALSE;
+	rg_addr = (RANGE_PROF *)(rglist->data);
+
+	P_SPINLOCK(Master_infor->rglist_spinlock);
+	
+	for(i = 0; i < rglist->nextrno; i++)
+	{
+		if (   !strncasecmp(str, rg_addr[i].rg_addr, RANGE_ADDR_MAX_LEN)
+		    && (rg_addr[i].rg_port == *(int *)(str + RANGE_ADDR_MAX_LEN))
+		   )
+		{
+			found = TRUE;
+			
+			if(rg_addr[i].rg_stat & RANGER_IS_ONLINE)
+			{
+				
+				/* Before failover, ranger server must be the suspected. */
+				Assert(rg_addr[i].rg_stat & RANGER_IS_SUSPECT);
+
+				//update rg list
+				rg_addr[i].rg_stat &= ~(RANGER_IS_ONLINE | RANGER_IS_SUSPECT);
+				rg_addr[i].rg_stat = RANGER_IS_OFFLINE | RANGER_NEED_RECOVERY;
+				//(rglist->nextrno)++;//do not modify this!	
+				rginfo_save = TRUE;
+				
+				break;
+			}
+			else
+			{
+				traceprint("\n error, rg server to be off-line is already off line \n");
+			}
+		}
+	}
+
+	if (!found)
+	{
+		traceprint("\n error, rg server to be off_line is not exist in rg list \n");
+	}
+
+	for(i = 0; i < rglist->nextrno; i++)
+	{
+		if(rg_addr[i].rg_stat & RANGER_IS_ONLINE)
+			break;
+	}
+	if(i == rglist->nextrno)
+	{
+		
+		Master_infor->rg_list.stat |= SVR_STAT_NON_AVAIL_RG;
+		rginfo_save = TRUE;			
+	}
+
+	if (rginfo_save)
+	{
+		meta_save_rginfo();
+	}
+
+	V_SPINLOCK(Master_infor->rglist_spinlock);
+	
 	return TRUE;
 }
 
@@ -3972,12 +4010,12 @@ again:
 
 	for(i = 0; i < rglist->nextrno; i++)
 	{
-		
 		if(rg_addr[i].rg_stat & RANGER_NEED_RECOVERY)
 		{
 			P_SPINLOCK(Master_infor->rglist_spinlock);
 			
-			Assert((rg_addr[i].rg_stat & RANGER_IS_OFFLINE) | (rg_addr[i].rg_stat & RANGER_RESTART));
+			Assert(  (rg_addr[i].rg_stat & RANGER_IS_OFFLINE) 
+			       | (rg_addr[i].rg_stat & RANGER_RESTART));
 
 			
 			char	send_buf[256];
@@ -4057,9 +4095,7 @@ again:
 				rg_addr[i].rg_stat &= ~(RANGER_IS_OFFLINE | RANGER_RESTART);
 
 				rg_addr[i].rg_stat |= RANGER_IS_ONLINE;
-			}
-
-			meta_save_rginfo();			
+			}						
 			
 			//update tablet
 			if(rg_addr[i].rg_tablet_num > 0)
@@ -4068,6 +4104,8 @@ again:
 			}
 
 			rg_addr[i].rg_tablet_num = 0;
+
+			meta_save_rginfo();
 
 			V_SPINLOCK(Master_infor->rglist_spinlock);
 			
@@ -4487,6 +4525,15 @@ meta_checkranger(TREE *command)
 		if (!rtn_stat)
 		{
 			traceprint("Ranger %d (%s:%d) is invalid-state\n", i, rg_prof[i].rg_addr, rg_prof[i].rg_port);
+		}
+
+		if (HB_RANGER_IS_ON(&(Master_infor->heart_beat_data[i])))
+		{
+			traceprint("Ranger %d (%s:%d) has been online.\n", i, rg_prof[i].rg_addr, rg_prof[i].rg_port);
+		}
+		else
+		{
+			traceprint("Ranger %d (%s:%d) has been offline.\n", i, rg_prof[i].rg_addr, rg_prof[i].rg_port);
 		}
 	}
 
