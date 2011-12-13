@@ -2695,18 +2695,18 @@ meta_collect_rg(char * req_buf)
 			
 			if(rg_addr[i].rg_stat & RANGER_IS_OFFLINE)
 			{
-				P_SPINLOCK(Master_infor->rglist_spinlock);
+//				P_SPINLOCK(Master_infor->rglist_spinlock);
 
 				if(rg_addr[i].rg_stat & RANGER_NEED_RECOVERY)
 				{
 					rg_addr[i].rg_stat |= RANGER_RESTART;
 
-					V_SPINLOCK(Master_infor->rglist_spinlock);
+//					V_SPINLOCK(Master_infor->rglist_spinlock);
 
 					break;
 				}
 				
-				V_SPINLOCK(Master_infor->rglist_spinlock);
+//				V_SPINLOCK(Master_infor->rglist_spinlock);
 				rg_addr[i].rg_stat &= ~RANGER_IS_OFFLINE;
 				rg_addr[i].rg_stat |= RANGER_IS_ONLINE;
 
@@ -3483,9 +3483,9 @@ void * meta_heartbeat(void *args)
 				goto finish;
 			}
 
-			P_SPINLOCK(Master_infor->rglist_spinlock);
+//			P_SPINLOCK(Master_infor->rglist_spinlock);
 			rg_addr->rg_stat |= RANGER_IS_SUSPECT;
-			V_SPINLOCK(Master_infor->rglist_spinlock);
+//			V_SPINLOCK(Master_infor->rglist_spinlock);
 			sleeptime = 3;
 
 		}
@@ -3499,17 +3499,17 @@ void * meta_heartbeat(void *args)
                         	goto finish;
 			}
 
-			P_SPINLOCK(Master_infor->rglist_spinlock);
+//			P_SPINLOCK(Master_infor->rglist_spinlock);
 			rg_addr->rg_stat |= RANGER_IS_SUSPECT;
-			V_SPINLOCK(Master_infor->rglist_spinlock);
+//			V_SPINLOCK(Master_infor->rglist_spinlock);
 			sleeptime = 3;
 		}
 
 		if ((resp->status_code & RPC_SUCCESS) && (rg_addr->rg_stat & RANGER_IS_SUSPECT))
 		{
-			P_SPINLOCK(Master_infor->rglist_spinlock);
+//			P_SPINLOCK(Master_infor->rglist_spinlock);
 			rg_addr->rg_stat &= ~RANGER_IS_SUSPECT;
-			V_SPINLOCK(Master_infor->rglist_spinlock);
+//			V_SPINLOCK(Master_infor->rglist_spinlock);
 			sleeptime = HEARTBEAT_INTERVAL;
 		}
 

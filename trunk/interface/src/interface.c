@@ -230,6 +230,8 @@ retry:
 		sleep(5);
 		
 		meta_retry++;
+
+		goto retry;
 	}
 	
 	if (!(resp->status_code & RPC_SUCCESS))
@@ -713,6 +715,8 @@ mt_cli_rgsel_meta(conn * connection, char * cmd, SELCTX *resp_selctx)
 	MEMCPY(tab_name, ((TREE *)(tss->tcmd_parser))->sym.command.tabname,
 	((TREE *)(tss->tcmd_parser))->sym.command.tabname_len);
 
+retry:
+
 	send_buf_size = strlen(cmd);
 	MEMSET(send_buf, LINE_BUF_SIZE);
 	MEMCPY(send_buf, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
@@ -736,6 +740,8 @@ mt_cli_rgsel_meta(conn * connection, char * cmd, SELCTX *resp_selctx)
 		sleep(5);
 		
 		meta_retry++;
+
+		goto retry;
 	}
 	
 	if ((resp == NULL) || (!(resp->status_code & RPC_SUCCESS)))
