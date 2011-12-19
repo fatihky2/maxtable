@@ -1,163 +1,159 @@
 #summary How to use the client API.
 * 1. Intoduction to the client API
 {{{
-a) cli_connection(char * meta_ip, int meta_port, conn ** connection);
-   
-   Open a connection to the Maxtable cluster.
+/* 
+** Client context initialization. 
+**
+** Parameters:
+** 	None.
+** 
+** Returns:
+**	None.
+** 
+** Side Effects:
+**	Allocate some memory to initialize the context for the client of Maxtable.
+** 
+*/
+extern void
+mt_cli_crt_context();
 
-   Parameters:
-     	Char *meta_ip:	    The IP address of metaserver in Maxtable cluster.
-        Int meta_port:	    The port of metaserver
-     	Conn **connection:  The context of connection to metaserver.
+/* 
+** Client context destroy. 
+**
+** Parameters:
+**	None.
+** 
+** Returns:
+**	None.
+** 
+** Side Effects:
+**	Free the memory allocated by the mt_cli_crt_context();
+** 
+*/
+extern void
+mt_cli_destroy_context();
 
-   Return:
-        TRUE if success or FALSE
 
-   Example:
-        cli_connection("192.168.0.160", 1959, &connection);
+/*
+** Create the connection between client and server and return the connection.
+**
+** Parameters:
+**	meta_ip		- (IN) metaserver address.
+**	meta_port	- (IN) metaserver port.
+**	connection	- (OUT) the context of net connection.
+** 
+** Returns:
+**	True if success, or false.
+** 
+** Side Effects
+**	None
+** 
+*/
+extern int
+mt_cli_open_connection(char * meta_ip, int meta_port, conn ** connection);
+
+/*
+** Close the connection between client and server.
+**
+** Parameters:
+**	connection	- (IN) the context of net connection.
+** 
+** Returns:
+**	None.
+** 
+** Side Effects
+**	None
+**
+*/
+extern void
+mt_cli_close_connection(conn * connection);
+
+
+/*
+** Open the context to execute the command user specified.
+**
+** Parameters:
+**	connection	- (IN) the context of net connection.
+**	cmd		- (IN) the command user specified.
+**	exec_ctx		- (IN) the execution context.
+** 
+** Returns:
+**	True if success, or false.
+** 
+** Side Effects
+**	None
+** 
+*/
+extern int 
+mt_cli_open_execute(conn *connection, char *cmd, MT_CLI_EXEC_CONTEX *exec_ctx);
+
+
+/*
+** Close the execution context.
+**
+** Parameters:
+**	exec_ctx		- (IN) the execution context.
+** 
+** Returns:
+**	None.
+** 
+** Side Effects
+**	None
+** 
+*/
+extern void 
+mt_cli_close_execute(MT_CLI_EXEC_CONTEX *exec_ctx);
+
+
+/*
+** Get the row from the execution context.
+**
+** Parameters:
+**	exec_ctx		- (IN) the execution context.
+**	rlen		- (OUT) the length of row.
+** 
+** Returns:
+**	The pointer of the row value.
+** 
+** Side Effects
+**	It may change the content in the execution context. 
+** 
+*/
+extern char *
+mt_cli_get_nextrow(MT_CLI_EXEC_CONTEX *exec_ctx, int *rlen);
+
+
+/*
+** Get the column user specified from the returned row.
+**
+** Parameters:
+**	exec_ctx		- (IN) the execution context.
+**	row_buf		- (IN) the row pointer.
+**	col_idx		- (IN) the column index user specified.		
+**	collen		- (OUT) the length of column.
+** 
+** Returns:
+**	The pointer of the column value.
+** 
+** Side Effects
+**	It may change the content in the execution context. 
+** 
+*/
+extern char *
+mt_cli_get_colvalue(MT_CLI_EXEC_CONTEX *exec_ctx, char *rowbuf, int col_idx, int *collen);
 }}}
-{{{
-b) void cli_exit(conn * connection);
 
-   Close the connection to the Maxtable cluster
 
-   Parameters:
-        Conn *connection:	The context of connection to metaserver.
-
-   Return:
-        null
-
-   Example:
-	cli_exit(connection);
-}}}
-{{{
-c) int cli_execute (conn * connection, char * cmd, char * response, int * length);
-
-   Execute the MQL command.
-
-   Parameter:
-	Conn *connection:	The context of connection to metaserver.
-	Char *cmd:	The string of command you want to execute.
-	Char *reponse:	The response information for this execution.
-	Int *length:	The length of this response information.
-
-   Return:
-        TRUE if success or FALSE
-
-   Example:
-	cli_execute(connection, cmd, resp, &len);
-}}}
-{{{
-d) int cli_open_range(conn * connection, char * cmd, int opid);
-
-   This API is for the range query(selectrange and selectwhere). It will open a new connection to the Maxtable cluster. 
-
-   Parameters:
-	Conn *connection:	The context of connection to metaserver.
-	Char *cmd:	The string of command you want to execute.
-	Int opid:	Flag if this command is for the SELECTWHERE or SELECTRANGE.
-   
-   Return:
-        The id of socket that connects to the ranger server by the big data port.
-
-   Example:
-	cli_open_range(connection, cmd, SELECT_WHERE_OP);
-}}}
-{{{
-e) int cli_read_range(int sockfd, RANGE_QUERYCTX *rgsel_cont);
-
-   This API is for the range query(selectrange and selectwhere). It will read data from the Maxtable cluster.
-
-   Parameters:
-	Int sockfd:	The sockect connecting to rangerserver.
-	RANGE_QUERYCTX *rgsel_cont:	The context of range query.
-
-   Return:
-        TRUE if success or FALSE
-
-   Example:
-	cli_read_range(sockfd, &rgsel_cont);
-}}}
-{{{
-f) void cli_write_range(int sockfd);
-
-   This API is for the range query(selectrange and selectwhere). It will send the response information to the Maxtable cluster.
-
-   Parameters:
-	Int sockfd:	The sockect connecting to rangerserver.
-
-   Return:
-        null
-
-   Example:
-	cli_write_range(sockfd);
-}}}
-{{{
-g) void cli_close_range(int sockfd);
-   
-   Close the connection openned by the cli_open_range.
-
-   Parameters:
-        Int sockfd:	The sockect connecting to rangerserver.
-
-   Return:
-        null
-
-   Example:
-	cli_close_range(sockfd);
-}}}
-{{{
-h) char *cli_get_nextrow(RANGE_QUERYCTX *rgsel_cont);
-
-   This API is for the range query(selectrange and selectwhere). It will get someone row user specified. 
-
-   Parameters:
-	RANGE_QUERYCTX *rgsel_cont:	The context of range query.
-
-   Return:
-        The ptr of current row.
- 
-   Example:
-	cli_get_nextrow(&rgsel_cont);
-}}}
-
-* 2. Usage of the client API
-
-  * You need to connect to the metaserver of maxtable using the API of cli_connection() cluster before executing any operations and exit the connection using the cli_exit() after the done of your work.
-
-  * Create table/drop table/Insert data/Delete data/select data by the key
-    You only need to use the API of cli_execute()
-
-  * Select some rows by the range user specified or the WHERE caluse.
-    # Use the cli_open_range() to connect to the maxtable server.<br>
-    # Use the cli_read_range() to read data from the server and save to the local memory.<br>
-    # Use the cli_get_nextrow() to scan the data sets in this round and get the status from the query context that flag if we have got all the data.<br>
-    # Use the cli_write_range() to send the response to server for the done of this round of fetching data. If status saved in the query context flags the data fetching is to be continued, you need to go to the step 2 for the further data reading, or go to the step 5 to close this task.<br>
-    # Use the cli_close_range() to close this task.<br>
-
-* 3. Sample code.
+* 2. Sample code.
 
 {{{
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-#include "interface.h"
-
-static int
-match(char* dest, char *src)
-{
-	return !strcasecmp(dest, src);
-}
-
-/* Following definition is for the parameter of the routine of cli_open_range(). */
-#define	SELECT_RANGE_OP		0x0001
-#define	SELECT_WHERE_OP		0x0002
-
 int main(int argc, char *argv[])
 {
 	conn 	*connection;
 	char	resp[256], cmd[256];
-	int	i, len;
+	int	rtn_stat;
+	int	i;
+	
 
 	if (argc != 2)
 	{
@@ -166,85 +162,95 @@ int main(int argc, char *argv[])
 		printf("Testing delete:       ./sample delete\n");
 		printf("Testing select:       ./sample select\n");
 		printf("Testing selectrange:  ./sample selectrange\n");
-                printf("Testing selectwhere:  ./sample selectwhere\n");
+		printf("Testing selectwhere:  ./sample selectwhere\n");
 		printf("Testing drop:         ./sample drop\n");
 
 		return 0;
 	}
 
-	if(cli_connection("192.168.0.160", 1959, &connection))
+	mt_cli_crt_context();
+
+	MT_CLI_EXEC_CONTEX t_exec_ctx;
+	MT_CLI_EXEC_CONTEX *exec_ctx = &t_exec_ctx;
+
+	if(mt_cli_open_connection("172.16.10.11", 1959, &connection))
 	{
 		if (match(argv[1], "create"))
 		{
+			
 			/* Create Table */
 			memset(resp, 0, 256);
 			memset(cmd , 0, 256);
-			sprintf(cmd, "create table gu(id1 varchar, id2 varchar,id3 int, id4 varchar,id5 varchar,
-                            id6 varchar, id7 varchar,id8 varchar,id9 varchar)");
-			cli_execute(connection, cmd, resp, &len);
-			printf("ret: %s\n", resp);
+
+			sprintf(cmd, "create table gu(id1 varchar, id2 varchar,id3 int, id4 varchar,id5 varchar,id6 varchar,id7 varchar,id8 varchar,id9 varchar)");
+			mt_cli_open_execute(connection, cmd, exec_ctx);
+
+			mt_cli_close_execute(exec_ctx);			
 		}
 
 		if (match(argv[1], "insert"))
 		{
 			/* Insert 10000 data rows into table */
 			for(i = 1; i < 10000; i++)
-			{
-				memset(resp, 0, 256);
-				memset(cmd, 0, 256);
-	
-				char	*c = "ccccccc";
-				char	*d = "dddddddddd";
-				char	*e = "eeeeeee";
-				char 	*f = "fffffffffff";
-				char	*g = "gggggggggg";
-				char	*h = "hhhhh";
+			{			
+				char	*c = "cccccccccccccccccccccccccccccccccccccccccccccccccccccc";
+				char	*d = "dddddddddddddddddddddddddddddddddddddddddddddddddddddd";
+				char	*e = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
 
-				sprintf(cmd, "insert into gu(aaaa%d, bbbb%d, %d, %s%d, %s%d, %s%d, %s%d, %s%d, %s%d)", 
-                                              i,i,i,c,i,d, i,e, i,f,i,g,i,h,i);
-				if (!cli_execute(connection, cmd, resp, &len))
+				char 	*f = "ffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+				char	*g = "gggggggggggggggggggggggggggggggggggggggggggggggggggggg";
+
+				char	*h = "hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh";
+
+				sprintf(cmd, "insert into gu(aaaa%d, bbbb%d, %d, %s%d, %s%d, %s%d, %s%d, %s%d, %s%d)", i,i,i,c,i,d, i,e, i,f,i,g,i,h,i);
+
+				//sprintf(cmd, "insert into gu(aaaa%d, bbbb%d)", i,i);
+				rtn_stat = mt_cli_open_execute(connection, cmd, exec_ctx);
+
+				if (!(rtn_stat & CLI_SUCCESS))
 				{
 					printf ("Error! \n");
 
 	                                continue;
 				}
-				printf("Client 1: %s, ret(%d): %s\n", cmd, len, resp);
+				
+				printf("Client 1: %s\n", cmd);
+
+				mt_cli_close_execute(exec_ctx);
+				
 			}
 		}
 
 		if (match(argv[1], "selectwhere"))
-		{
-	
+		{	
 			memset(resp, 0, 256);
 			memset(cmd, 0, 256);
 			sprintf(cmd, "selectwhere gu where id1(aaaa7, aaaa9) and id2(bbbb6, bbbb8)");
-			int sockfd = cli_open_range(connection, cmd, SELECT_WHERE_OP);
+//			sprintf(cmd, "selectwhere gu where id2(bbbb3, bbbb8)");
 
-			RANGE_QUERYCTX rgsel_cont;
+			
+			rtn_stat = mt_cli_open_execute(connection, cmd, exec_ctx);
 
-			char *test_rp;
+			printf("Client 1: %s\n", cmd);
 
-retry_where:
+			int	rlen;
+			char	*rp = NULL;
 
-			cli_read_range(sockfd, &rgsel_cont);
-
-			if (!(rgsel_cont.status & DATA_EMPTY))
-			{
-				do
+			do{
+				rp = mt_cli_get_nextrow(exec_ctx, &rlen);
+				
+				if (rp)
 				{
-					test_rp = cli_get_nextrow(&rgsel_cont);
-				} while(test_rp != NULL);
+					int	collen = 0;				
+					char	*col;
+					
+					col = mt_cli_get_colvalue(exec_ctx, rp, 6, &collen);
 
-				if (rgsel_cont.status & DATA_CONT)
-				{
-					cli_write_range(sockfd);					
-					goto retry_where;
-				}
-			}			
-			cli_close_range(sockfd);
-
-			printf("Client 1: %s, ret(%d): %s\n", cmd, len, resp);
-	
+					printf ("col: %s\n", col);
+				}			
+			} while(rp);
+			
+			mt_cli_close_execute(exec_ctx);
 		}
 		
 		if (match(argv[1], "select"))
@@ -255,13 +261,31 @@ retry_where:
 				memset(resp, 0, 256);
 				memset(cmd, 0, 256);
 				sprintf(cmd, "select gu(aaaa%d)", i);
-				if (!cli_execute(connection, cmd, resp, &len))
+
+				rtn_stat = mt_cli_open_execute(connection, cmd, exec_ctx);
+
+				if (!(rtn_stat & CLI_SUCCESS))
 				{
 					printf ("Error! \n");
-                                        continue;
+
+	                                continue;
 				}
-				resp[len] = '\0';
-				printf("cmd: %s, ret:  len = %d, %s\n", cmd, len, resp);
+				
+				printf("Client 1: %s\n", cmd);
+
+				int	rlen;
+				char	*rp = mt_cli_get_nextrow(exec_ctx, &rlen);
+
+				if (rp)
+				{
+					int	collen = 0;
+					char	*col;
+					col = mt_cli_get_colvalue(exec_ctx, rp, 6, &collen);
+					printf("col 6: %s\n", col);
+				}
+				
+				mt_cli_close_execute(exec_ctx);
+			
 			}
 		}
 
@@ -269,35 +293,27 @@ retry_where:
 		{
 			memset(resp, 0, 256);
 			memset(cmd, 0, 256);
-			sprintf(cmd, "selectrange gu(aaaa7, aaaa9)");
+			sprintf(cmd, "selectrange gu(aaaa7, aaaa8)");
 
-			int sockfd = cli_open_range(connection, cmd, SELECT_RANGE_OP);
+			int	row_cnt = 0;
 
-			RANGE_QUERYCTX rgsel_cont;
+			mt_cli_open_execute(connection, cmd, exec_ctx);
 
-			char *test_rp;
+			int	rlen;
+			char	*rp = NULL;
+			int	collen = 0;				
+			char	*col;
 
-retry_range:
+			while ((rp = mt_cli_get_nextrow(exec_ctx, &rlen)))
+			{					
+				col = mt_cli_get_colvalue(exec_ctx, rp, 6, &collen);
 
-			cli_read_range(sockfd, &rgsel_cont);
+				printf ("row: %d, col 6: %s\n", row_cnt, col);
 
-			if (!(rgsel_cont.status & DATA_EMPTY))
-			{
-				do
-				{
-					test_rp = cli_get_nextrow(&rgsel_cont);
-				} while(test_rp != NULL);
-
-				if (rgsel_cont.status & DATA_CONT)
-				{
-					cli_write_range(sockfd);					
-					goto retry_range;
-				}
-			}
+				row_cnt++;
+			};
 			
-			cli_close_range(sockfd);
-
-			printf("Client 1: %s, ret(%d): %s\n", cmd, len, resp);
+			mt_cli_close_execute(exec_ctx);
 		}
 
 	
@@ -310,29 +326,12 @@ retry_range:
 				memset(resp, 0, 256);
 				memset(cmd, 0, 256);
 				sprintf(cmd, "delete gu(aaaa%d)", i);
-				if (!cli_execute(connection, cmd, resp, &len))
-				{
-					printf ("Error! \n");
-                                        continue;
-				}
-				resp[len] = '\0';
-				printf("cmd: %s, %s\n", cmd, resp);
+				mt_cli_open_execute(connection, cmd, exec_ctx);
+
+				mt_cli_close_execute(exec_ctx);
+			
 			}
 
-			for(i = 1; i < 1000; i ++)
-			{
-				memset(resp, 0, 256);
-				memset(cmd, 0, 256);
-				sprintf(cmd, "select gu(gggg%d)", i);
-				if (!cli_execute(connection, cmd, resp, &len))
-				{
-					printf ("Error! \n");
-
-					continue;
-				}
-				resp[len] = '\0';
-				printf("cmd: %s, col_num: %d, ret(%d): %s, %d, %s\n", cmd, *((int *)(resp + len -4)), len, resp + *((int *)(resp + len -8)), *((int *)(resp + *((int *)(resp + len -12)))), resp + *((int *)(resp + len -16)));
-			}
 		}
 
 		if (match(argv[1], "drop"))
@@ -340,22 +339,18 @@ retry_range:
 			memset(resp, 0, 256);
 			memset(cmd, 0, 256);
 			sprintf(cmd, "drop gu");
-			if (!cli_execute(connection, cmd, resp, &len))
-			{
-				printf ("Error! \n");
+			
+			mt_cli_open_execute(connection, cmd, exec_ctx);
 
-				return 0;
-			}
-			resp[len] = '\0';
-		
-			printf("cmd: %s, %s\n", cmd, resp);
+			mt_cli_close_execute(exec_ctx);
+			
 		}
 		
-		cli_exit(connection);
+		mt_cli_close_connection(connection);
 	}
-	
+
+	mt_cli_destroy_context();
 	return 0;
 }
 
-#endif
 }}}
