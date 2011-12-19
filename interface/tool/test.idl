@@ -1,0 +1,19 @@
+{
+	"headname":"test",
+	"items":[
+	{
+	    "name":"test1T",
+	    "type":"struct",
+	    "desc":"just a test",
+            "key" : "m1",
+	    "members":[
+		    {"name":"m1","type":"string","desc":"member m1"},
+		    {"name":"m2","type":"int","desc":"member m2"},
+		    {"name":"m3","type":"bool","desc":"member m2"}
+	    ]
+	}
+	]
+}
+
+
+
