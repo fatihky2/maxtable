@@ -43,6 +43,7 @@ int main(int argc, char *argv[])
 
 	MT_CLI_EXEC_CONTEX t_exec_ctx;
 	MT_CLI_EXEC_CONTEX *exec_ctx = &t_exec_ctx;
+	memset(exec_ctx, 0, sizeof(MT_CLI_EXEC_CONTEX));
 
 	if(mt_cli_open_connection("172.16.10.11", 1959, &connection))
 	{
