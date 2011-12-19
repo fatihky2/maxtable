@@ -166,14 +166,47 @@ meta_server_setup(char *conf_path)
 	Kfsport = m_atoi(port, STRLEN(port));
 
 #endif
+	char	systable[1024];
+
 	if (STAT(MT_META_TABLE, &st) != 0)
 	{
 		MKDIR(status, MT_META_TABLE, 0755);
+
+		MEMSET(rang_server, 256);
+		MEMCPY(rang_server, MT_META_TABLE, STRLEN(MT_META_TABLE));
+		str1_to_str2(rang_server, '/', "systable");
+
+		OPEN(fd, rang_server, (O_CREAT|O_WRONLY|O_TRUNC));
+		
+		
+//		WRITE(fd, rang_server, STRLEN(rang_server));
+
+		MEMSET(systable, 1024);
+
+			
+		WRITE(fd, systable, 1024);
+	
+		CLOSE(fd);		
+
+		Master_infor->last_tabid = 0;
 	}
 	else
-	{
+	{		
+		MEMSET(rang_server, 256);
+		MEMCPY(rang_server, MT_META_TABLE, STRLEN(MT_META_TABLE));
+		str1_to_str2(rang_server, '/', "systable");
+
+		char	systable[1024];
+	
+		OPEN(fd, rang_server, (O_RDONLY));
 		
-		;
+		MEMSET(systable, 1024);
+
+		READ(fd, systable, 1024);
+	
+		CLOSE(fd);
+
+		Master_infor->last_tabid = *(int *)systable;
 	}
 
 	if (STAT(MT_META_REGION, &st) != 0)
@@ -486,7 +519,7 @@ meta_crtab(TREE *command)
 	tab_hdr = MEMALLOCHEAP(sizeof(TABLEHDR));
 
 	
-	tab_hdr->tab_id = 1;
+	tab_hdr->tab_id = ++Master_infor->last_tabid;
 	MEMCPY(tab_hdr->tab_name, tab_name, tab_name_len);
 	tab_hdr->tab_tablet = 0;
 	tab_hdr->tab_sstab = 0;
@@ -554,6 +587,23 @@ meta_crtab(TREE *command)
 	WRITE(fd, tablet_store, sizeof(SVR_IDX_FILE));
 
 	CLOSE(fd);
+
+	char systable[1024];
+
+	MEMSET(tab_dir1, 256);
+	MEMCPY(tab_dir1, MT_META_TABLE, STRLEN(MT_META_TABLE));
+	str1_to_str2(tab_dir1, '/', "systable");
+
+	OPEN(fd, tab_dir1, (O_RDWR));
+	
+
+	MEMSET(systable, 1024);
+
+	*(int *)systable = Master_infor->last_tabid;
+		
+	WRITE(fd, systable, 1024);
+
+	CLOSE(fd);		
 	
 	rtn_stat = TRUE;
 	
@@ -2208,9 +2258,6 @@ meta_selwheretab(TREE *command, TABINFO *tabinfo)
 	CONSTANT *cons = par_get_constant_by_colname(command, 
 					((COLINFO *)col_buf)[i].col_name);
 
-	MEMFREEHEAP(col_buf);
-	col_buf = NULL;
-
 	char	*range_leftkey;
 	int	leftkeylen;
 	char	*range_rightkey;
@@ -2291,27 +2338,50 @@ meta_selwheretab(TREE *command, TABINFO *tabinfo)
 	}	
 
 
-	col_buf_len = sizeof(SELWHERE) + sizeof(SVR_IDX_FILE);
-	col_buf = MEMALLOCHEAP(col_buf_len);
-	MEMSET(col_buf, col_buf_len);
-	col_buf_idx = 0;
-		
+	char	*resp_buf;
+
+	col_buf_len = sizeof(SELWHERE) + sizeof(SVR_IDX_FILE) + sizeof(TABLEHDR) + 
+					tab_hdr.tab_col * (sizeof(COLINFO));
 	
-	MEMCPY((col_buf + col_buf_idx), &selwhere, sizeof(SELWHERE));
-	col_buf_idx += sizeof(SELWHERE);
+	resp_buf = MEMALLOCHEAP(col_buf_len);
+	MEMSET(resp_buf, col_buf_len);
+
 
 	
-	MEMCPY((col_buf + col_buf_idx), &(Master_infor->rg_list), 
+	col_buf_idx = 0;		
+	
+	MEMCPY((resp_buf + col_buf_idx), &selwhere, sizeof(SELWHERE));
+	col_buf_idx += sizeof(SELWHERE);
+
+
+	MEMCPY((resp_buf + col_buf_idx), &(Master_infor->rg_list), 
 					sizeof(SVR_IDX_FILE));
 	col_buf_idx += sizeof(SVR_IDX_FILE);
+
 	
+	/* Save the meta (TABLEHDR) information into the SELWHERE structure. */
+	MEMCPY((resp_buf + col_buf_idx), &tab_hdr, sizeof(TABLEHDR));
+
+	col_buf_idx += sizeof(TABLEHDR);
+
+	MEMCPY((resp_buf + col_buf_idx), col_buf, tab_hdr.tab_col * sizeof(COLINFO));
+	
+	col_buf_idx += tab_hdr.tab_col * sizeof(COLINFO);
+	
+
+
 	rtn_stat = TRUE;
 
 exit:
+	if (col_buf)
+	{
+		MEMFREEHEAP(col_buf);
+	}
+	
 	if (rtn_stat)
 	{
 		rpc_status |= RPC_SUCCESS;
-		resp = conn_build_resp_byte(rpc_status, col_buf_idx, col_buf);
+		resp = conn_build_resp_byte(rpc_status, col_buf_idx, resp_buf);
 	}
 	else
 	{
@@ -2319,9 +2389,9 @@ exit:
 		resp = conn_build_resp_byte(rpc_status, 0, NULL);
 	}
 
-	if (col_buf != NULL)
+	if (resp_buf != NULL)
 	{
-		MEMFREEHEAP(col_buf);
+		MEMFREEHEAP(resp_buf);
 	}
 
 	return resp;

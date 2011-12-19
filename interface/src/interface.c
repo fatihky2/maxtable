@@ -27,6 +27,25 @@ sel_resp_rejoin(char * src_buf, char * dest_buf, int src_len, int * dest_len, ch
 static int 
 mt_cli_prt_help(char *cmd);
 
+static rg_conn *
+mt_cli_rgsel_ranger(conn * connection, char * cmd, MT_CLI_EXEC_CONTEX *exec_ctx, char *ip, int port);
+
+static int
+mt_cli_rgsel_meta(conn * connection, char * cmd, MT_CLI_EXEC_CONTEX *exec_ctx);
+
+static int
+mt_cli_rgsel_is_bigdata(rg_conn * rg_connection, int *bigdataport);
+
+static void
+mt_cli_write_range(int sockfd);
+
+static void
+mt_cli_close_range(int sockfd);
+
+static char *
+mt_cli_get__nextrow(RANGE_QUERYCTX *rgsel_cont, int *rlen);
+
+
 int validation_request(char * request)
 {
     //to be do.....
@@ -34,7 +53,7 @@ int validation_request(char * request)
 }
 
 void
-mt_cli_context_crt()
+mt_cli_crt_context()
 {
 	assert (cli_context == NULL);
 	
@@ -49,7 +68,7 @@ mt_cli_context_crt()
 
 
 void
-mt_cli_context_destroy()
+mt_cli_destroy_context()
 {
 	SPINLOCK_DESTROY(cli_context->mutex);
 	MEMFREEHEAP(cli_context);
@@ -63,7 +82,7 @@ mt_cli_context_destroy()
 ** create one connection between cli and svr, return the connection
 */
 int 
-mt_cli_connection(char * meta_ip, int meta_port, conn ** connection)
+mt_cli_open_connection(char * meta_ip, int meta_port, conn ** connection)
 {
 	P_SPINLOCK(cli_context->mutex);
 	
@@ -92,7 +111,7 @@ mt_cli_connection(char * meta_ip, int meta_port, conn ** connection)
 ** close one connection between cli and svr
 */
 void 
-mt_cli_exit(conn * connection)
+mt_cli_close_connection(conn * connection)
 {
 	int i;
 
@@ -118,8 +137,9 @@ mt_cli_exit(conn * connection)
 ** commit one request
 */
 int 
-mt_cli_execute(conn * connection, char * cmd, char * response, int * resp_len)
+mt_cli_exec_crtseldel(conn * connection, char * cmd, MT_CLI_EXEC_CONTEX *exec_ctx)
 {
+	LOCALTSS(tss);
 	char		send_buf[LINE_BUF_SIZE];
 	char		send_rg_buf[LINE_BUF_SIZE];
 	char		tab_name[64];
@@ -135,42 +155,17 @@ mt_cli_execute(conn * connection, char * cmd, char * response, int * resp_len)
 	int		remove_tab_hit;
 	int		retry_cnt;
 	int		meta_retry;
+
 	
-
-	P_SPINLOCK(cli_context->mutex);
-
-	LOCALTSS(tss);
-	
-	if(!validation_request(cmd))
-	{
-		V_SPINLOCK(cli_context->mutex);
-		return CLI_FAIL;
-	}
-
-	if (mt_cli_prt_help(cmd))
-	{
-		V_SPINLOCK(cli_context->mutex);
-		return CLI_SUCCESS;
-	}
-
 	rtn_stat = CLI_SUCCESS;
-	rg_resp = NULL;
 	sstab_split_resp = NULL;
 	remove_tab_resp = NULL;
 	sstab_split = FALSE;
 	remove_tab_hit = FALSE;
 	retry_cnt = 0;
 	meta_retry = 0;
-
-	//querytype = par_get_query(cmd, &querytype_index);
-	if(!parser_open(cmd))
-	{
-		parser_close();
-		tss->tstat |= TSS_PARSER_ERR;
-		traceprint("PARSER ERR: Please input the command again by the 'help' signed.\n");
-		V_SPINLOCK(cli_context->mutex);
-		return FALSE;
-	}
+	resp = NULL;
+	rg_resp = NULL;
 
 	querytype = ((TREE *)(tss->tcmd_parser))->sym.command.querytype;
 	MEMSET(tab_name, 64);
@@ -200,6 +195,7 @@ retry:
 #else
 	send_buf_size = strlen(cmd);
 #endif
+	
 	MEMSET(send_buf, LINE_BUF_SIZE);
 	MEMCPY(send_buf, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
 	MEMCPY(send_buf + RPC_MAGIC_MAX_LEN, cmd, send_buf_size);
@@ -231,6 +227,9 @@ retry:
 		
 		meta_retry++;
 
+		conn_destroy_resp(resp);
+		resp = NULL;
+
 		goto retry;
 	}
 	
@@ -248,26 +247,12 @@ retry:
 	}
 
 	if(   (querytype == INSERT) || (querytype == SELECT) || (querytype == DELETE) 
-	   || (querytype == SELECTRANGE) || (querytype == DROP) || (querytype == SELECTWHERE))
+	   || (querytype == DROP) )
 	{
 		INSMETA		*resp_ins;
-		SELRANGE	*resp_selrg;
-		SELWHERE	*resp_selwh;
 		
-		if (querytype == SELECTRANGE)
-		{			
-			resp_selrg = (SELRANGE *)resp->result;
-			resp_ins = &(resp_selrg->left_range);
-		}
-		else if (querytype == SELECTWHERE)
-		{
-			/*TODO: select where clause. */
-			resp_selwh= (SELWHERE *)resp->result;
-		}
-		else
-		{
-			resp_ins = (INSMETA *)resp->result;
-		}
+		resp_ins = (INSMETA *)resp->result;
+		
 		
 		rg_conn * rg_connection;
 		int i;
@@ -306,11 +291,7 @@ retry:
 
 		}
 
-		if (querytype == SELECTRANGE)
-		{
-			MEMCPY(resp->result, RPC_SELECTRANGE_MAGIC, RPC_MAGIC_MAX_LEN);
-		}
-		else if (querytype == DROP)
+		if (querytype == DROP)
 		{
 			MEMCPY(resp->result, RPC_DROP_TABLE_MAGIC, RPC_MAGIC_MAX_LEN);
 		}
@@ -347,9 +328,12 @@ retry:
 		{
 			traceprint("\n need to re-get rg meta \n");
 			conn_destroy_resp(resp);
+			resp = NULL;
 
 			rg_connection->status = CLOSED;
 			conn_close(rg_connection->connection_fd, NULL, rg_resp);
+
+			rg_resp = NULL;
 			
 			sleep(HEARTBEAT_INTERVAL + 1);
 			goto retry;
@@ -359,8 +343,13 @@ retry:
 		if (rg_resp->status_code == RPC_RETRY)
                 {
                         traceprint("\n need to try \n");
-                        conn_destroy_resp(resp);
+
+			conn_destroy_resp(resp);
+			resp = NULL;
+
 			conn_destroy_resp(rg_resp);
+			rg_resp = NULL;
+			
 			retry_cnt++;
 
 			if (retry_cnt > 5)
@@ -433,16 +422,17 @@ retry:
 
 			if (sstab_split_resp == NULL)
 			{
-				traceprint("\n ERROR in meta_server response \n");
+				traceprint("\n ERROR on sstab_split in meta_server response \n");
 				rtn_stat = CLI_FAIL;
 
+				/**/
 				MEMFREEHEAP(new_buf);
-				goto finish;				
+				goto finish;
 			}
 			
 			if (!(sstab_split_resp->status_code & RPC_SUCCESS))
 			{
-				traceprint("\n ERROR in meta_server response \n");
+				traceprint("\n ERROR on sstab_split in meta_server response \n");
 				rtn_stat = CLI_FAIL;
 
 				if (sstab_split_resp->status_code & RPC_TABLE_NOT_EXIST)
@@ -486,7 +476,7 @@ retry:
 
 			if (remove_tab_resp == NULL)
 			{
-				traceprint("\n ERROR in meta_server response \n");
+				traceprint("\n ERROR on drop in meta_server response \n");
 				rtn_stat = CLI_FAIL;
 
 				MEMFREEHEAP(new_buf);
@@ -495,7 +485,7 @@ retry:
 			
 			if (!(remove_tab_resp->status_code & RPC_SUCCESS))
 			{
-				traceprint("\n ERROR in meta_server response \n");
+				traceprint("\n ERROR on drop in meta_server response \n");
 				rtn_stat = CLI_FAIL;
 
 				if (remove_tab_resp->status_code & RPC_TABLE_NOT_EXIST)
@@ -512,62 +502,19 @@ retry:
 			
 	}
 
-	if(querytype == SELECT)
+finish:
+	if (querytype == SELECT)
 	{
-		//sel_resp_rejoin(rg_resp->result, response, rg_resp->result_length, resp_len, resp->result, querytype);
-		*resp_len = rg_resp->result_length;
-		strcpy(response, rg_resp->result);
-	}
-	else if (querytype == SELECTRANGE)
-	{
-		char	*rp;
-		int	rlen;
-		int	result_len = 0;
-		int	rowcnt;
-		int	row_idx = 0;
-		char	rowbp[512];
-		int	rlen_t;
-
-		rowcnt = *(int *)(rg_resp->result);
-		rp = rg_resp->result + sizeof(int);
-
-		while(row_idx < rowcnt)
-		{
-			rlen = *(int *)rp;
-			rp += sizeof(int);
-
-			result_len += (rlen + sizeof(int));
-
-			Assert(result_len < rg_resp->result_length);
-
-			MEMSET(rowbp, 512);
-			sel_resp_rejoin(rp, rowbp, rlen, &rlen_t, resp->result, querytype);
-
-			printf(" %s\n", rowbp);
-		
-			rp += rlen;
-			row_idx++;
-		}
-		
-		*resp_len = sizeof(SUC_RET);
-		strcpy(response, SUC_RET);
+		exec_ctx->meta_resp = (char *)resp;
+		exec_ctx->rg_resp = (char *)rg_resp;
+		exec_ctx->end_rowpos = 1;
 	}
 	else
 	{
-		*resp_len = sizeof(SUC_RET);
-		strcpy(response, SUC_RET);
-	}
-
-finish:
-
-	conn_destroy_resp(resp);
-	
-	if(rg_resp && ((querytype == INSERT) || (querytype == SELECT) ||(querytype == DELETE)
-		|| (querytype == SELECTRANGE)))
-	{
+		conn_destroy_resp(resp);
 		conn_destroy_resp(rg_resp);
 	}
-
+	
 	if (sstab_split)
 	{
 		Assert(querytype == INSERT);
@@ -580,12 +527,94 @@ finish:
 		Assert(querytype == DROP);
 		conn_destroy_resp(remove_tab_resp);
 	}
-		
-
+	
 	parser_close();    
 
-	V_SPINLOCK(cli_context->mutex);
 	return rtn_stat;
+}
+
+int 
+mt_cli_exec_selrang(conn * connection, char * cmd, MT_CLI_EXEC_CONTEX *exec_ctx)
+{
+	rg_conn		*rg_connection;
+	int 		sockfd = -1;
+	int		conn_cnt = 0;
+	int		bigdataport;
+	char		*ip;
+	int		port;
+	
+	SELRANGE	*selrg;
+	SELWHERE	*selwh;
+	SVR_IDX_FILE	*rglist;
+	int		rtn_state;
+
+
+	rtn_state = mt_cli_rgsel_meta(connection, cmd, exec_ctx);
+
+	if (rtn_state == FALSE)
+	{
+		return rtn_state;
+	}
+
+	Assert(((RPCRESP *)(exec_ctx->meta_resp))->status_code & RPC_SUCCESS);
+	
+	if (exec_ctx->querytype == SELECTRANGE)
+	{
+		selrg = (SELRANGE *)(((RPCRESP *)(exec_ctx->meta_resp))->result);
+
+		ip = selrg->left_range.i_hdr.rg_info.rg_addr;
+		port = selrg->left_range.i_hdr.rg_info.rg_port;
+	}
+	else if (exec_ctx->querytype == SELECTWHERE)
+	{
+		selwh = (SELWHERE *)(((RPCRESP *)(exec_ctx->meta_resp))->result);
+
+		rglist =  (SVR_IDX_FILE *)(((RPCRESP *)(exec_ctx->meta_resp))->result + sizeof(SELWHERE));
+
+		RANGE_PROF	*rg_prof;
+
+		rg_prof = (RANGE_PROF *)(rglist->data);
+
+		int	i;
+
+		for(i = 0; i < rglist->nextrno; i++)
+		{
+			if(rg_prof[i].rg_stat & RANGER_IS_ONLINE)
+			{
+				ip = rg_prof[i].rg_addr;
+				port = rg_prof[i].rg_port;
+				break;
+			}
+		}
+	}
+
+	rg_connection = mt_cli_rgsel_ranger(connection, cmd, exec_ctx, ip, port);
+
+	if (   (rg_connection == NULL) 
+	    || (!mt_cli_rgsel_is_bigdata(rg_connection, &bigdataport)))
+	{
+		goto finish;
+	}
+	
+	while ((sockfd < 0) && (conn_cnt < 1000))
+	{
+		sockfd = conn_open(rg_connection->rg_server_ip, bigdataport);
+
+		conn_cnt++;
+	}
+
+	if (sockfd < 0)
+	{
+		rtn_state = FALSE;
+		exec_ctx->status |= CLICTX_BAD_SOCKET;
+		goto finish;
+	}
+
+finish:
+	exec_ctx->socketid = sockfd;
+	exec_ctx->status |= CLICTX_DATA_BUF_NO_DATA;
+		
+	return rtn_state;
 }
 
 
@@ -630,6 +659,19 @@ sel_resp_rejoin(char * src_buf, char * dest_buf, int src_len, int * dest_len, ch
 
 	for(i = 0; i < tab_hdr->tab_col; i++)
 	{
+
+		if (querytype == SELECT)
+		{
+			int 	collen;
+			char	*col;
+			col = row_locate_col(src_buf, (col_info + i)->col_offset,tab_hdr->tab_row_minlen, &collen);
+
+			MEMCPY((char *)&dest_buf[i*32], col, collen);
+
+			continue;
+			
+		}
+	
 		int col_type = (col_info+i)->col_type;
 		
 		if(TYPE_IS_FIXED(col_type))
@@ -658,12 +700,19 @@ sel_resp_rejoin(char * src_buf, char * dest_buf, int src_len, int * dest_len, ch
 		}
 	}
 
+	
+	if (querytype == SELECT)
+	{
+		return TRUE;
+	}
+
 	if (COL_OFFTAB_MAX_SIZE > col_off_idx)
 	{
 		MEMCPY(dest_buf + dest_buf_index, col_off_tab + col_off_idx, COL_OFFTAB_MAX_SIZE - col_off_idx);
 		dest_buf_index += (COL_OFFTAB_MAX_SIZE - col_off_idx);
 	}
 
+	
 	*dest_len = dest_buf_index;
 
 	return TRUE;
@@ -671,8 +720,9 @@ sel_resp_rejoin(char * src_buf, char * dest_buf, int src_len, int * dest_len, ch
 
 
 int
-mt_cli_rgsel_meta(conn * connection, char * cmd, SELCTX *resp_selctx)
+mt_cli_rgsel_meta(conn * connection, char * cmd, MT_CLI_EXEC_CONTEX *exec_ctx)
 {
+	LOCALTSS(tss);
 	char		send_buf[LINE_BUF_SIZE];
 	char		tab_name[64];
 	int		send_buf_size;
@@ -680,40 +730,15 @@ mt_cli_rgsel_meta(conn * connection, char * cmd, SELCTX *resp_selctx)
 	int		querytype;
 	int		rtn_stat;
 	int		meta_retry;
+
 	
-
-	P_SPINLOCK(cli_context->mutex);
-
-	LOCALTSS(tss);
-	
-	if(!validation_request(cmd))
-	{
-		V_SPINLOCK(cli_context->mutex);
-		return FALSE;
-	}
-
-	if (mt_cli_prt_help(cmd))
-	{
-		V_SPINLOCK(cli_context->mutex);
-		return FALSE;
-	}
-
 	rtn_stat = TRUE;
 	meta_retry = 0;
-
-	if(!parser_open(cmd))
-	{
-		parser_close();
-		tss->tstat |= TSS_PARSER_ERR;
-		traceprint("PARSER ERR: Please input the command again by the 'help' signed.\n");
-		V_SPINLOCK(cli_context->mutex);
-		return FALSE;
-	}
 
 	querytype = ((TREE *)(tss->tcmd_parser))->sym.command.querytype;
 	MEMSET(tab_name, 64);
 	MEMCPY(tab_name, ((TREE *)(tss->tcmd_parser))->sym.command.tabname,
-	((TREE *)(tss->tcmd_parser))->sym.command.tabname_len);
+		((TREE *)(tss->tcmd_parser))->sym.command.tabname_len);
 
 retry:
 
@@ -741,6 +766,9 @@ retry:
 		
 		meta_retry++;
 
+		conn_destroy_resp(resp);
+		resp = NULL;
+
 		goto retry;
 	}
 	
@@ -751,39 +779,27 @@ retry:
 		goto finish;
 
 	}
-
-	if (resp_selctx->stat == SELECT_RANGE_OP)
-	{
-		MEMCPY(&(resp_selctx->ctx.selrg), resp->result, sizeof(SELRANGE));
-	}
-	else if(resp_selctx->stat == SELECT_WHERE_OP)
-	{
-		MEMCPY(&(resp_selctx->ctx.selwh), resp->result, sizeof(SELWHERE));
-		MEMCPY(&(resp_selctx->rglist), resp->result + sizeof(SELWHERE), 
-					sizeof(SVR_IDX_FILE));		
-	}
 	
 finish:
 
-	conn_destroy_resp(resp);
-	
+	exec_ctx->meta_resp = (char *)resp;
 	parser_close();
 
-	V_SPINLOCK(cli_context->mutex);
-	return TRUE;
+	return rtn_stat;
 }
 
 
 rg_conn *
-mt_cli_rgsel_ranger(conn * connection, char * cmd, SELCTX *selctx, char *ip, int port)
+mt_cli_rgsel_ranger(conn * connection, char * cmd, MT_CLI_EXEC_CONTEX *exec_ctx, char *ip, int port)
 {
 	char		send_rg_buf[LINE_BUF_SIZE];
 	int		rtn_stat;
 	rg_conn		*rg_connection;
 	int 		i;
 
-	P_SPINLOCK(cli_context->mutex);
 
+	rg_connection = NULL;
+	
 	for(i = 0; i < connection->rg_list_len; i++)
 	{
 		if((port == connection->rg_list[i]->rg_server_port)
@@ -808,7 +824,7 @@ mt_cli_rgsel_ranger(conn * connection, char * cmd, SELCTX *selctx, char *ip, int
 
 			MEMFREEHEAP(rg_connection);
 			rtn_stat = FALSE;
-			V_SPINLOCK(cli_context->mutex);
+
 			return NULL;
 
 		}
@@ -822,15 +838,15 @@ mt_cli_rgsel_ranger(conn * connection, char * cmd, SELCTX *selctx, char *ip, int
 
 	int send_buf_size = strlen(cmd);
 
-	if (selctx->stat == SELECT_RANGE_OP)
+	if (exec_ctx->querytype == SELECTRANGE)
 	{
-		MEMCPY(&(selctx->ctx.selrg), RPC_SELECTRANGE_MAGIC, RPC_MAGIC_MAX_LEN);
+		MEMCPY(((RPCRESP *)(exec_ctx->meta_resp))->result, RPC_SELECTRANGE_MAGIC, RPC_MAGIC_MAX_LEN);
 				
 		MEMSET(send_rg_buf, LINE_BUF_SIZE);
 		MEMCPY(send_rg_buf, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
 
 
-		MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN, &(selctx->ctx.selrg), 
+		MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN, ((RPCRESP *)(exec_ctx->meta_resp))->result, 
 			sizeof(SELRANGE));
 		MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN + sizeof(SELRANGE), cmd, 
 			send_buf_size);
@@ -838,15 +854,15 @@ mt_cli_rgsel_ranger(conn * connection, char * cmd, SELCTX *selctx, char *ip, int
 		tcp_put_data(rg_connection->connection_fd, send_rg_buf, 
 			(sizeof(SELRANGE) + send_buf_size + RPC_MAGIC_MAX_LEN));
 	}
-	else if (selctx->stat == SELECT_WHERE_OP)
+	else if (exec_ctx->querytype == SELECTWHERE)
 	{
-		MEMCPY(&(selctx->ctx.selwh), RPC_SELECTWHERE_MAGIC, RPC_MAGIC_MAX_LEN);
+		MEMCPY(((RPCRESP *)(exec_ctx->meta_resp))->result, RPC_SELECTWHERE_MAGIC, RPC_MAGIC_MAX_LEN);
 				
 		MEMSET(send_rg_buf, LINE_BUF_SIZE);
 		MEMCPY(send_rg_buf, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
 
 
-		MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN, &(selctx->ctx.selwh), 
+		MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN, ((RPCRESP *)(exec_ctx->meta_resp))->result, 
 			sizeof(SELWHERE));
 		MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN + sizeof(SELWHERE), cmd, 
 			send_buf_size);
@@ -855,7 +871,6 @@ mt_cli_rgsel_ranger(conn * connection, char * cmd, SELCTX *selctx, char *ip, int
 			(sizeof(SELWHERE) + send_buf_size + RPC_MAGIC_MAX_LEN));
 	}
 
-	V_SPINLOCK(cli_context->mutex);
 	return rg_connection;
 	
 
@@ -869,7 +884,6 @@ mt_cli_rgsel_is_bigdata(rg_conn * rg_connection, int *bigdataport)
 	int		rtn_stat;
 	
 
-	P_SPINLOCK(cli_context->mutex);
 	rg_resp = conn_recv_resp_abt(rg_connection->connection_fd);
 
 	switch (rg_resp->status_code)
@@ -880,6 +894,7 @@ mt_cli_rgsel_is_bigdata(rg_conn * rg_connection, int *bigdataport)
 		
 		rg_connection->status = CLOSED;
 		conn_close(rg_connection->connection_fd, NULL, rg_resp);
+		rg_resp = NULL;
 		
 		sleep(HEARTBEAT_INTERVAL + 1);
 
@@ -891,6 +906,7 @@ mt_cli_rgsel_is_bigdata(rg_conn * rg_connection, int *bigdataport)
 	
 	        traceprint("\n need to try \n");
 		conn_destroy_resp(rg_resp);
+		rg_resp = NULL;
 
 		rtn_stat = FALSE;
 		break;
@@ -913,100 +929,27 @@ mt_cli_rgsel_is_bigdata(rg_conn * rg_connection, int *bigdataport)
 			rtn_stat = TRUE;
 		}
 
-		conn_destroy_resp(rg_resp);
+		
 			
 		break;
 	
 	}
 
-	V_SPINLOCK(cli_context->mutex);
+	conn_destroy_resp(rg_resp);
+	rg_resp = NULL;
+
 	return rtn_stat;
 }
 
-
 int
-mt_cli_open_range(conn * connection, char * cmd, int opid)
-{
-	SELCTX		*selctx;
-	rg_conn		*rg_connection;
-	int 		sockfd = -1;
-	int		conn_cnt = 0;
-	int		bigdataport;
-	char		*ip;
-	int		port;
-
-
-	P_SPINLOCK(cli_context->mutex);
-	selctx = MEMALLOCHEAP(sizeof(SELCTX));
-
-	if (opid == SELECT_RANGE_OP)
-	{
-		selctx->stat = SELECT_RANGE_OP;
-	}
-	else if (opid == SELECT_WHERE_OP)
-	{
-		selctx->stat = SELECT_WHERE_OP;
-	}
-	
-	mt_cli_rgsel_meta(connection, cmd, selctx);
-
-	if (opid == SELECT_RANGE_OP)
-	{
-		ip = selctx->ctx.selrg.left_range.i_hdr.rg_info.rg_addr;
-		port = selctx->ctx.selrg.left_range.i_hdr.rg_info.rg_port;
-	}
-	else if (opid == SELECT_WHERE_OP)
-	{
-		SVR_IDX_FILE	*temp_store;
-		RANGE_PROF	*rg_prof;
-	
-		temp_store = &(selctx->rglist);
-		rg_prof = (RANGE_PROF *)(temp_store->data);
-
-		int	i;
-
-		for(i = 0; i < temp_store->nextrno; i++)
-		{
-			if(rg_prof[i].rg_stat & RANGER_IS_ONLINE)
-			{
-				ip = rg_prof[i].rg_addr;
-				port = rg_prof[i].rg_port;
-				break;
-			}
-		}
-	}
-
-	rg_connection = mt_cli_rgsel_ranger(connection, cmd, selctx, ip, port);
-
-	if (!mt_cli_rgsel_is_bigdata(rg_connection, &bigdataport))
-	{
-		MEMFREEHEAP(selctx);
-		return -1;
-	}
-	
-	MEMFREEHEAP(selctx);
-	
-	
-	while ((sockfd < 0) && (conn_cnt < 1000))
-	{
-		sockfd = conn_open(rg_connection->rg_server_ip, bigdataport);
-
-		conn_cnt++;
-	}
-
-	V_SPINLOCK(cli_context->mutex);
-	return sockfd;
-}
-
-int
-mt_cli_read_range(int sockfd, RANGE_QUERYCTX *rgsel_cont)
+mt_cli_read_range(MT_CLI_EXEC_CONTEX *exec_ctx)
 {
 	RPCRESP		*rg_resp;
 	int		rtn_stat;
+	int		retry_cnt = 0;
 	
-
-	P_SPINLOCK(cli_context->mutex);
-	rg_resp = conn_recv_resp_abt(sockfd);
+retry:
+	rg_resp = conn_recv_resp_abt(exec_ctx->socketid);
 
 	switch (rg_resp->status_code)
 	{
@@ -1015,7 +958,7 @@ mt_cli_read_range(int sockfd, RANGE_QUERYCTX *rgsel_cont)
 		traceprint("\n need to re-get rg meta \n");
 		
 		
-		conn_close(sockfd, NULL, rg_resp);
+		conn_close(exec_ctx->socketid, NULL, rg_resp);
 		
 		sleep(HEARTBEAT_INTERVAL + 1);
 
@@ -1027,7 +970,14 @@ mt_cli_read_range(int sockfd, RANGE_QUERYCTX *rgsel_cont)
 	
 	        traceprint("\n need to try \n");
 		conn_destroy_resp(rg_resp);
+		
+		if (retry_cnt < 1)
+		{
+			sleep(5);
 
+			goto retry;
+		}
+		
 		rtn_stat = FALSE;
 		break;
 
@@ -1037,21 +987,20 @@ mt_cli_read_range(int sockfd, RANGE_QUERYCTX *rgsel_cont)
 		if (!(rg_resp->status_code & RPC_SUCCESS))
 		{
 			traceprint("\n ERROR in rg_server response \n");
+			conn_destroy_resp(rg_resp);
 			rtn_stat = FALSE;
 		}
 		else
 		{
-			MEMCPY(rgsel_cont, rg_resp->result, sizeof(RANGE_QUERYCTX));
 			rtn_stat = TRUE;
+			Assert(exec_ctx->rg_resp);
+			exec_ctx->rg_resp = (char *)rg_resp;
 		}
 
-		conn_destroy_resp(rg_resp);	
-			
 		break;
 	
 	}
 
-	V_SPINLOCK(cli_context->mutex);
 	return rtn_stat;
 }
 
@@ -1081,7 +1030,7 @@ mt_cli_close_range(int sockfd)
                   (BLOCKSIZE - BLK_TAILSIZE - ROW_OFFSET_ENTRYSIZE)))
 
 char *
-mt_cli_get_nextrow(RANGE_QUERYCTX *rgsel_cont)
+mt_cli_get__nextrow(RANGE_QUERYCTX *rgsel_cont, int *rlen)
 {
 	if (rgsel_cont->cur_rowpos > rgsel_cont->end_rowpos)
 	{
@@ -1091,12 +1040,7 @@ mt_cli_get_nextrow(RANGE_QUERYCTX *rgsel_cont)
 	int *offtab = ROW_OFFSET_PTR(rgsel_cont->data);
 
 	char *rp = rgsel_cont->data + offtab[-(rgsel_cont->cur_rowpos)];
-	int rlen = ROW_GET_LENGTH(rp, rgsel_cont->rowminlen);
-
-	char test[BLOCKSIZE];
-	MEMSET(test, BLOCKSIZE);
-	MEMCPY(test, rp, rlen);
-	printf("next row: %s \n", (test + rgsel_cont->rowminlen + sizeof(int)));
+	*rlen = ROW_GET_LENGTH(rp, rgsel_cont->rowminlen);
 
 	(rgsel_cont->cur_rowpos)++;
 	
@@ -1104,10 +1048,281 @@ mt_cli_get_nextrow(RANGE_QUERYCTX *rgsel_cont)
 }
 
 char *
+mt_cli_get_nextrow(MT_CLI_EXEC_CONTEX *exec_ctx, int *rlen)
+{
+	char			*rp;
+	RANGE_QUERYCTX		*rgsel_cont;
+
+
+	rp = NULL;
+
+
+retry:
+
+	switch (exec_ctx->querytype)
+	{
+	    case SELECT:
+
+		exec_ctx->cur_rowpos = 0;
+		
+		if (exec_ctx->cur_rowpos < exec_ctx->end_rowpos)
+		{
+			exec_ctx->cur_rowpos++;
+			rp = ((RPCRESP *)(exec_ctx->rg_resp))->result;
+		}
+
+		break;
+			
+	    case SELECTRANGE:
+	    case SELECTWHERE:
+
+		if (exec_ctx->status & CLICTX_BAD_SOCKET)
+		{
+			traceprint("socket id (%d) is bad.\n", exec_ctx->socketid);
+			break;
+		}
+
+		
+		if (exec_ctx->status & CLICTX_RANGER_IS_UNCONNECT)
+		{
+			traceprint("ranger server is not connectable.\n");
+			break;
+		}
+
+		if (exec_ctx->status & CLICTX_DATA_BUF_NO_DATA)
+		{
+			if (!mt_cli_read_range(exec_ctx))
+			{
+				exec_ctx->status |= CLICTX_RANGER_IS_UNCONNECT;
+				break;
+			}
+			
+			exec_ctx->status &= ~CLICTX_DATA_BUF_NO_DATA;
+			exec_ctx->status |= CLICTX_DATA_BUF_HAS_DATA;
+		}
+
+		rgsel_cont = (RANGE_QUERYCTX *)(((RPCRESP *)(exec_ctx->rg_resp))->result);
+
+		if (!(rgsel_cont->status & DATA_EMPTY))
+		{
+			
+			rp = mt_cli_get__nextrow(rgsel_cont, rlen);
+
+			if ((rp == NULL) && (rgsel_cont->status & DATA_CONT))
+			{
+				mt_cli_write_range(exec_ctx->socketid);
+				
+				conn_destroy_resp((RPCRESP *)(exec_ctx->rg_resp));
+
+				exec_ctx->rg_resp = NULL;
+				exec_ctx->status &= ~CLICTX_DATA_BUF_HAS_DATA;
+				exec_ctx->status |= CLICTX_DATA_BUF_NO_DATA;
+				goto retry;
+			}
+		}
+
+		break;
+
+	    default:
+	    	break;
+
+	}
+
+	return rp;
+}
+
+
+int
+mt_cli_get_rowcnt(MT_CLI_EXEC_CONTEX *exec_ctx)
+{
+	return exec_ctx->end_rowpos;
+}
+
+char *
+mt_cli_get_colvalue(MT_CLI_EXEC_CONTEX *exec_ctx, char *rowbuf, int col_idx, int *collen)
+{
+	char		*meta_buf;
+
+
+	meta_buf = ((RPCRESP *)(exec_ctx->meta_resp))->result;
+
+	if (exec_ctx->querytype == SELECTRANGE)
+	{			
+		meta_buf += sizeof(SELRANGE);
+	}
+	else if (exec_ctx->querytype == SELECTWHERE)
+	{
+		meta_buf += (sizeof(SELWHERE) + sizeof(SVR_IDX_FILE));
+	}
+	else
+	{
+		meta_buf += sizeof(INSMETA);
+	}	
+
+	TABLEHDR *tab_hdr = (TABLEHDR *)meta_buf;
+
+	if ((col_idx < 0) || ((col_idx + 1) > tab_hdr->tab_col))
+	{
+		traceprint("Can't find the column.\n");
+		return FALSE;
+	}
+	
+	meta_buf += sizeof(TABLEHDR);
+
+	COLINFO *col_info = (COLINFO *)meta_buf;
+
+	return row_locate_col(rowbuf, (col_info + col_idx)->col_offset,tab_hdr->tab_row_minlen, collen);
+}
+
+
+char *
 mt_cli_get_firstrow(RANGE_QUERYCTX *rgsel_cont)
 {
 	return NULL;
 }
+
+int 
+mt_cli_open_execute(conn *connection, char *cmd, MT_CLI_EXEC_CONTEX *exec_ctx)
+{
+	int 	querytype;
+	int	s_idx;
+	int	rtn_stat;
+
+	if (exec_ctx == NULL)
+	{
+		return FALSE;
+	}
+	
+	if (exec_ctx->status & CLICTX_IS_OPEN)
+	{
+		return FALSE;
+	}
+	
+	if(!validation_request(cmd))
+	{
+		return FALSE;
+	}
+
+	if (mt_cli_prt_help(cmd))
+	{
+		return TRUE;
+	}
+
+	querytype = par_get_query(cmd, &s_idx);
+
+	P_SPINLOCK(cli_context->mutex);
+
+	LOCALTSS(tss);
+	
+	switch (querytype)
+	{
+	    case TABCREAT:
+	    	tss->topid |= TSS_OP_CRTTAB;
+		rtn_stat = par_crtins_tab((cmd + s_idx), TABCREAT);
+		break;
+		
+	    case INSERT:
+	    	tss->topid |= TSS_OP_INSTAB;
+		rtn_stat = par_crtins_tab((cmd + s_idx), INSERT);
+	        break;
+
+	    case SELECT:		
+		tss->topid |= TSS_OP_SELDELTAB;
+		rtn_stat = par_seldel_tab((cmd + s_idx), SELECT);
+
+	        break;
+
+	    case DELETE:
+	    	
+	    	tss->topid |= TSS_OP_SELDELTAB;
+	    	rtn_stat = par_seldel_tab((cmd + s_idx), DELETE);
+	        break;
+
+	    case SELECTRANGE:
+	    	rtn_stat = par_selrange_tab((cmd + s_idx), SELECTRANGE);
+	    	break;
+		
+	    case DROP:
+	    	rtn_stat = par_dropremovrebalanmcc_tab(cmd + s_idx, DROP);
+	    	break;
+		
+	    case SELECTWHERE:
+	    	rtn_stat = par_selwhere_tab(cmd + s_idx, SELECTWHERE);
+		break;
+
+	    default:
+	    	rtn_stat = FALSE;
+	        break;
+	}
+
+	if (!rtn_stat)
+	{
+		parser_close();
+		tss->tstat |= TSS_PARSER_ERR;
+		traceprint("PARSER ERR: Please input the command again by the 'help' signed.\n");
+		V_SPINLOCK(cli_context->mutex);
+		return FALSE;
+	}
+
+	MEMSET(exec_ctx, sizeof(MT_CLI_EXEC_CONTEX));
+
+	exec_ctx->querytype = querytype;
+
+	switch (querytype)
+	{
+	    case TABCREAT:
+	    case INSERT:
+	    case DELETE:
+	    case DROP:
+	    case SELECT:
+		rtn_stat = mt_cli_exec_crtseldel(connection, cmd, exec_ctx);
+		break;
+    		
+	    case SELECTRANGE:
+	    case SELECTWHERE:
+	    	rtn_stat = mt_cli_exec_selrang(connection, cmd, exec_ctx);
+	    	
+		break;
+
+	    default:
+	    	rtn_stat = FALSE;
+	        break;
+	}
+
+	V_SPINLOCK(cli_context->mutex);
+	return rtn_stat;
+
+}
+
+
+void 
+mt_cli_close_execute(MT_CLI_EXEC_CONTEX *exec_ctx)
+{
+	if (exec_ctx->meta_resp)
+	{
+		conn_destroy_resp((RPCRESP *)(exec_ctx->meta_resp));
+		exec_ctx->meta_resp = NULL;
+	}
+	
+	if(exec_ctx->rg_resp)
+	{
+		conn_destroy_resp((RPCRESP *)(exec_ctx->rg_resp));
+
+		exec_ctx->rg_resp = NULL;
+	}
+
+	if ((exec_ctx->querytype == SELECTRANGE) || (exec_ctx->querytype == SELECTWHERE))
+	{
+		if (!(exec_ctx->status & CLICTX_BAD_SOCKET))
+		{
+			mt_cli_close_range(exec_ctx->socketid);
+		}
+	}
+	
+	exec_ctx->status  = 0;
+		
+}
+
 
 static int
 mt_cli_prt_help(char *cmd)

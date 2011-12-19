@@ -225,6 +225,7 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 	char		*tab_name;
 	int		tab_name_len;
 	char		tab_dir[TABLE_NAME_MAX_LEN];
+	char		tran_tab_dir[TABLE_NAME_MAX_LEN];
 	int		status;
 	int		rtn_stat;
 	int		sstab_rlen;
@@ -284,6 +285,9 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 		*/
 		traceprint("ins_meta->sstab_name =%s \n", ins_meta->sstab_name);
 	}
+
+	MEMSET(tran_tab_dir,TABLE_NAME_MAX_LEN);
+	MEMCPY(tran_tab_dir,tab_dir,STRLEN(tab_dir));
 	
 	sstable = ins_meta->sstab_name;
 
@@ -618,17 +622,19 @@ rg_seldeltab(TREE *command, TABINFO *tabinfo)
 	{
 		/* TODO: rp, rlen just be the future work setting. */
 		char *rp = (char *)(bp->bblk) + offset;
-		char *value;
 		
 		// char	*filename = meta_get_coldata(bp, offset, sizeof(ROWFMT));
 
-		value = row_locate_col(rp, -2, bp->bblk->bminlen, &rlen);
+		rlen = ROW_GET_LENGTH(rp, bp->bblk->bminlen);
+		
+		//value = row_locate_col(rp, -1, bp->bblk->bminlen, &rlen);
 
 		/* Building the response information. */
 		col_buf = MEMALLOCHEAP(rlen);
+		
 		MEMSET(col_buf, rlen);
 
-		MEMCPY(col_buf, value, rlen);
+		MEMCPY(col_buf, rp, rlen);
 		
 	}
 	
@@ -853,7 +859,9 @@ rg_selrangetab(TREE *command, TABINFO *tabinfo, int fd)
 
 
 	int n;
-
+	
+	signal (SIGPIPE,SIG_IGN);
+	
 	resp = conn_build_resp_byte(RPC_BIGDATA_CONN, sizeof(int),
 					(char *)(&(Range_infor->bigdataport)));
 	resp_size = conn_get_resp_size((RPCRESP *)resp);	
@@ -945,8 +953,8 @@ rg_selrangetab(TREE *command, TABINFO *tabinfo, int fd)
 						(char *)&rgsel_cont);
 		
 		resp_size = conn_get_resp_size((RPCRESP *)resp);
-		  
-		tcp_put_data(connfd, resp, resp_size);			
+
+		tcp_put_data(connfd, resp, resp_size);
 
 		conn_destroy_resp_byte(resp);	
 
@@ -1183,6 +1191,8 @@ rg_selwheretab(TREE *command, SELWHERE *selwhere, int fd)
 	{
 		goto exit;
 	}
+
+	signal (SIGPIPE,SIG_IGN);
 
 	resp = conn_build_resp_byte(RPC_BIGDATA_CONN, sizeof(int),
 					(char *)(&(Range_infor->bigdataport)));

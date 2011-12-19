@@ -386,7 +386,9 @@ conn_recv_resp(int sockfd)
 
 //	MEMSET(buf, CONN_BUF_SIZE);
 
-	n = read(sockfd, buf, CONN_BUF_SIZE);
+//	n = read(sockfd, buf, CONN_BUF_SIZE);
+
+	n = tcp_get_data(sockfd, buf, CONN_BUF_SIZE);
 
 	//If n == 0, measn the remote node have encounter some bad problems
 	if(n == 0)
@@ -420,8 +422,9 @@ conn_recv_resp_abt(int sockfd)
 	tv.tv_usec = 0;
 	setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 
-	n = read(sockfd, buf, CONN_BUF_SIZE);
+//	n = read(sockfd, buf, CONN_BUF_SIZE);
 
+	n = tcp_get_data(sockfd, buf, CONN_BUF_SIZE);
 	if(n > 0)
 	{
 		resp = conn_build_resp(buf);
@@ -453,7 +456,8 @@ conn_recv_resp_abt(int sockfd)
 		resp->status_code = RPC_UNAVAIL;
 	}
 	
-    
+
+    	assert(resp);
 	free(buf);
 	return resp;
 }
@@ -475,7 +479,9 @@ conn_recv_resp_meta(int sockfd, char *recv_buf)
 	tv.tv_usec = 0;
 	setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 
-	n = read(sockfd, buf, CONN_BUF_SIZE);
+//	n = read(sockfd, buf, CONN_BUF_SIZE);
+
+	n = tcp_get_data(sockfd, buf, CONN_BUF_SIZE);
 
 	if(n > 0)
 	{
@@ -607,7 +613,10 @@ start_daemon(int listenfd, char * (*handler_request)(char *req_buf))
 		MEMSET(buf, CONN_BUF_SIZE);
 
 _read_again:
-		n = read(connfd, buf, CONN_BUF_SIZE - 1);
+//		n = read(connfd, buf, CONN_BUF_SIZE - 1);
+
+		n = tcp_get_data(connfd, buf, CONN_BUF_SIZE - 1);
+
 		if (n > 0) 
 		{
 			buf[n] = '\0'; 
@@ -723,6 +732,7 @@ conn_socket_accept(int sockfd)
 }
 
 
+/* Currently, this method just be used to read the fixed (8 bytes) data from the client (mt_cli_write_range). */
 int 
 conn_socket_read(int sockfd, char *buf, int size)
 {

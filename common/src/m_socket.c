@@ -122,7 +122,7 @@ tcp_get_data(int socket, char *recvbp, int count)
 	int	need;
 
 
-	Assert(count < (MSG_SIZE + 1));
+//	Assert(count < (MSG_SIZE + 1));
 
 retry:
 	n = m_recvdata(socket, recvbp, count);
@@ -194,7 +194,9 @@ tcp_put_data(int socket, char *sendbp, int count)
 	{
 		n = m_senddata(socket, sendbp, count);
 //		n = write(socket, sendbp, count);
-                
+
+//		traceprint("SELECT_RANGE_PUT_DATA: %d bytes has been sent.\n", n);
+
 		if(n >= 0)
 		{
 			sendbp += n;
