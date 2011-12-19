@@ -51,6 +51,8 @@ int set_nonblock(int fd)
 	return fcntl(fd, F_SETFL, fcntl( fd, F_GETFL)|O_NONBLOCK);
 }
 
+#if 0
+
 void msg_write(int fd, char * buf, int size)
 {
 	int written = 0;
@@ -63,6 +65,8 @@ void msg_write(int fd, char * buf, int size)
                     written += ret;
         }
 }
+
+#endif
 
 void * msg_recv(void *args)
 
@@ -183,7 +187,7 @@ void * msg_recv(void *args)
 					    	break;
 					}
 
-					traceprint("TCP: get data error in step 1: ret(%d)\n", n);
+					traceprint("TODO: Tcp/ip information definition (%d)\n", n);
 
 					goto finish;
 				}
@@ -293,7 +297,8 @@ finish:
 				events[i].data.ptr = NULL;
 				
 				sockfd = resp_msg->fd;
-				msg_write(sockfd, resp_msg->data, resp_msg->n_size);
+				//msg_write(sockfd, resp_msg->data, resp_msg->n_size);
+				tcp_put_data(sockfd, resp_msg->data, resp_msg->n_size);
 				printf("write %d->[%s] -- socketfd = %d \n", resp_msg->n_size, resp_msg->data, sockfd);
 
 				if(resp_msg->block_buffer)

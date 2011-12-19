@@ -220,8 +220,8 @@ typedef struct select_where
 
 typedef union context
 {	
-	struct select_range	selrg;
-	struct select_where	selwh;
+	struct select_range	*selrg;
+	struct select_where	*selwh;
 }CONTEXT;
 
 
@@ -330,6 +330,7 @@ typedef struct master_infor
 {
 	char		conf_path[META_CONF_PATH_MAX_LEN];
 	int		port;
+	int		last_tabid;
 	LOCKATTR 	mutexattr;
 	SPINLOCK	rglist_spinlock;	
 	SVR_IDX_FILE	rg_list;
