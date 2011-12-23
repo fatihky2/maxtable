@@ -1391,7 +1391,6 @@ meta_removtab(TREE *command)
 	int	tab_name_len;
 	char	tab_dir[TABLE_NAME_MAX_LEN];
 	char	tab_meta_dir[TABLE_NAME_MAX_LEN];
-	char	cmd_str[TABLE_NAME_MAX_LEN];
 	int	fd1;
 	int	rtn_stat;
 	TABLEHDR	tab_hdr;
@@ -1452,11 +1451,19 @@ meta_removtab(TREE *command)
 	
 	CLOSE(fd1);
 
+#ifdef MT_KFS_BACKEND
+
+	RMDIR(status, tab_dir);
+	if(!status)
+#else
+
+	char	cmd_str[TABLE_NAME_MAX_LEN];
 	MEMSET(cmd_str, TABLE_NAME_MAX_LEN);
 	
 	sprintf(cmd_str, "rm -rf %s", tab_dir);
 	
 	if (!system(cmd_str))
+#endif
 	{
 		rtn_stat = TRUE;
 	}
