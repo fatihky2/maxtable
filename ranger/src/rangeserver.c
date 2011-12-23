@@ -194,7 +194,6 @@ rg_droptab(TREE *command)
 	int		tab_name_len;
 	char		tab_dir[TABLE_NAME_MAX_LEN];
 	int		rtn_stat;
-	char		cmd_str[TABLE_NAME_MAX_LEN];
 	char		*resp;
 
 
@@ -218,11 +217,20 @@ rg_droptab(TREE *command)
 		goto exit;		
 	}
 
+#ifdef MT_KFS_BACKEND
+	int	status;
+	RMDIR(status, tab_dir);
+	if(!status)
+
+#else
+	char	cmd_str[TABLE_NAME_MAX_LEN];
+
 	MEMSET(cmd_str, TABLE_NAME_MAX_LEN);
 	
 	sprintf(cmd_str, "rm -rf %s", tab_dir);
 	
 	if (!system(cmd_str))
+#endif
 	{
 		rtn_stat = TRUE;
 	}
@@ -2559,8 +2567,7 @@ rg_rebalancer(REBALANCE_DATA * rbd)
 		int	*offset;
 		char 	*rp;
 		char	*sstabname;
-		char	cmd_str[TABLE_NAME_MAX_LEN];
-		
+				
 		while (TRUE)
 		{
 			blk = (BLOCK *)(rbd->rbd_data + i * BLOCKSIZE);
@@ -2613,11 +2620,17 @@ rg_rebalancer(REBALANCE_DATA * rbd)
 
 				if (rtn_stat == TRUE)
 				{
+#ifdef MT_KFS_BACKEND
+					RMFILE(status, tab_sstab_dir);
+					if(!status)
+#else
+					char	cmd_str[TABLE_NAME_MAX_LEN];
 					MEMSET(cmd_str, TABLE_NAME_MAX_LEN);
 	
 					sprintf(cmd_str, "rm -rf %s", tab_sstab_dir);
 	
-					if (system(cmd_str))
+					if (!system(cmd_str))
+#endif
 					{
 						rtn_stat = TRUE;
 					}
