@@ -38,7 +38,7 @@ typedef struct _conn
 	
 }conn;
 
-typedef struct _range_query_contex
+typedef struct range_query_contex
 {
 	int	status;
 	int	first_rowpos;

@@ -75,8 +75,6 @@ typedef struct tss
 			*ttab_sstabmap;
 	char		*rglogfile;
 	char		*rgbackpfile;
-	char		*rginsdellogfile;
-
 } TSS;
 
 

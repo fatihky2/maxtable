@@ -31,7 +31,6 @@
 
 
 extern KERNEL *Kernel;
-char	*RgInsdelLogfile;
 
 
 void
@@ -72,7 +71,7 @@ hkgc_wash_sstab(int force)
 	{
 		log_build(&logrec, CHECKPOINT_BEGIN, 0, 0, NULL, NULL, 0, 0, 0);
 		
-		log_insert_insdel(RgInsdelLogfile, &logrec, NULL, 0);
+		log_insert_insdel(&logrec, NULL, 0);
 	}
 
 	if (!force)
@@ -101,7 +100,7 @@ hkgc_wash_sstab(int force)
 		
 		log_build(&logrec, CHECKPOINT_COMMIT, 0, 0, NULL, NULL, 0, 0, 0);
 		
-		log_insert_insdel(RgInsdelLogfile, &logrec, NULL, 0);
+		log_insert_insdel(&logrec, NULL, 0);
 
 		if (!force)
 		{

@@ -74,7 +74,7 @@ TAB_SSTAB_MAP *tab_sstabmap;
 
 
 
-MASTER_INFOR *Master_infor = NULL;
+MASTER_INFOR	*Master_infor = NULL;
 
 extern pthread_mutex_t mutex;
 extern pthread_cond_t cond;
@@ -86,8 +86,6 @@ extern MSG_DATA * msg_list_tail;
 
 struct stat st;
 
-
-#define	COL_MAX_NUM	16
 
 static void
 meta_heartbeat_setup(RANGE_PROF * rg_addr);
@@ -119,6 +117,14 @@ meta_checkdata(TREE *command);
 static char *
 meta_checkranger(TREE *command);
 
+static int
+meta_table_is_exist(char *tabname);
+
+static int
+meta_load_sysmeta();
+
+
+
 void
 meta_bld_rglist(char *filepath)
 {
@@ -141,6 +147,15 @@ meta_server_setup(char *conf_path)
 	MEMSET(port, 32);
 	Master_infor = MEMALLOCHEAP(sizeof(MASTER_INFOR));
 	MEMCPY(Master_infor->conf_path, conf_path, STRLEN(conf_path));
+
+	Master_infor->meta_systab = malloc(sizeof(META_SYSTABLE));
+	memset(Master_infor->meta_systab, 0, sizeof(META_SYSTABLE));
+
+	Master_infor->meta_sysobj = malloc(sizeof(META_SYSOBJECT));
+	memset(Master_infor->meta_sysobj, 0, sizeof(META_SYSOBJECT));
+
+	Master_infor->meta_syscol = malloc(sizeof(META_SYSCOLUMN));
+	memset(Master_infor->meta_syscol, 0, sizeof(META_SYSCOLUMN));
 
 	conf_get_value_by_key(port, conf_path, CONF_PORT_KEY);
 
@@ -166,8 +181,6 @@ meta_server_setup(char *conf_path)
 	Kfsport = m_atoi(port, STRLEN(port));
 
 #endif
-	char	systable[1024];
-
 	if (STAT(MT_META_TABLE, &st) != 0)
 	{
 		MKDIR(status, MT_META_TABLE, 0755);
@@ -177,14 +190,8 @@ meta_server_setup(char *conf_path)
 		str1_to_str2(rang_server, '/', "systable");
 
 		OPEN(fd, rang_server, (O_CREAT|O_WRONLY|O_TRUNC));
-		
-		
-//		WRITE(fd, rang_server, STRLEN(rang_server));
-
-		MEMSET(systable, 1024);
-
 			
-		WRITE(fd, systable, 1024);
+		WRITE(fd, Master_infor->meta_systab, sizeof(META_SYSTABLE));
 	
 		CLOSE(fd);		
 
@@ -196,18 +203,16 @@ meta_server_setup(char *conf_path)
 		MEMCPY(rang_server, MT_META_TABLE, STRLEN(MT_META_TABLE));
 		str1_to_str2(rang_server, '/', "systable");
 
-		char	systable[1024];
-	
 		OPEN(fd, rang_server, (O_RDONLY));
 		
-		MEMSET(systable, 1024);
-
-		READ(fd, systable, 1024);
+		READ(fd, Master_infor->meta_systab, sizeof(META_SYSTABLE));
 	
 		CLOSE(fd);
 
-		Master_infor->last_tabid = *(int *)systable;
+		Master_infor->last_tabid = Master_infor->meta_systab->last_tabid;
 	}
+
+	meta_load_sysmeta();
 
 	if (STAT(MT_META_REGION, &st) != 0)
 	{
@@ -267,10 +272,8 @@ meta_server_setup(char *conf_path)
 			/* Metaserver is crash, all the online ranger server will be recovery. */
 			if (rg_addr[i].rg_stat & RANGER_IS_ONLINE)
 			{
-				log_recov_rg(rg_addr[i].rg_addr, 
-						rg_addr[i].rg_port);
-							
-				meta_heartbeat_setup(rg_addr + i);
+				rg_addr[i].rg_stat &= ~RANGER_IS_ONLINE;
+				rg_addr[i].rg_stat |= (RANGER_IS_OFFLINE | RANGER_NEED_RECOVERY);
 			}
 		}
 		
@@ -499,8 +502,6 @@ meta_crtab(TREE *command)
 	WRITE(fd, col_buf, col_buf_idx);
 
 	CLOSE(fd);
-
-	MEMFREEHEAP(col_buf);
 	
 	MEMSET(tab_dir1, 256);
 
@@ -535,8 +536,6 @@ meta_crtab(TREE *command)
 	
 	WRITE(fd, tab_hdr, sizeof(TABLEHDR));
 
-	MEMFREEHEAP(tab_hdr);
-
 	CLOSE(fd);
 	
 	
@@ -568,11 +567,12 @@ meta_crtab(TREE *command)
 	tablet_store = (SVR_IDX_FILE *)MEMALLOCHEAP(sizeof(SVR_IDX_FILE));
 
 	
-	MEMSET(tab_dir1, 256);
+	MEMSET(tab_dir1, TABLE_NAME_MAX_LEN);
 
 	
 	MEMCPY(tab_dir1, tab_dir, STRLEN(tab_dir));
 
+	/* TODO: placehoder. */
 	str1_to_str2(tab_dir1, '/', "tabletinranger");
 	
 	OPEN(fd, tab_dir1, (O_CREAT|O_WRONLY|O_TRUNC));
@@ -581,14 +581,29 @@ meta_crtab(TREE *command)
 	{
 		goto exit;
 	}
-
-	
 	
 	WRITE(fd, tablet_store, sizeof(SVR_IDX_FILE));
 
 	CLOSE(fd);
 
-	char systable[1024];
+	MEMSET(tab_dir1, TABLE_NAME_MAX_LEN);
+
+	
+	MEMCPY(tab_dir1, tab_dir, STRLEN(tab_dir));
+
+	/* TODO: placehoder. */
+	str1_to_str2(tab_dir1, '/', "tabletinranger");
+	
+	OPEN(fd, tab_dir1, (O_CREAT|O_WRONLY|O_TRUNC));
+
+	if (fd < 0)
+	{
+		goto exit;
+	}
+	
+	WRITE(fd, tablet_store, sizeof(SVR_IDX_FILE));
+
+	CLOSE(fd);
 
 	MEMSET(tab_dir1, 256);
 	MEMCPY(tab_dir1, MT_META_TABLE, STRLEN(MT_META_TABLE));
@@ -597,13 +612,26 @@ meta_crtab(TREE *command)
 	OPEN(fd, tab_dir1, (O_RDWR));
 	
 
-	MEMSET(systable, 1024);
+	/* Saving the meta information to the in-memory structure. */
+	Master_infor->meta_systab->last_tabid = Master_infor->last_tabid;
 
-	*(int *)systable = Master_infor->last_tabid;
-		
-	WRITE(fd, systable, 1024);
+	MEMCPY(Master_infor->meta_systab->meta_tabdir[Master_infor->meta_systab->tabnum], tab_dir, STRLEN(tab_dir));
+	
+	(Master_infor->meta_systab)->tabnum++;
 
-	CLOSE(fd);		
+	/* Flush this creating information into the disk. */
+	WRITE(fd, Master_infor->meta_systab, sizeof(META_SYSTABLE));
+
+	CLOSE(fd);
+
+	MEMCPY(&(Master_infor->meta_sysobj->sysobject[Master_infor->meta_systab->tabnum - 1]), tab_hdr,sizeof(TABLEHDR));
+
+	Master_infor->meta_syscol->colnum[Master_infor->meta_systab->tabnum - 1] = tab_hdr->tab_col;
+	MEMCPY(&(Master_infor->meta_syscol->colinfor[Master_infor->meta_systab->tabnum - 1]),col_buf, col_buf_idx);
+	
+	MEMFREEHEAP(tab_hdr);
+
+	MEMFREEHEAP(col_buf);
 	
 	rtn_stat = TRUE;
 	
@@ -684,7 +712,7 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 	char		tab_tabletschm_dir[TABLE_NAME_MAX_LEN];
 	int		fd1;
 	int		rtn_stat;
-	TABLEHDR	tab_hdr;
+	TABLEHDR	*tab_hdr;
 	char		*keycol;
 	int		keycolen;
 	int		sstab_idx;
@@ -709,12 +737,15 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 	int		sstabmap_chg;
 	int		rpc_status;
 	int		rg_suspect;
+	int		tabidx;
+	int		tabhdr_update;
 
 
 	Assert(command);
 
 	rtn_stat = FALSE;
 	sstabmap_chg = FALSE;
+	tabhdr_update = FALSE;
 	sstab_idx = 0;
 	col_buf = NULL;
 	tab_name = command->sym.command.tabname;
@@ -732,66 +763,47 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
 
-	if (STAT(tab_dir, &st) != 0)
+	if ((tabidx = meta_table_is_exist(tab_dir)) == -1)
 	{
 		traceprint("Table %s is not exist!\n", tab_name);
 
 		rpc_status |= RPC_TABLE_NOT_EXIST;
 		goto exit;
 	}
-	
-	str1_to_str2(tab_meta_dir, '/', "sysobjects");
 
 
-	OPEN(fd1, tab_meta_dir, (O_RDWR));
-	
-	if (fd1 < 0)
-	{
-		goto exit;
-	}
+	tab_hdr = &(Master_infor->meta_sysobj->sysobject[tabidx]);
 
-	status = READ(fd1, &tab_hdr, sizeof(TABLEHDR));	
-
-	Assert(status == sizeof(TABLEHDR));
-
-	if (status != sizeof(TABLEHDR))
-	{
-		traceprint("Table %s sysobjects hit error!\n", tab_name);
-		CLOSE(fd1);
-		ex_raise(EX_ANY);
-	}
-
-	if (tab_hdr.tab_stat & TAB_DROPPED)
+	if (tab_hdr->tab_stat & TAB_DROPPED)
 	{
 		traceprint("This table has been dropped.\n");
-		CLOSE(fd1);
+
 		goto exit;
 	}
 
-	keycol = par_get_colval_by_colid(command, tab_hdr.tab_key_colid, 
+	keycol = par_get_colval_by_colid(command, tab_hdr->tab_key_colid, 
 					&keycolen);
 
 	MEMSET(sstab_name, SSTABLE_NAME_MAX_LEN);
 
-	sstab_map = sstab_map_get(tab_hdr.tab_id, tab_dir, &tab_sstabmap);
+	sstab_map = sstab_map_get(tab_hdr->tab_id, tab_dir, &tab_sstabmap);
 
 	Assert(sstab_map != NULL);
 
 	if (sstab_map == NULL)
 	{
 		traceprint("Table %s has no sstabmap in the metaserver!", tab_name);
-		CLOSE(fd1);
 		ex_raise(EX_ANY);
 	}
 
-	if (tab_hdr.tab_tablet > 0)
+	if (tab_hdr->tab_tablet > 0)
 	{
 		
 		MEMSET(tab_tabletschm_dir, TABLE_NAME_MAX_LEN);
 		MEMCPY(tab_tabletschm_dir, tab_dir, STRLEN(tab_dir));
 		str1_to_str2(tab_tabletschm_dir, '/', "tabletscheme");
 
-		tabletschm_rp = tablet_schm_srch_row(&tab_hdr, tab_hdr.tab_id, 
+		tabletschm_rp = tablet_schm_srch_row(tab_hdr, tab_hdr->tab_id, 
 						     TABLETSCHM_ID, 
 						     tab_tabletschm_dir,
 						     keycol, keycolen);
@@ -831,22 +843,17 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 		{
 			traceprint("Can't get the profile of ranger server %s\n", rg_addr);
 
-			CLOSE(fd1);
 			goto exit;
 		}
 
 		if (tss->tcur_rgprof->rg_stat & RANGER_IS_OFFLINE)
 		{
 			traceprint("Ranger server (%s:%d) is OFF-LINE\n", rg_addr, rg_port);
-
-			CLOSE(fd1);
 			goto exit;
 		}
 		else if (tss->tcur_rgprof->rg_stat & RANGER_IS_SUSPECT)
 		{
 			traceprint("Ranger server (%s:%d) is SUSPECT\n", rg_addr, rg_port);
-
-			CLOSE(fd1);
 
 			rg_suspect = TRUE;
 			goto exit;
@@ -857,7 +864,7 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 		
 		tabinfo->t_stat &= ~TAB_TABLET_KEYROW_CHG;
 		
-		rp = tablet_srch_row(tabinfo, &tab_hdr, tab_hdr.tab_id, tabletid, 
+		rp = tablet_srch_row(tabinfo, tab_hdr, tab_hdr->tab_id, tabletid, 
 				     tab_meta_dir, keycol, keycolen);
 
 		
@@ -889,7 +896,7 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 				if (!SSTAB_MAP_USED(res_sstab_id))
 				{
 					traceprint("SSTable map hit error!\n");
-					CLOSE(fd1);
+
 					goto exit;
 				}
 
@@ -932,10 +939,10 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 					       keycol, keycolen);								
 			}
 			
-			tablet_del_row(&tab_hdr, tab_hdr.tab_id, tabletid,
+			tablet_del_row(tab_hdr, tab_hdr->tab_id, tabletid,
 					tab_meta_dir, rp, ROW_MINLEN_IN_TABLET);
 
-			tablet_ins_row(&tab_hdr, tab_hdr.tab_id, tabletid, 
+			tablet_ins_row(tab_hdr, tab_hdr->tab_id, tabletid, 
 					tab_meta_dir, newrp, 
 					ROW_MINLEN_IN_TABLET);
 
@@ -955,14 +962,14 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 							TABLETSCHM_KEY_COLID_INROW, 
 						    	keycol, keycolen);
 				
-				tablet_schm_del_row(tab_hdr.tab_id, TABLETSCHM_ID,
+				tablet_schm_del_row(tab_hdr->tab_id, TABLETSCHM_ID,
 							tab_tabletschm_dir,
 							tabletschm_rp);
 
-				tablet_schm_ins_row(tab_hdr.tab_id, TABLETSCHM_ID, 
+				tablet_schm_ins_row(tab_hdr->tab_id, TABLETSCHM_ID, 
 							tab_tabletschm_dir, 
 							tabletschm_newrp,
-							tab_hdr.tab_tablet);
+							tab_hdr->tab_tablet);
 
 				tabinfo->t_stat &= ~TAB_TABLET_KEYROW_CHG;
 				
@@ -972,24 +979,24 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 		}
 
 	}
-	else if (tab_hdr.tab_tablet == 0)
+	else if (tab_hdr->tab_tablet == 0)
 	{
 		MEMCPY(sstab_name, tab_name, tab_name_len);
-		build_file_name("tablet", tablet_name, tab_hdr.tab_tablet);
+		build_file_name("tablet", tablet_name, tab_hdr->tab_tablet);
 		MEMCPY((sstab_name + tab_name_len), tablet_name, 
 			STRLEN(tablet_name));
 		build_file_name("sstable", sstab_name + tab_name_len + STRLEN(tablet_name), 
-				tab_hdr.tab_sstab);
+				tab_hdr->tab_sstab);
 	}
 	else
 	{
 		Assert(0);
-		CLOSE(fd1);
+
 		ex_raise(EX_ANY);
 	}
 	
 	
-	if (tab_hdr.tab_tablet == 0)
+	if (tab_hdr->tab_tablet == 0)
 	{
 		char	*sstab_rp;
 		int	sstab_rlen;
@@ -1015,7 +1022,7 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 			if (!rg_prof)
 			{
 				traceprint("Ranger server is un-available for insert\n");
-				CLOSE(fd1);
+
 				goto exit;
 			}
 
@@ -1024,7 +1031,7 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 		else
 		{
 			Assert(0);
-			CLOSE(fd1);
+
 			ex_raise(EX_ANY);
 		}
 		
@@ -1033,16 +1040,18 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 						tab_name_len, sstab_id, 
 						res_sstab_id, sstab_name,
 						STRLEN(sstab_name), keycol,
-						keycolen, tab_hdr.tab_key_coltype);
+						keycolen, tab_hdr->tab_key_coltype);
 	
 		rg_addr = rg_prof->rg_addr;
 		rg_port = rg_prof->rg_port;
 		
-		tablet_crt(&tab_hdr, tab_dir, rg_addr, sstab_rp, 
+		tablet_crt(tab_hdr, tab_dir, rg_addr, sstab_rp, 
 				tablet_min_rlen, rg_port);
 		
-		(tab_hdr.tab_tablet)++;
-		(tab_hdr.tab_sstab)++;
+		(tab_hdr->tab_tablet)++;
+		(tab_hdr->tab_sstab)++;
+
+		tabhdr_update = TRUE;
 
 		(rg_prof->rg_tablet_num)++;
 
@@ -1051,49 +1060,40 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 		MEMFREEHEAP(sstab_rp);
 	}
 
-#ifdef MT_KFS_BACKEND
-	CLOSE(fd1);
-
-	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
-	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
-
-	if (STAT(tab_dir, &st) != 0)
+	if (tabhdr_update)
 	{
-		traceprint("Table %s is not exist!\n", tab_name);
-		goto exit;
+		MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
+		MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
+
+		str1_to_str2(tab_meta_dir, '/', "sysobjects");
+
+
+		OPEN(fd1, tab_meta_dir, (O_RDWR));
+		
+		if (fd1 < 0)
+		{
+			goto exit;
+		}
+
+		
+		status = WRITE(fd1, tab_hdr, sizeof(TABLEHDR));
+		
+		Assert(status == sizeof(TABLEHDR));
+
+		if (status != sizeof(TABLEHDR))
+		{
+			traceprint("Table %s sysobjects hit error!\n", tab_name);
+			CLOSE(fd1);
+			ex_raise(EX_ANY);
+		}
+		
+		CLOSE(fd1);	
 	}
-	
-	str1_to_str2(tab_meta_dir, '/', "sysobjects");
-
-
-	OPEN(fd1, tab_meta_dir, (O_RDWR));
-	
-	if (fd1 < 0)
-	{
-		goto exit;
-	}
-#else
-	LSEEK(fd1, 0, SEEK_SET);
-#endif	
-	
-	status = WRITE(fd1, &tab_hdr, sizeof(TABLEHDR));
-
-	Assert(status == sizeof(TABLEHDR));
-
-	if (status != sizeof(TABLEHDR))
-	{
-		traceprint("Table %s sysobjects hit error!\n", tab_name);
-		CLOSE(fd1);
-		ex_raise(EX_ANY);
-	}
-	
-	CLOSE(fd1);	
-
 	
 
 	
 	col_buf_len = sizeof(INSMETA) + sizeof(TABLEHDR) 
-				+ tab_hdr.tab_col * (sizeof(COLINFO));
+				+ tab_hdr->tab_col * (sizeof(COLINFO));
 	col_buf = MEMALLOCHEAP(col_buf_len);
 	MEMSET(col_buf, col_buf_len);
 
@@ -1135,39 +1135,28 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 	col_buf_idx += sizeof(int);
 
 	
-        *(int *)(col_buf + col_buf_idx) = tab_hdr.tab_col;
+        *(int *)(col_buf + col_buf_idx) = tab_hdr->tab_col;
 	col_buf_idx += sizeof(int);
 
-	*(int *)(col_buf + col_buf_idx) = tab_hdr.tab_varcol;
+	*(int *)(col_buf + col_buf_idx) = tab_hdr->tab_varcol;
 	col_buf_idx += sizeof(int);
 
-	*(int *)(col_buf + col_buf_idx) = tab_hdr.tab_row_minlen;
+	*(int *)(col_buf + col_buf_idx) = tab_hdr->tab_row_minlen;
 	col_buf_idx += sizeof(int);
 
 	col_buf_idx += sizeof(int);
 
 	
-	MEMCPY((col_buf + col_buf_idx), &tab_hdr, sizeof(TABLEHDR));
+	MEMCPY((col_buf + col_buf_idx), tab_hdr, sizeof(TABLEHDR));
 	col_buf_idx += sizeof(TABLEHDR);
 	
 	
-	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
-	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
-	str1_to_str2(tab_meta_dir, '/', "syscolumns");
+	Assert(Master_infor->meta_syscol->colnum[tabidx] == tab_hdr->tab_col);
 
-	OPEN(fd1, tab_meta_dir, (O_RDONLY));
+	MEMCPY((col_buf + col_buf_idx), &(Master_infor->meta_syscol->colinfor[tabidx]),tab_hdr->tab_col * sizeof(COLINFO));
 
-	if (fd1 < 0)
-	{
-		goto exit;
-	}
-
+	col_buf_idx += tab_hdr->tab_col * sizeof(COLINFO);
 	
-	READ(fd1, (col_buf + col_buf_idx), tab_hdr.tab_col * sizeof(COLINFO));
-
-	CLOSE(fd1);
-
-	col_buf_idx += tab_hdr.tab_col * sizeof(COLINFO);
 	if (sstabmap_chg)
 	{
 		sstab_map_put(-1, tss->ttab_sstabmap);
@@ -1499,9 +1488,8 @@ meta_seldeltab(TREE *command, TABINFO *tabinfo)
 	char   		*col_buf;
 	int		col_buf_idx;
 	int		col_buf_len;
-	int		fd1;
 	int		rtn_stat;
-	TABLEHDR	tab_hdr;
+	TABLEHDR	*tab_hdr;
 	char		*keycol;
 	int		keycolen;
 	int		sstab_rlen;
@@ -1517,7 +1505,8 @@ meta_seldeltab(TREE *command, TABINFO *tabinfo)
 	int		rg_port;
 	int		rpc_status;
 	int		rg_suspect;
-
+	int		tabidx;
+	
 
 	Assert(command);
 
@@ -1540,7 +1529,7 @@ meta_seldeltab(TREE *command, TABINFO *tabinfo)
 	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
 
-	if (!(STAT(tab_dir, &st) == 0))
+	if ((tabidx = meta_table_is_exist(tab_dir)) == -1)
 	{
 		traceprint("Table %s is not exist.\n", tab_name);
 		rpc_status |= RPC_TABLE_NOT_EXIST;
@@ -1549,38 +1538,21 @@ meta_seldeltab(TREE *command, TABINFO *tabinfo)
 	
 	str1_to_str2(tab_meta_dir, '/', "sysobjects");
 
-	OPEN(fd1, tab_meta_dir, (O_RDONLY));
-	
-	if (fd1 < 0)
-	{
-		traceprint("Table is not exist! \n");
-		goto exit;
-	}
+	tab_hdr = &(Master_infor->meta_sysobj->sysobject[tabidx]);
 
-	
-	READ(fd1, &tab_hdr, sizeof(TABLEHDR));	
-
-	CLOSE(fd1);
-
-	if (tab_hdr.tab_tablet == 0)
+	if (tab_hdr->tab_tablet == 0)
 	{
 		traceprint("Table %s has no data.\n", tab_name);
 		goto exit;
 	}
 
-	if (tab_hdr.tab_stat & TAB_DROPPED)
+	if (tab_hdr->tab_stat & TAB_DROPPED)
 	{
 		traceprint("This table has been dropped.\n");
 		goto exit;
 	}
 
-	if (tab_hdr.tab_tablet == 0)
-	{
-		traceprint("Table should have one tablet at least! \n");
-		goto exit;
-	}
-
-	sstab_map = sstab_map_get(tab_hdr.tab_id, tab_dir, &tab_sstabmap);
+	sstab_map = sstab_map_get(tab_hdr->tab_id, tab_dir, &tab_sstabmap);
 
 	Assert(sstab_map != NULL);
 
@@ -1590,7 +1562,7 @@ meta_seldeltab(TREE *command, TABINFO *tabinfo)
 		ex_raise(EX_ANY);
 	}
 	
-	keycol = par_get_colval_by_colid(command, tab_hdr.tab_key_colid, 
+	keycol = par_get_colval_by_colid(command, tab_hdr->tab_key_colid, 
 						&keycolen);
 
 	
@@ -1598,7 +1570,7 @@ meta_seldeltab(TREE *command, TABINFO *tabinfo)
 	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
 	str1_to_str2(tab_meta_dir, '/', "tabletscheme");
 
-	rp = tablet_schm_srch_row(&tab_hdr, tab_hdr.tab_id, TABLETSCHM_ID,
+	rp = tablet_schm_srch_row(tab_hdr, tab_hdr->tab_id, TABLETSCHM_ID,
 				tab_meta_dir, keycol, keycolen);
 
 	name = row_locate_col(rp, TABLETSCHM_TABLETNAME_COLOFF_INROW, 
@@ -1650,7 +1622,7 @@ meta_seldeltab(TREE *command, TABINFO *tabinfo)
 	tabletid = *(int *)row_locate_col(rp, TABLETSCHM_TABLETID_COLOFF_INROW, 
 					  ROW_MINLEN_IN_TABLETSCHM, &namelen);
 
-	rp = tablet_srch_row(tabinfo, &tab_hdr, tab_hdr.tab_id, tabletid, 
+	rp = tablet_srch_row(tabinfo, tab_hdr, tab_hdr->tab_id, tabletid, 
 				tab_meta_dir, keycol, keycolen);
 
 	
@@ -1676,13 +1648,9 @@ meta_seldeltab(TREE *command, TABINFO *tabinfo)
 	{
 		goto exit;
 	}
-
-	
-	
-
 		
 	col_buf_len = sizeof(INSMETA) + sizeof(TABLEHDR) 
-				+ tab_hdr.tab_col * (sizeof(COLINFO));
+				+ tab_hdr->tab_col * (sizeof(COLINFO));
 	col_buf = MEMALLOCHEAP(col_buf_len);
 	MEMSET(col_buf, col_buf_len);
 
@@ -1724,39 +1692,26 @@ meta_seldeltab(TREE *command, TABINFO *tabinfo)
 	col_buf_idx += sizeof(int);
 
 	
-        *(int *)(col_buf + col_buf_idx) = tab_hdr.tab_col;
+        *(int *)(col_buf + col_buf_idx) = tab_hdr->tab_col;
 	col_buf_idx += sizeof(int);
 
-	*(int *)(col_buf + col_buf_idx) = tab_hdr.tab_varcol;
+	*(int *)(col_buf + col_buf_idx) = tab_hdr->tab_varcol;
 	col_buf_idx += sizeof(int);
 
-	*(int *)(col_buf + col_buf_idx) = tab_hdr.tab_row_minlen;
+	*(int *)(col_buf + col_buf_idx) = tab_hdr->tab_row_minlen;
 	col_buf_idx += sizeof(int);
 
 	col_buf_idx += sizeof(int);
 
 	
-	MEMCPY((col_buf + col_buf_idx), &tab_hdr, sizeof(TABLEHDR));
+	MEMCPY((col_buf + col_buf_idx), tab_hdr, sizeof(TABLEHDR));
 	col_buf_idx += sizeof(TABLEHDR);
 	
+	Assert(Master_infor->meta_syscol->colnum[tabidx] == tab_hdr->tab_col);
 	
-	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
-	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
-	str1_to_str2(tab_meta_dir, '/', "syscolumns");
-
-	OPEN(fd1, tab_meta_dir, (O_RDONLY));
-
-	if (fd1 < 0)
-	{
-		goto exit;
-	}
-
+	MEMCPY((col_buf + col_buf_idx), &(Master_infor->meta_syscol->colinfor[tabidx]),tab_hdr->tab_col * sizeof(COLINFO));
 	
-	READ(fd1, (col_buf + col_buf_idx), tab_hdr.tab_col * sizeof(COLINFO));
-
-	CLOSE(fd1);
-
-	col_buf_idx += tab_hdr.tab_col * sizeof(COLINFO);
+	col_buf_idx += tab_hdr->tab_col * sizeof(COLINFO);
 	rtn_stat = TRUE;
 
 exit:
@@ -1800,9 +1755,8 @@ meta_selrangetab(TREE *command, TABINFO *tabinfo)
 	char   		*col_buf;
 	int		col_buf_idx;
 	int		col_buf_len;
-	int		fd1;
 	int		rtn_stat;
-	TABLEHDR	tab_hdr;
+	TABLEHDR	*tab_hdr;
 	int		sstab_rlen;
 	int		sstab_idx;
 	char		*resp;
@@ -1816,7 +1770,8 @@ meta_selrangetab(TREE *command, TABINFO *tabinfo)
 	int		rg_port;
 	int		key_is_expand;
 	int		rpc_status;
-	int		rg_suspect; 	
+	int		rg_suspect;
+	int		tabidx;
 
 
 	Assert(command);
@@ -1840,47 +1795,28 @@ meta_selrangetab(TREE *command, TABINFO *tabinfo)
 	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
 
-	if (!(STAT(tab_dir, &st) == 0))
+	if ((tabidx = meta_table_is_exist(tab_dir)) == -1)
 	{
 		traceprint("Table %s is not exist.\n", tab_name);
 		rpc_status |= RPC_TABLE_NOT_EXIST;
 		goto exit;
 	}
 	
-	str1_to_str2(tab_meta_dir, '/', "sysobjects");
+	tab_hdr = &(Master_infor->meta_sysobj->sysobject[tabidx]);
 
-	OPEN(fd1, tab_meta_dir, (O_RDONLY));
-	
-	if (fd1 < 0)
-	{
-		traceprint("Table is not exist! \n");
-		goto exit;
-	}
-
-	
-	READ(fd1, &tab_hdr, sizeof(TABLEHDR));	
-
-	CLOSE(fd1);
-
-	if (tab_hdr.tab_tablet == 0)
+	if (tab_hdr->tab_tablet == 0)
 	{
 		traceprint("Table %s has no data.\n", tab_name);
 		goto exit;
 	}
 
-	if (tab_hdr.tab_stat & TAB_DROPPED)
+	if (tab_hdr->tab_stat & TAB_DROPPED)
 	{
 		traceprint("This table has been dropped.\n");
 		goto exit;
 	}
 
-	if (tab_hdr.tab_tablet == 0)
-	{
-		traceprint("Table should have one tablet at least! \n");
-		goto exit;
-	}
-
-	sstab_map = sstab_map_get(tab_hdr.tab_id, tab_dir, &tab_sstabmap);
+	sstab_map = sstab_map_get(tab_hdr->tab_id, tab_dir, &tab_sstabmap);
 
 	Assert(sstab_map != NULL);
 
@@ -1908,7 +1844,7 @@ meta_selrangetab(TREE *command, TABINFO *tabinfo)
 	int	k;
 
 	col_buf_len = sizeof(SELRANGE) + sizeof(TABLEHDR) + 
-					tab_hdr.tab_col * (sizeof(COLINFO));
+					tab_hdr->tab_col * (sizeof(COLINFO));
 	col_buf = MEMALLOCHEAP(col_buf_len);
 	MEMSET(col_buf, col_buf_len);
 	col_buf_idx = 0;
@@ -1927,20 +1863,20 @@ meta_selrangetab(TREE *command, TABINFO *tabinfo)
 			
 			if (k == 0)
 			{
-				rp = tablet_schm_get_1st_or_last_row(&tab_hdr, 
-						tab_hdr.tab_id, TABLETSCHM_ID,
+				rp = tablet_schm_get_1st_or_last_row(tab_hdr, 
+						tab_hdr->tab_id, TABLETSCHM_ID,
 						tab_meta_dir, TRUE);
 			}
 			else
 			{
-				rp = tablet_schm_get_1st_or_last_row(&tab_hdr, 
-						tab_hdr.tab_id, TABLETSCHM_ID,
+				rp = tablet_schm_get_1st_or_last_row(tab_hdr, 
+						tab_hdr->tab_id, TABLETSCHM_ID,
 						tab_meta_dir, FALSE);
 			}
 		}
 		else
 		{
-			rp = tablet_schm_srch_row(&tab_hdr, tab_hdr.tab_id,
+			rp = tablet_schm_srch_row(tab_hdr, tab_hdr->tab_id,
 						TABLETSCHM_ID, tab_meta_dir, 
 						keycol, keycolen);
 		}
@@ -1996,16 +1932,16 @@ meta_selrangetab(TREE *command, TABINFO *tabinfo)
 		{
 			if (k == 0)
 			{
-				rp = tablet_get_1st_or_last_row(&tab_hdr,
-								tab_hdr.tab_id,
+				rp = tablet_get_1st_or_last_row(tab_hdr,
+								tab_hdr->tab_id,
 								tabletid, 
 								tab_meta_dir,
 								TRUE);
 			}
 			else
 			{
-				rp = tablet_get_1st_or_last_row(&tab_hdr, 
-								tab_hdr.tab_id, 
+				rp = tablet_get_1st_or_last_row(tab_hdr, 
+								tab_hdr->tab_id, 
 								tabletid, 
 								tab_meta_dir, 
 								FALSE);
@@ -2013,7 +1949,7 @@ meta_selrangetab(TREE *command, TABINFO *tabinfo)
 		}
 		else
 		{
-			rp = tablet_srch_row(tabinfo, &tab_hdr, tab_hdr.tab_id, 
+			rp = tablet_srch_row(tabinfo, tab_hdr, tab_hdr->tab_id, 
 						tabletid, tab_meta_dir, keycol, 
 						keycolen);
 		}
@@ -2073,40 +2009,27 @@ meta_selrangetab(TREE *command, TABINFO *tabinfo)
 		col_buf_idx += sizeof(int);
 
 		
-	        *(int *)(col_buf + col_buf_idx) = tab_hdr.tab_col;
+	        *(int *)(col_buf + col_buf_idx) = tab_hdr->tab_col;
 		col_buf_idx += sizeof(int);
 
-		*(int *)(col_buf + col_buf_idx) = tab_hdr.tab_varcol;
+		*(int *)(col_buf + col_buf_idx) = tab_hdr->tab_varcol;
 		col_buf_idx += sizeof(int);
 
-		*(int *)(col_buf + col_buf_idx) = tab_hdr.tab_row_minlen;
+		*(int *)(col_buf + col_buf_idx) = tab_hdr->tab_row_minlen;
 		col_buf_idx += sizeof(int);
 
 		col_buf_idx += sizeof(int);
 
 	}
 	
-	MEMCPY((col_buf + col_buf_idx), &tab_hdr, sizeof(TABLEHDR));
+	MEMCPY((col_buf + col_buf_idx), tab_hdr, sizeof(TABLEHDR));
 	col_buf_idx += sizeof(TABLEHDR);
 	
-	
-	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
-	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
-	str1_to_str2(tab_meta_dir, '/', "syscolumns");
+	Assert(Master_infor->meta_syscol->colnum[tabidx] == tab_hdr->tab_col);
 
-	OPEN(fd1, tab_meta_dir, (O_RDONLY));
+	MEMCPY((col_buf + col_buf_idx), &(Master_infor->meta_syscol->colinfor[tabidx]),tab_hdr->tab_col * sizeof(COLINFO));
 
-	if (fd1 < 0)
-	{
-		goto exit;
-	}
-
-	
-	READ(fd1, (col_buf + col_buf_idx), tab_hdr.tab_col * sizeof(COLINFO));
-
-	CLOSE(fd1);
-
-	col_buf_idx += tab_hdr.tab_col * sizeof(COLINFO);
+	col_buf_idx += tab_hdr->tab_col * sizeof(COLINFO);
 	rtn_stat = TRUE;
 
 exit:
@@ -2149,9 +2072,8 @@ meta_selwheretab(TREE *command, TABINFO *tabinfo)
 	char   		*col_buf;
 	int		col_buf_idx;
 	int		col_buf_len;
-	int		fd1;
 	int		rtn_stat;
-	TABLEHDR	tab_hdr;
+	TABLEHDR	*tab_hdr;
 	int		sstab_rlen;
 	int		sstab_idx;
 	char		*resp;
@@ -2161,6 +2083,7 @@ meta_selwheretab(TREE *command, TABINFO *tabinfo)
 	int		key_is_expand;
 	SELWHERE	selwhere;
 	int		rpc_status;
+	int		tabidx;
 
 
 	Assert(command);
@@ -2183,68 +2106,35 @@ meta_selwheretab(TREE *command, TABINFO *tabinfo)
 	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
 
-	if (!(STAT(tab_dir, &st) == 0))
+	if ((tabidx = meta_table_is_exist(tab_dir)) == -1)
 	{
 		traceprint("Table %s is not exist.\n", tab_name);
 		rpc_status |= RPC_TABLE_NOT_EXIST;
 		goto exit;
 	}
 	
-	str1_to_str2(tab_meta_dir, '/', "sysobjects");
+	tab_hdr = &(Master_infor->meta_sysobj->sysobject[tabidx]);
 
-	OPEN(fd1, tab_meta_dir, (O_RDONLY));
-	
-	if (fd1 < 0)
-	{
-		traceprint("Table is not exist! \n");
-		goto exit;
-	}
-
-	
-	READ(fd1, &tab_hdr, sizeof(TABLEHDR));	
-
-	CLOSE(fd1);
-
-	if (tab_hdr.tab_tablet == 0)
+	if (tab_hdr->tab_tablet == 0)
 	{
 		traceprint("Table %s has no data.\n", tab_name);
 		goto exit;
 	}
 
-	if (tab_hdr.tab_stat & TAB_DROPPED)
+	if (tab_hdr->tab_stat & TAB_DROPPED)
 	{
 		traceprint("This table has been dropped.\n");
 		goto exit;
 	}
 
-	if (tab_hdr.tab_tablet == 0)
-	{
-		traceprint("Table should have one tablet at least! \n");
-		goto exit;
-	}
 
-	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
-	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
-	str1_to_str2(tab_meta_dir, '/', "syscolumns");
-
-	OPEN(fd1, tab_meta_dir, (O_RDONLY));
-
-	if (fd1 < 0)
-	{
-		goto exit;
-	}
+	Assert(Master_infor->meta_syscol->colnum[tabidx] == tab_hdr->tab_col);
 	
-	col_buf_len = tab_hdr.tab_col * (sizeof(COLINFO));
-	col_buf = MEMALLOCHEAP(col_buf_len);
-	
-	READ(fd1, col_buf, tab_hdr.tab_col * sizeof(COLINFO));
+	col_buf = (char *)(&(Master_infor->meta_syscol->colinfor[tabidx]));
 
-	CLOSE(fd1);
-
-	
 	int i;
 
-	for (i = 0; i < tab_hdr.tab_col; i++)
+	for (i = 0; i < tab_hdr->tab_col; i++)
 	{
 		
 		if (((COLINFO *)col_buf)[i].col_id == 1)
@@ -2300,22 +2190,22 @@ meta_selwheretab(TREE *command, TABINFO *tabinfo)
 			if (k == 0)
 			{
 				
-				rp = tablet_schm_get_1st_or_last_row(&tab_hdr,
-						tab_hdr.tab_id, TABLETSCHM_ID, 
+				rp = tablet_schm_get_1st_or_last_row(tab_hdr,
+						tab_hdr->tab_id, TABLETSCHM_ID, 
 						tab_meta_dir, TRUE);
 			}
 			else
 			{
 				
-				rp = tablet_schm_get_1st_or_last_row(&tab_hdr, 
-						tab_hdr.tab_id, TABLETSCHM_ID, 
+				rp = tablet_schm_get_1st_or_last_row(tab_hdr, 
+						tab_hdr->tab_id, TABLETSCHM_ID, 
 						tab_meta_dir, FALSE);
 			}
 		}
 		else
 		{
 			
-			rp = tablet_schm_srch_row(&tab_hdr, tab_hdr.tab_id, 
+			rp = tablet_schm_srch_row(tab_hdr, tab_hdr->tab_id, 
 						TABLETSCHM_ID, tab_meta_dir, 
 					  	keycol, keycolen);
 		}
@@ -2341,7 +2231,7 @@ meta_selwheretab(TREE *command, TABINFO *tabinfo)
 	char	*resp_buf;
 
 	col_buf_len = sizeof(SELWHERE) + sizeof(SVR_IDX_FILE) + sizeof(TABLEHDR) + 
-					tab_hdr.tab_col * (sizeof(COLINFO));
+					tab_hdr->tab_col * (sizeof(COLINFO));
 	
 	resp_buf = MEMALLOCHEAP(col_buf_len);
 	MEMSET(resp_buf, col_buf_len);
@@ -2360,24 +2250,19 @@ meta_selwheretab(TREE *command, TABINFO *tabinfo)
 
 	
 	/* Save the meta (TABLEHDR) information into the SELWHERE structure. */
-	MEMCPY((resp_buf + col_buf_idx), &tab_hdr, sizeof(TABLEHDR));
+	MEMCPY((resp_buf + col_buf_idx), tab_hdr, sizeof(TABLEHDR));
 
 	col_buf_idx += sizeof(TABLEHDR);
 
-	MEMCPY((resp_buf + col_buf_idx), col_buf, tab_hdr.tab_col * sizeof(COLINFO));
+	MEMCPY((resp_buf + col_buf_idx), col_buf, tab_hdr->tab_col * sizeof(COLINFO));
 	
-	col_buf_idx += tab_hdr.tab_col * sizeof(COLINFO);
+	col_buf_idx += tab_hdr->tab_col * sizeof(COLINFO);
 	
 
 
 	rtn_stat = TRUE;
 
 exit:
-	if (col_buf)
-	{
-		MEMFREEHEAP(col_buf);
-	}
-	
 	if (rtn_stat)
 	{
 		rpc_status |= RPC_SUCCESS;
@@ -4621,6 +4506,101 @@ meta_checkranger(TREE *command)
 
 	return resp;
 }
+
+static int
+meta_table_is_exist(char *tabname)
+{
+	int	i;
+	int	tabidx;
+
+
+	tabidx = -1;
+
+
+	for (i = 0; i < Master_infor->meta_systab->tabnum; i++)
+	{
+		if(strcmp(tabname, Master_infor->meta_systab->meta_tabdir[i])==0)
+		{
+			return i;
+		}
+	}
+
+	return tabidx;
+}
+
+static int
+meta_load_sysmeta()
+{
+	int		i;
+	int		fd;
+	char		tab_meta_dir[TABLE_NAME_MAX_LEN];
+	int		status;
+
+	
+	for (i = 0; i < Master_infor->meta_systab->tabnum; i++)
+	{
+		MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
+		MEMCPY(tab_meta_dir, Master_infor->meta_systab->meta_tabdir[i], STRLEN(Master_infor->meta_systab->meta_tabdir[i]));
+
+		
+		str1_to_str2(tab_meta_dir, '/', "sysobjects");
+
+
+		OPEN(fd, tab_meta_dir, (O_RDWR));
+		
+		if (fd < 0)
+		{
+			return FALSE;
+		}
+
+		status = READ(fd, &(Master_infor->meta_sysobj->sysobject[i]), sizeof(TABLEHDR));
+
+		if(status != sizeof(TABLEHDR))
+		{
+			CLOSE(fd);
+
+			return FALSE;
+		}
+
+		CLOSE(fd);
+
+
+		MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
+		
+		MEMCPY(tab_meta_dir, Master_infor->meta_systab->meta_tabdir[i], STRLEN(Master_infor->meta_systab->meta_tabdir[i]));
+		
+		str1_to_str2(tab_meta_dir, '/', "syscolumns");
+
+		OPEN(fd, tab_meta_dir, (O_RDONLY));
+
+		if (fd < 0)
+		{
+			return FALSE;
+		}
+
+		Master_infor->meta_syscol->colnum[i] = Master_infor->meta_sysobj->sysobject[i].tab_col;
+
+		Assert(Master_infor->meta_sysobj->sysobject[i].tab_col < COL_MAX_NUM);
+		
+		status = READ(fd, &(Master_infor->meta_syscol->colinfor[i]), Master_infor->meta_sysobj->sysobject[i].tab_col * sizeof(COLINFO));
+
+		if(status != Master_infor->meta_sysobj->sysobject[i].tab_col * sizeof(COLINFO))
+		{
+			CLOSE(fd);
+
+			return FALSE;
+		}
+
+		CLOSE(fd);
+
+
+		
+
+	}
+
+	return TRUE;
+}
+
 
 int main(int argc, char *argv[])
 {

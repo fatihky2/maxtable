@@ -13,6 +13,10 @@ match(char* dest, char *src)
 	return !strcasecmp(dest, src);
 }
 
+struct timeval tpStart;
+struct timeval tpEnd;
+float timecost;
+
 
 /* Following definition is for the stat. */
 #define	SELECT_RANGE_OP		0x0001
@@ -62,6 +66,8 @@ int main(int argc, char *argv[])
 
 		if (match(argv[1], "insert"))
 		{
+			gettimeofday(&tpStart, NULL);
+				
 			/* Insert 10000 data rows into table */
 			for(i = 1; i < 10000; i++)
 			{			
@@ -91,6 +97,12 @@ int main(int argc, char *argv[])
 				mt_cli_close_execute(exec_ctx);
 				
 			}
+
+			gettimeofday(&tpEnd, NULL);
+			timecost = 0.0f;
+			timecost = tpEnd.tv_sec - tpStart.tv_sec + (float)(tpEnd.tv_usec-tpStart.tv_usec)/1000000;
+			printf("time cost: %f\n", timecost);
+	
 		}
 
 		if (match(argv[1], "selectwhere"))

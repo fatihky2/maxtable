@@ -32,5 +32,11 @@
 
 #endif
 
+typedef struct rg_loginfo
+{
+	int	logfd;
+	int	logoffset;
+	char	logdir[256];
+}RG_LOGINFO;
 
 #endif 

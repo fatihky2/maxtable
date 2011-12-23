@@ -96,9 +96,9 @@ kfs_read(int fd,char *buf, int len, char *serverHost, int port)
 		cout << "kfs client failed to initialize...exiting" << endl;
 		exit(-1);
 	}
-
+	
 	nread = kfsClient->Read(fd, buf, (size_t)len);
-
+	
 	return nread;
 	
 }
@@ -138,6 +138,25 @@ kfs_rmdir(char *tab_dir, char *serverHost, int port)
 	}
 
 	stat = kfsClient->Rmdir(tab_dir);
+
+	return stat;
+}
+
+int
+kfs_remove(char *tab_file, char *serverHost, int port)
+{
+	KfsClientPtr kfsClient;
+	int	stat;
+
+	kfsClient = getKfsClientFactory()->GetClient(serverHost, port);
+
+	if (!kfsClient) 
+	{
+		cout << "kfs client failed to initialize...exiting" << endl;
+		exit(-1);
+	}
+
+	stat = kfsClient->Remove(tab_file);
 
 	return stat;
 }
@@ -280,7 +299,7 @@ kfs_append(int fd, char *buf, int buf_len, char *serverHost, int port)
 {
 	KfsClientPtr kfsClient;
 	int	nwrite;
-	int	offset;
+
 
 	kfsClient = getKfsClientFactory()->GetClient(serverHost, port);
 
@@ -290,19 +309,11 @@ kfs_append(int fd, char *buf, int buf_len, char *serverHost, int port)
 		exit(-1);
 	}
 
-	offset = kfsClient->Tell(fd);
-
-	if ((offset + buf_len) > KFS_LOG_FILE_SIZE)
-	{
-		return 0;
-	}
-
-	/* Fill the LOGREC. */
-	*(int *)(buf + buf_len - sizeof(int) - sizeof(int)) = offset;
-	*(int *)(buf + buf_len - sizeof(int)) = offset + buf_len;
-
-	nwrite = kfsClient->Write(fd, buf, buf_len);
-
+//	nwrite = kfsClient->Write(fd, buf, buf_len);
+//	nwrite = kfsClient->AtomicRecordAppend(fd, buf, buf_len);
+	
+	nwrite = kfsClient->RecordAppend(fd, buf, buf_len);
+	
 	if (nwrite != buf_len) 
 	{
 		cout << "Was able to write only: " << nwrite << " instead of " << buf_len << endl;
@@ -311,7 +322,7 @@ kfs_append(int fd, char *buf, int buf_len, char *serverHost, int port)
 	// flush out the changes
 	kfsClient->Sync(fd);
 
-	return 1;
+	return nwrite;
 }
 
 
@@ -374,53 +385,126 @@ kfs_copy(char *filename_src, char *filename_dest, char *serverHost, int port)
 	
 }
 
+#ifdef MEMMGR_KFS_TEST
 
-/*
+struct timeval tpStart;
+struct timeval tpEnd;
+float timecost;
 
 int
 main(int argc, char **argv)
 {
-        char    filebuf[6400];
+        char    filebuf[64000];
         int     flag;
         int     fd;
         char    *content;
+	char	*rglog;
         int     nwrite;
         int     nread;
+	char	*serverIp = "172.16.10.42\0";
+	int	serverPort = 20000;
 
+	int wcount = 1000;
+	int offset = 0;
 
 //        kfs_mkdir((char *)"/table", serverHost, port);
 
-        flag = O_CREAT | O_WRONLY | O_TRUNC;
+	flag = O_CREAT | O_APPEND | O_RDWR;
+//	flag = O_CREAT | O_RDWR;
+//       	flag = O_APPEND | O_RDWR;
 //	flag = O_WRONLY;
-        content = (char *)"/table/test107";
+//	flag = O_RDWR;
+        content = (char *)"/table";
+	rglog = (char *)"rglog";
+	
 
         //fd = create(content);
 
-        fd = kfs_open(content, flag, serverHost, port);
+ //       fd = kfs_create(content, serverIp, serverPort);
+
+	
+	gettimeofday(&tpStart, NULL);
+//#if 0
+//retry:
+	fd = kfs_open(content, flag,serverIp, serverPort);
         if (fd < 0)
         {
                 return -1;
         }
 
-        filebuf[0] = 'r';
-        filebuf[1] = 'g';
-        filebuf[2] = 'l';
-        filebuf[3] = 'i';
-        filebuf[4] = 's';
-        filebuf[5] = 't';
+	
+   
+	
+	while(wcount)
+	{	
+		//kfs_exist(rglog, serverIp, serverPort);
+		
+		nwrite = kfs_append(fd, filebuf, 1000, serverIp, serverPort);
 
-        nwrite = kfs_write(fd, filebuf, 6400, serverHost, port);
+		//kfs_exist(rglog, serverIp, serverPort);
 
-//      nread = kfs_read(fd, filebuf1, 1024);
+//		offset = kfs_seek(fd, 0, SEEK_END,serverIp, serverPort);
 
-        if (nwrite != 6400)
-        {
-                ;
-        }
+		
+//		cout << "offset = " << offset <<endl;
 
-        kfs_close(fd, serverHost, port);
+//		nwrite = kfs_write(fd,  filebuf, 1000, serverIp, serverPort);
+		//      nread = kfs_read(fd, filebuf1, 1024);
+
+		if (nwrite != 1000)
+		{
+		        cout << "kfs: write error " << endl;
+		}
+
+	
+		
+
+		wcount--;
+//		kfs_close(fd, serverIp, serverPort);
+
+//		goto retry;
+
+		
+	}
+
+	
+	
+        kfs_close(fd, serverIp, serverPort);
+
+
+
+
+
+
+		
+	gettimeofday(&tpEnd, NULL);
+	timecost = 0.0f;
+	timecost = tpEnd.tv_sec - tpStart.tv_sec + (float)(tpEnd.tv_usec-tpStart.tv_usec)/1000000;
+	printf("Inserted rows = %d\n", wcount);
+	printf("time cost: %f\n", timecost);
+
+
+//#endif
+#if 0
+	flag = O_RDWR;
+
+	fd = kfs_open(content, flag,serverIp, serverPort);
+
+	int nbytes = 0;
+	char	readbuf[30000];
+
+	memset(readbuf, 0, 30000);
+
+//	nwrite = kfs_append(fd, filebuf, 6400, serverIp, serverPort);
+//	nbytes = kfs_read(fd, readbuf, 30000,serverIp, serverPort);
+	
+	offset = kfs_seek(fd, 0, SEEK_END,serverIp, serverPort);
+	 kfs_close(fd, serverIp, serverPort);
+
+#endif	
 
         return 1;
 }
 
-*/
+#endif
+

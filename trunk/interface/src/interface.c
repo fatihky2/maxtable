@@ -17,7 +17,7 @@
 #include "m_socket.h"
 
 
-MT_CLI_CONTEXT *cli_context = NULL;
+MT_CLI_CONTEXT *Cli_context = NULL;
 
 extern	TSS	*Tss;
 
@@ -55,24 +55,24 @@ int validation_request(char * request)
 void
 mt_cli_crt_context()
 {
-	assert (cli_context == NULL);
+	assert (Cli_context == NULL);
 	
 	mem_init_alloc_regions();
 	tss_setup(TSS_OP_CLIENT);
 
-	cli_context = MEMALLOCHEAP(sizeof(MT_CLI_CONTEXT));
-	SPINLOCK_ATTR_INIT(cli_context->mutexattr);
-	SPINLOCK_ATTR_SETTYPE(cli_context->mutexattr, PTHREAD_MUTEX_RECURSIVE);
-	SPINLOCK_INIT(cli_context->mutex, &(cli_context->mutexattr));
+	Cli_context = MEMALLOCHEAP(sizeof(MT_CLI_CONTEXT));
+	SPINLOCK_ATTR_INIT(Cli_context->mutexattr);
+	SPINLOCK_ATTR_SETTYPE(Cli_context->mutexattr, PTHREAD_MUTEX_RECURSIVE);
+	SPINLOCK_INIT(Cli_context->mutex, &(Cli_context->mutexattr));
 }
 
 
 void
 mt_cli_destroy_context()
 {
-	SPINLOCK_DESTROY(cli_context->mutex);
-	MEMFREEHEAP(cli_context);
-	cli_context = NULL;
+	SPINLOCK_DESTROY(Cli_context->mutex);
+	MEMFREEHEAP(Cli_context);
+	Cli_context = NULL;
 	tss_release();
 	mem_free_alloc_regions();	
 }
@@ -84,7 +84,7 @@ mt_cli_destroy_context()
 int 
 mt_cli_open_connection(char * meta_ip, int meta_port, conn ** connection)
 {
-	P_SPINLOCK(cli_context->mutex);
+	P_SPINLOCK(Cli_context->mutex);
 	
 	conn * new_conn = (conn *)MEMALLOCHEAP(sizeof(conn));
 	new_conn->meta_server_port = meta_port;
@@ -94,7 +94,7 @@ mt_cli_open_connection(char * meta_ip, int meta_port, conn ** connection)
 	{
 		perror("error in create connection: ");
 		MEMFREEHEAP(new_conn);
-		V_SPINLOCK(cli_context->mutex);
+		V_SPINLOCK(Cli_context->mutex);
 		return FALSE;
 	}
 
@@ -103,7 +103,7 @@ mt_cli_open_connection(char * meta_ip, int meta_port, conn ** connection)
 
 	*connection = new_conn;
 
-	V_SPINLOCK(cli_context->mutex);
+	V_SPINLOCK(Cli_context->mutex);
 	return TRUE;
 }
 
@@ -115,7 +115,7 @@ mt_cli_close_connection(conn * connection)
 {
 	int i;
 
-	P_SPINLOCK(cli_context->mutex);
+	P_SPINLOCK(Cli_context->mutex);
 	
 	close(connection->connection_fd);
 	
@@ -130,7 +130,7 @@ mt_cli_close_connection(conn * connection)
 	}
 	MEMFREEHEAP(connection);
 
-	V_SPINLOCK(cli_context->mutex);
+	V_SPINLOCK(Cli_context->mutex);
 }
 
 /*
@@ -993,7 +993,7 @@ retry:
 		else
 		{
 			rtn_stat = TRUE;
-			Assert(exec_ctx->rg_resp);
+			Assert(exec_ctx->rg_resp == NULL);
 			exec_ctx->rg_resp = (char *)rg_resp;
 		}
 
@@ -1210,7 +1210,7 @@ mt_cli_open_execute(conn *connection, char *cmd, MT_CLI_EXEC_CONTEX *exec_ctx)
 
 	querytype = par_get_query(cmd, &s_idx);
 
-	P_SPINLOCK(cli_context->mutex);
+	P_SPINLOCK(Cli_context->mutex);
 
 	LOCALTSS(tss);
 	
@@ -1260,7 +1260,7 @@ mt_cli_open_execute(conn *connection, char *cmd, MT_CLI_EXEC_CONTEX *exec_ctx)
 		parser_close();
 		tss->tstat |= TSS_PARSER_ERR;
 		traceprint("PARSER ERR: Please input the command again by the 'help' signed.\n");
-		V_SPINLOCK(cli_context->mutex);
+		V_SPINLOCK(Cli_context->mutex);
 		return FALSE;
 	}
 
@@ -1289,7 +1289,7 @@ mt_cli_open_execute(conn *connection, char *cmd, MT_CLI_EXEC_CONTEX *exec_ctx)
 	        break;
 	}
 
-	V_SPINLOCK(cli_context->mutex);
+	V_SPINLOCK(Cli_context->mutex);
 	return rtn_stat;
 
 }

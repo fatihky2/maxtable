@@ -306,6 +306,10 @@ typedef struct tab_info
 
 #define META_CONF_PATH_MAX_LEN   64
 
+#define	COL_MAX_NUM	16
+#define	TAB_MAX_NUM	64
+
+
 #define MAX_RANGER_NUM	1024
 #define HB_DATA_SIZE	128
 
@@ -325,18 +329,46 @@ typedef struct hb_data
 
 #define HB_SET_RANGER_OFF(hb_data)	((hb_data)->hb_stat = (((hb_data)->hb_stat & ~HB_IS_ON) | HB_IS_OFF))
 
+/* In-memory structure. */
+typedef struct meta_systable
+{
+	int		last_tabid;	/* Max table id. */
+	int		update_ts;	/* The TS latest update. */
+	int		tabnum;		/* The number of table current system owning. */
+	int		tab_stat[TAB_MAX_NUM];
+	char		meta_tabdir[TAB_MAX_NUM][256];
+	int		pad;
+}META_SYSTABLE;
+
+/* Following definition is for the tab_stat. */
+#define	TAB_1ST_INSERT		0x0001	/* No insertion since the table was created. */
+
+
+typedef struct meta_syscolumn
+{
+	int		colnum[TAB_MAX_NUM];
+	COLINFO		colinfor[TAB_MAX_NUM][COL_MAX_NUM];
+}META_SYSCOLUMN;
+
+
+typedef struct meta_sysobject
+{
+	TABLEHDR	sysobject[TAB_MAX_NUM];
+}META_SYSOBJECT;
 
 typedef struct master_infor
 {
 	char		conf_path[META_CONF_PATH_MAX_LEN];
 	int		port;
 	int		last_tabid;
+	META_SYSTABLE	*meta_systab;
+	META_SYSOBJECT	*meta_sysobj;
+	META_SYSCOLUMN	*meta_syscol;	
 	LOCKATTR 	mutexattr;
 	SPINLOCK	rglist_spinlock;	
 	SVR_IDX_FILE	rg_list;
 	HB_DATA		heart_beat_data[MAX_RANGER_NUM];
 }MASTER_INFOR;
-
 
 
 #define TABINFO_INIT(tabinfo, sstab_name, srch_info, minlen, status, tabid, sstabid)	\
