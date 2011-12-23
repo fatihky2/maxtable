@@ -57,6 +57,9 @@ vim ranger.conf
 ./sample create
 ./sample insert
 ./sample select
+./sample selectrange
+./sample selectwhere
+./sample drop
 }}}
 
 *RUN REGRESSION TESTS*<br>
