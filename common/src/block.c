@@ -573,7 +573,7 @@ finish:
 					tabinfo->t_row_minlen, tabinfo->t_tabid,
 					tabinfo->t_sstab_id);
 		
-		log_insert_insdel(tss->rginsdellogfile, &logrec, rp, rlen);
+		log_insert_insdel(&logrec, rp, rlen);
 
 		if (tabinfo->t_stat & TAB_SSTAB_SPLIT)
 		{

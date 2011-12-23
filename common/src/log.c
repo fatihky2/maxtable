@@ -36,9 +36,14 @@
 
 
 extern TSS	*Tss;
+RG_LOGINFO	*Rg_loginfo = NULL;
 
 static int
 log__redo_insdel(LOGREC *logrec, char *rp);
+
+static int
+log_get_last_logoffset(LOGREC *logrec);
+
 
 
 static int
@@ -134,7 +139,7 @@ log_check_delete(LOGFILE *logfile, int logtype, char *backup)
 			
 #ifdef MT_KFS_BACKEND
 			sprintf(cmd_str, "%s/%s",  backup, tmpsstab);
-			RMDIR(status, cmd_str);
+			RMFILE(status, cmd_str);
 			if(!status)
 #else			
 			sprintf(cmd_str, "rm -rf %s/%s",  backup, tmpsstab);
@@ -230,8 +235,7 @@ log_insert_sstab_split(char *logfile_dir, LOGREC *logrec, int logtype)
 					
 #ifdef MT_KFS_BACKEND
 		int i = strmnstr(logrec->oldsstabname, "/", STRLEN(logrec->oldsstabname));
-		sprintf(cmd_str, "%s", tss->rgbackpfile);
-		sprintf(cmd_str, "%s", logrec->oldsstabname + i);
+		sprintf(cmd_str, "%s/%s", tss->rgbackpfile, logrec->oldsstabname + i);
 
 		if (COPYFILE(logrec->oldsstabname,cmd_str) != 0)
 #else			
@@ -276,34 +280,36 @@ exit:
 
 
 int
-log_insert_insdel(char	 *logfile_dir, LOGREC *logrec, char *rp, int rlen)
+log_insert_insdel(LOGREC *logrec, char *rp, int rlen)
 {
+
 	LOCALTSS(tss);
-	int		fd;
 	int		status;
 	char		*logbuf;
 	int		logbuflen;
-	int		retry_cnt;
-	int		flag;
+	int		idx;
 
 
-	logbuflen = rlen+ sizeof(LOGREC);
-	logbuf = (char *)MEMALLOCHEAP(logbuflen);
-	retry_cnt = 0;
 	status = 0;
-	flag = O_RDWR;
-
-retry:	
-	OPEN(fd, logfile_dir, (flag));
-
-	if (fd < 0)
-	{
-		goto exit;
-	}
-
-	int	idx = 0;
+	idx = 0;
+	
 	if (rp)
 	{
+		Assert(rlen > 0);
+		logbuflen = sizeof(LOGREC) + sizeof(int) + rlen;
+	}
+	else
+	{
+		logbuflen = sizeof(LOGREC);
+	}
+	
+	logbuf = (char *)MEMALLOCHEAP(logbuflen);
+	
+	if (rp)
+	{
+		*(int *)logbuf = rlen;
+		idx += sizeof(int);
+			
 		PUT_TO_BUFFER(logbuf, idx, rp, rlen);
 	}
 	
@@ -311,47 +317,47 @@ retry:
 
 	MEMCPY(logrec->logmagic, MT_LOG, LOG_MAGIC_LEN);
 
+	logrec->loglen = logbuflen;
+
 	PUT_TO_BUFFER(logbuf, idx, logrec, sizeof(LOGREC));
-	
-#ifdef MT_KFS_BACKEND
 
-	status = APPEND(fd, logbuf, logbuflen);
+	Rg_loginfo->logoffset += logbuflen;
 
-#else
-
-	APPEND(fd, logbuf, logbuflen, status);
-#endif
-
-	if (status == 0)
+	if (Rg_loginfo->logoffset > SSTABLE_SIZE)
 	{
-		if (retry_cnt)
-		{
-			traceprint("logfile hit error while lohinsdel record.\n");
-			goto exit;
-		}
+		CLOSE(Rg_loginfo->logfd);
 		
-		CLOSE(fd);
-		
-		retry_cnt = 1;
-		int idxpos = str1nstr(logfile_dir, tss->rglogfile, STRLEN(logfile_dir));
+		int idxpos = str1nstr(Rg_loginfo->logdir, tss->rglogfile, STRLEN(Rg_loginfo->logdir));
 
-		int logfilenum = m_atoi(logfile_dir + idxpos, 
-					STRLEN(logfile_dir) - idxpos);
+		int logfilenum = m_atoi(Rg_loginfo->logdir+ idxpos, 
+					STRLEN(Rg_loginfo->logdir) - idxpos);
 		
 		logfilenum++;
 
-		MEMSET(logfile_dir, STRLEN(logfile_dir));
-		sprintf(logfile_dir, "%s%d", tss->rglogfile, logfilenum);
+		MEMSET(Rg_loginfo->logdir, STRLEN(Rg_loginfo->logdir));
+		sprintf(Rg_loginfo->logdir, "%s%d", tss->rglogfile, logfilenum);
 
-		flag = O_CREAT|O_WRONLY|O_TRUNC;
+		OPEN(Rg_loginfo->logfd, Rg_loginfo->logdir, (O_CREAT | O_APPEND | O_RDWR |O_TRUNC));
 
-		goto retry;
+		Rg_loginfo->logoffset = 0;
+	}
+
+	if (Rg_loginfo->logoffset > SSTABLE_SIZE)
+	{
+		traceprint("The size of logfile (%d) is greater than the sstable size", Rg_loginfo->logoffset);
+		goto exit;
 	}
 	
+#ifdef MT_KFS_BACKEND
+
+	status = APPEND(Rg_loginfo->logfd, logbuf, logbuflen);
+
+#else
+
+	APPEND(Rg_loginfo->logfd, logbuf, logbuflen, status);
+#endif
+
 exit:
-
-	CLOSE(fd);	
-
 	MEMFREEHEAP(logbuf);
 
 	return status;
@@ -471,7 +477,7 @@ log_undo_sstab_split(char *logfile_dir, char *backup_dir, int logtype)
 
 				int	rtn_stat;
 
-				RMDIR(rtn_stat,srcfile);
+				RMFILE(rtn_stat,srcfile);
 
 				if (rtn_stat < 0)
 
@@ -633,7 +639,7 @@ log_get_latest_rginsedelfile(char *rginsdellogfile, char *rg_ip, int port)
 
 		/* No insdel log case. */
 		status = (slen2 == 0)? FALSE : TRUE;
-	} 
+	} 
 	
 #else
 	DIR *pDir ;
@@ -688,7 +694,7 @@ log_redo_insdel(char *insdellogfile, int scan_first)
 	int		offset;
 	LOGREC		*logrec;
 	char		*rp;
-	int		minrowlen;
+	int		rlen;
 	
 	
 	logfilebuf = (char *)malloc(SSTABLE_SIZE);
@@ -700,18 +706,13 @@ log_redo_insdel(char *insdellogfile, int scan_first)
 	{
 		goto exit;
 	}
+	
+	READ(fd, logfilebuf, SSTABLE_SIZE);
 
-	offset = LSEEK(fd, 0, SEEK_END);
+	offset = log_get_last_logoffset((LOGREC *)logfilebuf);
 
 	Assert(offset < SSTABLE_SIZE);
 
-#ifdef MT_KFS_BACKEND
-	READ(fd, logfilebuf, offset);
-#else
-
-	LSEEK(fd, 0, SEEK_SET);
-	READ(fd, logfilebuf, offset);
-#endif
 	int tmp = offset;
 	int row_cnt = 0; 
 	int log_scope_start = FALSE;
@@ -726,6 +727,7 @@ log_redo_insdel(char *insdellogfile, int scan_first)
 	
 	while(tmp > 0)
 	{
+		/* It must be a LOGREC structure. */
 		logrec = (LOGREC *)(logfilebuf + tmp - sizeof(LOGREC));
 
 		if (logrec->opid == CHECKPOINT_COMMIT)
@@ -734,8 +736,7 @@ log_redo_insdel(char *insdellogfile, int scan_first)
 
 			log_scope_start = TRUE;
 
-			tmp = logrec->cur_log_off;
-
+			tmp -= logrec->loglen;
 			continue;
 		}
 
@@ -745,12 +746,10 @@ log_redo_insdel(char *insdellogfile, int scan_first)
 			break;
 		}
 
-		tmp = logrec->cur_log_off;
+		tmp -= logrec->loglen;
 
 		if (logrec->opid != CHECKPOINT_BEGIN)
 		{
-			minrowlen = logrec->minrowlen;
-
 			row_cnt++;
 		}
 	}
@@ -762,34 +761,56 @@ log_redo_insdel(char *insdellogfile, int scan_first)
 
 	while (row_cnt > 0)
 	{	
+		/* 
+		** Insert and delete log has row value, so the start address of log will be 
+		** error code, but the commit log will hit the right magic code because it
+		** has not row value.
+		*/
 		if (strncasecmp(logrec->logmagic, MT_LOG, STRLEN(MT_LOG)) != 0)
 		{
 			/* INSERT LOG */
-			rp = (char *)logrec;
-			logrec = (LOGREC *)(rp + ROW_GET_LENGTH(rp, minrowlen));
+			rlen = *(int *)logrec;
+			rp = (char *)logrec + sizeof(int);
+			logrec = (LOGREC *)(rp + rlen);
 		}
 		
-		if ((logrec->opid == CHECKPOINT_BEGIN) || (logrec->opid == CHECKPOINT_COMMIT)
-		    || (logrec->opid == LOG_SKIP))
+		if (   (logrec->opid == CHECKPOINT_BEGIN) 
+		    || (logrec->opid == CHECKPOINT_COMMIT)
+		   )
 		{
-			logrec = (LOGREC *)(logfilebuf + logrec->next_log_off);
+			/* 
+			** Continue to scan the next log that may be commit or 
+			** insert/delete log. 
+			*/
+			Assert(logrec->loglen == sizeof(LOGREC));
+			logrec = (LOGREC *)((char *)logrec + sizeof(LOGREC));
 			continue;
 		}
+		else if(logrec->opid == LOG_SKIP)
+		{
+			logrec = (LOGREC *)((char *)logrec + sizeof(LOGREC));
+			continue;
+		}
+		else if ((logrec->opid == LOG_INSERT) || (logrec->opid == LOG_DELETE))
+	   	{
+		   	rp = (char *)logrec + sizeof(LOGREC) - logrec->loglen;
+			rlen = *(int *)rp;
+			rp += sizeof(int);
+		}
+		else
+		{
+			traceprint("The log recovery hit error.\n");
+			Assert(0);
+		}
 
+		/* It must be a whole LOGREC and inser or delete log here. */
 		Assert(strncasecmp(logrec->logmagic, MT_LOG, STRLEN(MT_LOG)) == 0);
 
-		rp = logfilebuf + logrec->cur_log_off;
 		log__redo_insdel(logrec, rp);
 
 		row_cnt--;
 
-		if (row_cnt > 0)
-		{
-			rp = (logfilebuf + logrec->next_log_off);
-
-			logrec = (LOGREC *)(logfilebuf + logrec->next_log_off + ROW_GET_LENGTH(rp, minrowlen));
-		}
-		
+		logrec = (LOGREC *)((char *)logrec + sizeof(LOGREC));
 	}
 	
 
@@ -1099,24 +1120,97 @@ log_recov_rg(char *rgip, int rgport)
 		int logfilenum = m_atoi(logfile + idxpos, 
 					STRLEN(logfile) - idxpos);
 
-		Assert (logfilenum == 0);
-				
-		logfilenum--;
+		if (logfilenum > 0)
+		{				
+			logfilenum--;
 
-		MEMSET(prelogfile, STRLEN(prelogfile));
-		MEMCPY(prelogfile, logfile, idxpos);
-		sprintf(prelogfile + idxpos, "%d", logfilenum);
+			MEMSET(prelogfile, STRLEN(prelogfile));
+			MEMCPY(prelogfile, logfile, idxpos);
+			sprintf(prelogfile + idxpos, "%d", logfilenum);
 
-		/* 
-		** TODO: Just handle two log files to get the scoping of one Disk IO round.
-		**	We need to make sure it can not write two sstable in the interval 
-		**	of HK.
-		*/
-		log_redo_insdel(prelogfile, FALSE);
+			/* 
+			** TODO: Just handle two log files to get the scoping of one Disk IO round.
+			**	We need to make sure it can not write two sstable in the interval 
+			**	of HK.
+			*/
+			log_redo_insdel(prelogfile, FALSE);
+		}
 	}
 
 	log_redo_insdel(logfile, FALSE);	
 
 	return TRUE;
+}
+
+static int
+log_get_last_logoffset(LOGREC *logrec)
+{
+	int	rlen;
+	char	*rp;
+	int	logoffset;
+	char	*tmp;
+
+
+	logoffset = 0;
+	tmp = (char *)logrec + SSTABLE_SIZE;
+	
+	while (logoffset < SSTABLE_SIZE)
+	{	
+		/* Check if it hit the LOGREC structure. */
+		if (strncasecmp(logrec->logmagic, MT_LOG, STRLEN(MT_LOG)) != 0)
+		{
+			/* If not a LOGREC, it must be the row, or it should have hit the end. */
+			rlen = *(int *)logrec;
+			
+			rp = (char *)logrec + sizeof(int);
+			logrec = (LOGREC *)(rp + rlen);
+
+			if ((char *)logrec > tmp)
+			{
+				/* Hit the end */
+				break;
+			}
+		}
+		
+		if (   (logrec->opid == CHECKPOINT_BEGIN) 
+		    || (logrec->opid == CHECKPOINT_COMMIT)
+		   )
+		{
+			Assert(logrec->loglen == sizeof(LOGREC));
+
+			logoffset += logrec->loglen;
+
+			//traceprint("logoffset -- %d, logrec->opid  -- %d\n", logoffset, logrec->opid );
+			
+			logrec = (LOGREC *)((char *)logrec + sizeof(LOGREC));
+			
+			continue;
+		}
+		else if(logrec->opid == LOG_SKIP)
+		{
+			logoffset += logrec->loglen;
+
+			//traceprint("logoffset -- %d, logrec->opid  -- %d\n", logoffset, logrec->opid );
+			
+			logrec = (LOGREC *)((char *)logrec + sizeof(LOGREC));
+			continue;
+		}
+
+		/* It must be a whole LOGREC and inser or delete log here. */
+		if(strncasecmp(logrec->logmagic, MT_LOG, STRLEN(MT_LOG)) == 0)
+		{
+			logoffset += logrec->loglen;
+			//traceprint("logoffset -- %d, logrec->opid  -- %d\n", logoffset, logrec->opid );
+		}
+		else
+		{
+			break;
+		}
+		
+
+		logrec = (LOGREC *)((char *)logrec + sizeof(LOGREC));
+	}
+
+	return logoffset;
 }
 

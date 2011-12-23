@@ -60,28 +60,36 @@ extern	int	Kfsport;
 
 #define	RANGE_CONF_PATH_MAX_LEN	64
 
-char	*RgLogfile;
-char	*RgBackup;
-extern char	*RgInsdelLogfile;
+extern	RG_LOGINFO	*Rg_loginfo;
+
+/* In-memory structure. */
+typedef struct rg_systable
+{
+	int		tabnum;		/* The number of table current system owning. */
+	char		rg_tabdir[TAB_MAX_NUM][256];
+	char		rg_sstab[TAB_MAX_NUM][256];
+	int		pad;
+}RG_SYSTABLE;
+
 
 /* This struct will also be used at cli side */
 typedef struct rg_info
 {
-	char	conf_path[RANGE_CONF_PATH_MAX_LEN];
-	char	rg_meta_ip[RANGE_ADDR_MAX_LEN];
-	int     rg_meta_port;
-	char	rg_ip[RANGE_ADDR_MAX_LEN];
-	int	port;
-	int	bigdataport;
-	int	flush_check_interval;
-	char	rglogfiledir[256];
-	char	rgbackup[256];
-	char	rginsdellogfile[256];
-	int	rginsdellognum;
+	char		conf_path[RANGE_CONF_PATH_MAX_LEN];
+	char		rg_meta_ip[RANGE_ADDR_MAX_LEN];
+	int     	rg_meta_port;
+	char		rg_ip[RANGE_ADDR_MAX_LEN];
+	int		port;
+	int		bigdataport;
+	int		flush_check_interval;
+	char		rglogfiledir[256];
+	char		rgbackup[256];
+	int		rginsdellognum;
+	RG_SYSTABLE	rg_systab;
 }RANGEINFO;
 
 
-typedef struct _range_query_contex
+typedef struct range_query_contex
 {
 	int	status;
 	int	first_rowpos;
@@ -161,6 +169,22 @@ rg_sstabscan(SSTAB_SCANCTX *scanctx);
 static char *
 rg_recovery(char *rgip, int rgport);
 
+
+static int
+rg_table_is_exist(char *tabname);
+
+
+static int
+rg_table_regist(char *tabname);
+
+static int
+rg_table_unregist(char *tabname);
+
+static int
+rg_sstable_is_exist(char *sstabname, int tabidx);
+
+static int
+rg_sstable_regist(char *sstabname, int tabidx);
 
 
 char *
@@ -245,6 +269,7 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 	char		*resp_buf;
 	int		resp_len;
 	int		buf_spin;
+	int		tabidx;
 
 
 	Assert(command);
@@ -267,16 +292,22 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 	
 	str1_to_str2(tab_dir, '/', tab_name);
 
-	if (STAT(tab_dir, &st) != 0)
+	if ((tabidx = rg_table_is_exist(tab_dir)) == -1)
 	{
-		MKDIR(status, tab_dir, 0755);
-
-		if (status < 0)
+		if (STAT(tab_dir, &st) != 0)
 		{
-			goto exit;
+			MKDIR(status, tab_dir, 0755);
+
+			if (status < 0)
+			{
+				goto exit;
+			}
 		}
+
+		tabidx = rg_table_regist(tab_dir);
 	}
 
+	
 	if (DEBUG_TEST(tss))
 	{
 		/* 
@@ -295,12 +326,20 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 	MEMSET(ins_meta->sstab_name, SSTABLE_NAME_MAX_LEN);
 	MEMCPY(ins_meta->sstab_name, tab_dir, STRLEN(tab_dir));
 
-	if (STAT(tab_dir, &st) != 0)
+	/* sstable checking is for the key propagation to the tablet. */
+	if (!rg_sstable_is_exist(tab_dir, tabidx))
 	{
-		/* Flag if it's the first insertion. */
-		ins_meta->status |= INS_META_1ST;
+		if (STAT(tab_dir, &st) != 0)
+		{
+			/* Flag if it's the first insertion. */
+			ins_meta->status |= INS_META_1ST;
+		}
+		else
+		{
+			rg_sstable_regist(tab_dir, tabidx);
+		}
 	}
-
+	
 	if (DEBUG_TEST(tss))
 	{
 		traceprint("ins_meta->sstab_name =%s \n", ins_meta->sstab_name);
@@ -518,6 +557,7 @@ rg_seldeltab(TREE *command, TABINFO *tabinfo)
 	char   		*col_buf;
 	int 		rlen;
 	int		buf_spin;
+	int		tabidx;
 
 
 	Assert(command);
@@ -538,9 +578,15 @@ rg_seldeltab(TREE *command, TABINFO *tabinfo)
 	
 	str1_to_str2(tab_dir, '/', tab_name);
 
-	if (STAT(tab_dir, &st) != 0)
+	if ((tabidx = rg_table_is_exist(tab_dir)) == -1)
 	{
-		goto exit;
+		if (STAT(tab_dir, &st) != 0)
+		{
+			traceprint("Table %s is not exist.\n", tab_name);
+			goto exit;
+		}
+
+		tabidx = rg_table_regist(tab_dir);
 	}
 
 	if (DEBUG_TEST(tss))
@@ -554,11 +600,16 @@ rg_seldeltab(TREE *command, TABINFO *tabinfo)
 	MEMSET(ins_meta->sstab_name, SSTABLE_NAME_MAX_LEN);
 	MEMCPY(ins_meta->sstab_name, tab_dir, STRLEN(tab_dir));
 
-	if (STAT(tab_dir, &st) != 0)
+	if (!rg_sstable_is_exist(tab_dir, tabidx))
 	{
-		goto exit; 
-	}
+		if (STAT(tab_dir, &st) != 0)
+		{
+			goto exit; 
+		}
 
+		rg_sstable_regist(tab_dir, tabidx);
+	}
+	
 	if (DEBUG_TEST(tss))
 	{
 		traceprint("ins_meta->sstab_name =%s \n", ins_meta->sstab_name);
@@ -657,8 +708,7 @@ exit:
 						tabinfo->t_tabid, 
 						tabinfo->t_sstab_id);
 			
-			log_insert_insdel(RgInsdelLogfile, &logrec, 
-						tabinfo->t_cur_rowp,
+			log_insert_insdel(&logrec, tabinfo->t_cur_rowp,
 						tabinfo->t_cur_rowlen);
 
 			MEMFREEHEAP(tabinfo->t_cur_rowp);
@@ -725,6 +775,7 @@ rg_selrangetab(TREE *command, TABINFO *tabinfo, int fd)
 	int		left_expand;
 	int		right_expand;
 	B_SRCHINFO	srchinfo;
+	int		tabidx;
 
 
 	Assert(command);
@@ -745,11 +796,17 @@ rg_selrangetab(TREE *command, TABINFO *tabinfo, int fd)
 	
 	str1_to_str2(tab_dir, '/', tab_name);
 
-	if (STAT(tab_dir, &st) != 0)
+	if ((tabidx = rg_table_is_exist(tab_dir)) == -1)
 	{
-		goto exit;		
-	}
+		if (STAT(tab_dir, &st) != 0)
+		{
+			traceprint("Table %s is not exist.\n", tab_name);
+			goto exit;
+		}
 
+		tabidx = rg_table_regist(tab_dir);
+	}
+	
 	if (DEBUG_TEST(tss))
 	{
 		traceprint("ins_meta->sstab_name =%s \n", ins_meta->sstab_name);
@@ -761,9 +818,14 @@ rg_selrangetab(TREE *command, TABINFO *tabinfo, int fd)
 	MEMSET(ins_meta->sstab_name, SSTABLE_NAME_MAX_LEN);
 	MEMCPY(ins_meta->sstab_name, tab_dir, STRLEN(tab_dir));
 
-	if (STAT(tab_dir, &st) != 0)
+	if (!rg_sstable_is_exist(tab_dir, tabidx))
 	{
-		goto exit; 
+		if (STAT(tab_dir, &st) != 0)
+		{
+			goto exit; 
+		}
+
+		rg_sstable_regist(tab_dir, tabidx);
 	}
 
 	if (DEBUG_TEST(tss))
@@ -1078,6 +1140,7 @@ rg_selwheretab(TREE *command, SELWHERE *selwhere, int fd)
 	TABLET_SCANCTX	*tablet_scanctx;
 	RANGE_QUERYCTX	rgsel_cont;
 	char		rg_tab_dir[TABLE_NAME_MAX_LEN];
+	int		tabidx;
 
 
 	Assert(command);
@@ -1105,10 +1168,15 @@ rg_selwheretab(TREE *command, SELWHERE *selwhere, int fd)
 	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
 
-	if (!(STAT(tab_dir, &st) == 0))
+	if ((tabidx = rg_table_is_exist(tab_dir)) == -1)
 	{
-		traceprint("Table %s is not exist.\n", tab_name);
-		goto exit;
+		if (STAT(tab_dir, &st) != 0)
+		{
+			traceprint("Table %s is not exist.\n", tab_name);
+			goto exit;
+		}
+
+		tabidx = rg_table_regist(tab_dir);
 	}
 	
 	str1_to_str2(tab_meta_dir, '/', "sysobjects");
@@ -1927,7 +1995,8 @@ rg_handler(char *req_buf, int fd)
 	tab_hdr		= NULL;
 	col_info	= NULL;
 	resp 		= NULL;
-	tss->rglogfile 	= RgLogfile;
+	tss->rglogfile 	= Range_infor->rglogfiledir;
+	tss->rgbackpfile= Range_infor->rgbackup;
 	
 	if ((req_op = rg_get_meta(req_buf, &ins_meta, &sel_rg, &tab_hdr, 
 					&col_info)) == 0)
@@ -2041,9 +2110,7 @@ rg_handler(char *req_buf, int fd)
 	/* Initialize the meta data for build RESDOM. */
 	tss->tcol_info = col_info;
 	tss->tmeta_hdr = ins_meta;
-	tss->rgbackpfile = RgBackup;	
-	tss->rginsdellogfile = RgInsdelLogfile;
-
+	
 	if (!parser_open(req_buf))
 	{
 		parser_close();
@@ -2158,7 +2225,7 @@ rg_handler(char *req_buf, int fd)
 		log_build(&logrec, LOG_END, 0, 0, tabinfo->t_sstab_name, NULL,
 				0, 0, 0);
 
-		log_insert_sstab_split(RgLogfile, &logrec, SPLIT_LOG);
+		log_insert_sstab_split(Range_infor->rglogfiledir, &logrec, SPLIT_LOG);
 	}
        
 
@@ -2261,9 +2328,13 @@ rg_setup(char *conf_path)
 	int	rg_port;
 	char	metaport[32];
 	int	fd;
+	
 
-	Range_infor = MEMALLOCHEAP(sizeof(RANGEINFO));
-	MEMSET(Range_infor, sizeof(RANGEINFO));
+	Range_infor = malloc(sizeof(RANGEINFO));
+	memset(Range_infor, 0, sizeof(RANGEINFO));
+
+	Rg_loginfo = malloc(sizeof(RG_LOGINFO));
+	memset(Rg_loginfo, 0, sizeof(RG_LOGINFO));
 	
 	MEMCPY(Range_infor->conf_path, conf_path, STRLEN(conf_path));
 
@@ -2301,56 +2372,62 @@ rg_setup(char *conf_path)
 	if (STAT(MT_RANGE_TABLE, &st) != 0)
 	{
 		MKDIR(status, MT_RANGE_TABLE, 0755);
-	}	
+	}
 
 	rg_regist();
 
 	char	rgname[64];
-	RgLogfile = Range_infor->rglogfiledir;
 	
-	MEMSET(RgLogfile, 256);
-	MEMCPY(RgLogfile, LOG_FILE_DIR, STRLEN(LOG_FILE_DIR));
+	MEMSET(Range_infor->rglogfiledir, 256);
+	MEMCPY(Range_infor->rglogfiledir, LOG_FILE_DIR, STRLEN(LOG_FILE_DIR));
 
 	MEMSET(rgname, 64);
 	sprintf(rgname, "%s%d", Range_infor->rg_ip, Range_infor->port);
 
-	str1_to_str2(RgLogfile, '/', rgname);
+	str1_to_str2(Range_infor->rglogfiledir, '/', rgname);
 
-	str1_to_str2(RgLogfile, '/', "log");
+	str1_to_str2(Range_infor->rglogfiledir, '/', "log");
 
-	if (!(STAT(RgLogfile, &st) == 0))
+	if (!(STAT(Range_infor->rglogfiledir, &st) == 0))
 	{
-		traceprint("Log file %s is not exist.\n", RgLogfile);
+		traceprint("Log file %s is not exist.\n", Range_infor->rglogfiledir);
 		return;
 	}
 
-	RgInsdelLogfile = Range_infor->rginsdellogfile;
-	log_get_latest_rginsedelfile(RgInsdelLogfile, Range_infor->rg_ip,
+	log_get_latest_rginsedelfile(Rg_loginfo->logdir, Range_infor->rg_ip,
 					Range_infor->port);
 
-	if (strcmp(RgLogfile, RgInsdelLogfile) == 0)
+	if (strcmp(Range_infor->rglogfiledir, Rg_loginfo->logdir) == 0)
 	{
-		sprintf(RgInsdelLogfile, "%s0", RgInsdelLogfile);
+		sprintf(Rg_loginfo->logdir, "%s0", Rg_loginfo->logdir);
 
-		OPEN(fd, RgInsdelLogfile, (O_CREAT|O_WRONLY|O_TRUNC));
-		CLOSE(fd);
+		/* Long open. */
+		OPEN(fd, Rg_loginfo->logdir, (O_CREAT | O_APPEND | O_RDWR |O_TRUNC));
+//		CLOSE(fd);
+		Rg_loginfo->logfd = fd;
+		Rg_loginfo->logoffset = 0;	
+	}
+	else
+	{
+		OPEN(fd, Rg_loginfo->logdir, (O_APPEND | O_RDWR));
+//		CLOSE(fd);
+		Rg_loginfo->logfd = fd;
+		Rg_loginfo->logoffset = LSEEK(fd, 0, SEEK_END);		
 	}
 
-	int idxpos = str1nstr(RgInsdelLogfile, RgLogfile, STRLEN(RgLogfile));
+	int idxpos = str1nstr(Rg_loginfo->logdir, Range_infor->rglogfiledir, STRLEN(Range_infor->rglogfiledir));
 
-	Range_infor->rginsdellognum = m_atoi(RgInsdelLogfile + idxpos, 
-					STRLEN(RgInsdelLogfile) - idxpos);
+	Range_infor->rginsdellognum = m_atoi(Rg_loginfo->logdir + idxpos, 
+					STRLEN(Rg_loginfo->logdir) - idxpos);
 
-	RgBackup = Range_infor->rgbackup;
-	
-	MEMSET(RgBackup, 256);
-	MEMCPY(RgBackup, BACKUP_DIR, STRLEN(BACKUP_DIR));
+	MEMSET(Range_infor->rgbackup, 256);
+	MEMCPY(Range_infor->rgbackup, BACKUP_DIR, STRLEN(BACKUP_DIR));
 
-	str1_to_str2(RgBackup, '/', rgname);
+	str1_to_str2(Range_infor->rgbackup, '/', rgname);
 
-	if (STAT(RgBackup, &st) != 0)
+	if (STAT(Range_infor->rgbackup, &st) != 0)
 	{
-		traceprint("Backup file %s is not exist.\n", RgBackup);
+		traceprint("Backup file %s is not exist.\n", Range_infor->rgbackup);
 		return;
 	}
 
@@ -3051,6 +3128,119 @@ exit:
 	return resp;
 
 }
+
+
+
+static int
+rg_table_is_exist(char *tabname)
+{
+	int	i;
+	int	tabidx;
+
+
+	tabidx = -1;
+
+	for (i = 0; i < Range_infor->rg_systab.tabnum; i++)
+	{
+		if(strcmp(tabname, Range_infor->rg_systab.rg_tabdir[i])==0)
+		{
+			return i;
+		}
+	}
+
+	return tabidx;
+}
+
+
+/* 
+** SSTABLE exist checking just temp solution, because the insertion may not hit the same
+** sstable in the batch inserting.
+*/
+static int
+rg_sstable_is_exist(char *sstabname, int tabidx)
+{
+	if(strcmp(sstabname, Range_infor->rg_systab.rg_sstab[tabidx])== 0)
+	{
+		return TRUE;;
+	}
+	
+
+	return FALSE;
+}
+
+
+static int
+rg_sstable_regist(char *sstabname, int tabidx)
+{
+	if (tabidx > TAB_MAX_NUM)
+	{
+		return FALSE;
+	}
+
+	MEMSET(Range_infor->rg_systab.rg_sstab[tabidx], 256);
+	
+	MEMCPY(Range_infor->rg_systab.rg_sstab[tabidx], 
+			sstabname, STRLEN(sstabname));
+
+	return TRUE;
+}
+
+static int
+rg_table_regist(char *tabname)
+{
+	int	tabidx;
+
+	
+	if ((Range_infor->rg_systab.tabnum + 1) > TAB_MAX_NUM)
+	{
+		return -1;
+	}
+
+	MEMCPY(Range_infor->rg_systab.rg_tabdir[Range_infor->rg_systab.tabnum], 
+			tabname, STRLEN(tabname));
+
+	tabidx = Range_infor->rg_systab.tabnum;
+	
+	(Range_infor->rg_systab.tabnum)++;
+
+	return tabidx;
+}
+
+static int
+rg_table_unregist(char *tabname)
+{
+	int	i;
+	int	j;
+
+
+	for (i = 0; i < Range_infor->rg_systab.tabnum; i++)
+	{
+		if(strcmp(tabname, Range_infor->rg_systab.rg_tabdir[i])==0)
+		{
+			j = i;
+			break;
+		}
+	}
+
+	for(i = j; (i + 1) < Range_infor->rg_systab.tabnum; i++)
+	{
+		MEMCPY(Range_infor->rg_systab.rg_tabdir[i], 
+			Range_infor->rg_systab.rg_tabdir[i+1],
+			STRLEN(Range_infor->rg_systab.rg_tabdir[i+1]));
+
+		MEMCPY(Range_infor->rg_systab.rg_sstab[i], 
+			Range_infor->rg_systab.rg_sstab[i+1],
+			STRLEN(Range_infor->rg_systab.rg_sstab[i+1]));
+	}
+
+	if (Range_infor->rg_systab.tabnum > 0)
+	{
+		(Range_infor->rg_systab.tabnum)--;
+	}
+
+	return TRUE;
+}
+
 
 
 int 

@@ -69,8 +69,7 @@ typedef struct logrec
 	char		oldsstabname[SSTABLE_NAME_MAX_LEN];
 	char		newsstabname[SSTABLE_NAME_MAX_LEN];
 	int		rowend_off;
-	int		cur_log_off;
-	int		next_log_off;
+	int		loglen;
 }LOGREC;
 
 
@@ -111,7 +110,7 @@ int
 log_get_rgbackup(char *rgbackup, char *rgip, int rgport);
 
 int
-log_insert_insdel(char	 *logfile_dir, LOGREC *logrec, char *rp, int rlen);
+log_insert_insdel(LOGREC *logrec, char *rp, int rlen);
 
 int
 log_get_latest_rginsedelfile(char *rginsdellogfile, char *rg_ip, int port);

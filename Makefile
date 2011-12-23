@@ -27,7 +27,7 @@ endif
 
 ifeq (${MT_BACKEND}, KFS)
 
-all: kfsfacer_o kfsfacer_a client master ranger memTest sample client_lib clients_lib
+all: kfsfacer_o kfsfacer_a client master ranger kfsmain memTest sample client_lib clients_lib
 
 else ifeq (${MT_BACKEND}, LOCAL)
 
@@ -50,17 +50,20 @@ kfsfacer_a: kfsfacer.o
 	$(AR) kfsfacer.a kfsfacer.o 
         
 master: ${COMMON_SRC} ${MASTER_SRC}
-	$(CC) $(CFLAGS) $(KFSFLAG) ${COMMON_SRC} ${MASTER_SRC} -L. kfsfacer.a -lstdc++ -D MEMMGR_TEST -D MAXTABLE_BENCH_TEST -D MT_KFS_BACKEND ${MT_KEY_VALUE} -o startMaster
+	$(CC) $(CFLAGS) $(KFSFLAG) ${COMMON_SRC} ${MASTER_SRC} -L. kfsfacer.a -lstdc++ -D DEBUG -D MEMMGR_TEST -D MAXTABLE_BENCH_TEST -D MT_KFS_BACKEND ${MT_KEY_VALUE} -o startMaster
 
 ranger: ${COMMON_SRC} ${REGION_SRC}
-	$(CC) $(CFLAGS) $(KFSFLAG) ${COMMON_SRC} ${REGION_SRC} -L. kfsfacer.a -lstdc++ -D MEMMGR_TEST -D MAXTABLE_BENCH_TEST -D MT_KFS_BACKEND -D MT_ASYNC_IO ${MT_KEY_VALUE} -o startRanger
+	$(CC) $(CFLAGS) $(KFSFLAG) ${COMMON_SRC} ${REGION_SRC} -L. kfsfacer.a -lstdc++ -D DEBUG -D MEMMGR_TEST -D MAXTABLE_BENCH_TEST -D MT_KFS_BACKEND -D MT_ASYNC_IO ${MT_KEY_VALUE} -o startRanger
 
 client: ${COMMON_SRC} ${CLI_SRC}
 	$(CC) $(CFLAGS) $(KFSFLAG) ${COMMON_SRC} ${CLI_SRC} -L. kfsfacer.a -lstdc++ -D MEMMGR_TEST -D MAXTABLE_UNIT_TEST -D MT_KFS_BACKEND ${MT_KEY_VALUE} -o startClient
 	$(CC) $(CFLAGS) $(KFSFLAG) ${COMMON_SRC} ${CLI_SRC} -L. kfsfacer.a -lstdc++ -D MEMMGR_TEST -D MT_KFS_BACKEND ${MT_KEY_VALUE} -o imql        
   
 sample: ${COMMON_SRC} ${INTERFACE_SRC}
-	$(CC) $(CFLAGS) $(KFSFLAG) ${COMMON_SRC} ${INTERFACE_SRC} -L. kfsfacer.a -lstdc++ -D MAXTABLE_SAMPLE_TEST -D MT_KFS_BACKEND ${MT_KEY_VALUE} -o sample
+	$(CC) $(CFLAGS) $(KFSFLAG) ${COMMON_SRC} ${INTERFACE_SRC} -L. kfsfacer.a -lstdc++ -D DEBUG -D MAXTABLE_SAMPLE_TEST -D MT_KFS_BACKEND ${MT_KEY_VALUE} -o sample
+
+kfsmain:
+	$(CPP) -I./dfsfacer/include/ $(KFSFLAG) dfsfacer/src/kfsfacer.cc -D MEMMGR_KFS_TEST -o kfsmain
 
 else ifeq (${MT_BACKEND}, LOCAL)
 
@@ -99,5 +102,5 @@ clients_lib: ${LIB_OBJS_C}
 	$(AR) libmtcli.a ${LIB_OBJS_C}
 
 clean: 
-	rm -rf startClient startMaster startRanger imql memTest benchmark sample libmtService.a libmtcli.a ${LIB_OBJS_C} ${LIB_OBJS_CPP} libmtClient.so kfsfacer.o kfsfacer.a
+	rm -rf startClient startMaster startRanger imql kfsmain memTest benchmark sample libmtService.a libmtcli.a ${LIB_OBJS_C} ${LIB_OBJS_CPP} libmtClient.so kfsfacer.o kfsfacer.a
 	rm -rf ./table ./index ./rg_server ./rg_table ./meta_table ./rgbackup ./rglog

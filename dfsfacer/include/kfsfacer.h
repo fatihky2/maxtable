@@ -20,6 +20,9 @@ int
 kfs_rmdir(char * tab_dir,char * serverHost,int port);
 
 int
+kfs_remove(char * tab_file,char * serverHost,int port);
+
+int
 kfs_write(int fd, char *buf, int buf_len, char *serverHost, int port);
 
 int
