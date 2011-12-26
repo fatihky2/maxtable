@@ -178,9 +178,6 @@ typedef	struct svr_idx_file
 	char		data[SVR_IDX_FILE_BLK];	
 }SVR_IDX_FILE;
 
-#define SVR_STAT_NON_AVAIL_RG 0x0001
-
-
 #define	SVR_IS_BAD	0x0001
 
 

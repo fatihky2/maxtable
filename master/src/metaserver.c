@@ -858,6 +858,20 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 			rg_suspect = TRUE;
 			goto exit;
 		}
+		else if (tss->tcur_rgprof->rg_stat & RANGER_NEED_RECOVERY)
+		{
+			traceprint("Ranger server (%s:%d) is being in the recovery\n", rg_addr, rg_port);
+
+			rg_suspect = TRUE;
+			goto exit;
+		}
+		else if (tss->tcur_rgprof->rg_stat & RANGER_RESTART)
+		{
+			traceprint("Ranger server (%s:%d) is booting.\n", rg_addr, rg_port);
+
+			rg_suspect = TRUE;
+			goto exit;
+		}
 
 		//rg_port = tss->tcur_rgprof->rg_port;
 
@@ -1615,6 +1629,20 @@ meta_seldeltab(TREE *command, TABINFO *tabinfo)
 		rg_suspect = TRUE;	
 		goto exit;
 	}
+	else if (tss->tcur_rgprof->rg_stat & RANGER_NEED_RECOVERY)
+	{
+		traceprint("Ranger server (%s:%d) is being in the recovery\n", rg_addr, rg_port);
+
+		rg_suspect = TRUE;
+		goto exit;
+	}
+	else if (tss->tcur_rgprof->rg_stat & RANGER_RESTART)
+	{
+		traceprint("Ranger server (%s:%d) is booting.\n", rg_addr, rg_port);
+
+		rg_suspect = TRUE;
+		goto exit;
+	}
 
 	//rg_port = tss->tcur_rgprof->rg_port;
 	
@@ -1921,6 +1949,20 @@ meta_selrangetab(TREE *command, TABINFO *tabinfo)
 		else if (tss->tcur_rgprof->rg_stat & RANGER_IS_SUSPECT)
 		{
 			traceprint("Ranger server (%s:%d) is SUSPECT\n", rg_addr, rg_port);
+			rg_suspect = TRUE;
+			goto exit;
+		}
+		else if (tss->tcur_rgprof->rg_stat & RANGER_NEED_RECOVERY)
+		{
+			traceprint("Ranger server (%s:%d) is being in the recovery\n", rg_addr, rg_port);
+
+			rg_suspect = TRUE;
+			goto exit;
+		}
+		else if (tss->tcur_rgprof->rg_stat & RANGER_RESTART)
+		{
+			traceprint("Ranger server (%s:%d) is booting.\n", rg_addr, rg_port);
+
 			rg_suspect = TRUE;
 			goto exit;
 		}
@@ -2647,6 +2689,8 @@ meta_collect_rg(char * req_buf)
 	start_heartbeat = TRUE;
 	rg_addr = (RANGE_PROF *)(rglist->data);
 
+	P_SPINLOCK(Master_infor->rglist_spinlock);
+	
 	for(i = 0; i < rglist->nextrno; i++)
 	{
 		if (   !strncasecmp(str, rg_addr[i].rg_addr, RANGE_ADDR_MAX_LEN)
@@ -2657,18 +2701,13 @@ meta_collect_rg(char * req_buf)
 			
 			if(rg_addr[i].rg_stat & RANGER_IS_OFFLINE)
 			{
-//				P_SPINLOCK(Master_infor->rglist_spinlock);
-
 				if(rg_addr[i].rg_stat & RANGER_NEED_RECOVERY)
 				{
 					rg_addr[i].rg_stat |= RANGER_RESTART;
 
-//					V_SPINLOCK(Master_infor->rglist_spinlock);
-
 					break;
 				}
 				
-//				V_SPINLOCK(Master_infor->rglist_spinlock);
 				rg_addr[i].rg_stat &= ~RANGER_IS_OFFLINE;
 				rg_addr[i].rg_stat |= RANGER_IS_ONLINE;
 
@@ -2680,6 +2719,12 @@ meta_collect_rg(char * req_buf)
 			{
 				if (HB_RANGER_IS_ON(&(Master_infor->heart_beat_data[i])))
 				{
+					/*
+					** If the ranger server restart while it just crash in the interval of 
+					** heartbeat,  it will hit a false issue here that the ranger has not
+					** been create the heartbeat with meta server. In this senario, user 
+					** will have to restart the ranger server again.
+					*/
 					traceprint("\n rg server with same ip and port is already on line \n");
 					start_heartbeat = FALSE;
 				}
@@ -2717,19 +2762,13 @@ meta_collect_rg(char * req_buf)
 		meta_heartbeat_setup(rg_addr + i);
 	}
 
-	if(rglist->stat & SVR_STAT_NON_AVAIL_RG)
-	{
-		
-		// meta_update("", -1);
-		rglist->stat &= ~SVR_STAT_NON_AVAIL_RG;
-		rginfo_save = TRUE;
-	}
-
 	if (rginfo_save)
 	{
 		meta_save_rginfo();
 	}
 
+	V_SPINLOCK(Master_infor->rglist_spinlock);
+	
 	return TRUE;
 }
 
@@ -3396,12 +3435,12 @@ void * meta_heartbeat(void *args)
 	MSG_DATA	*new_msg;
 	int		sleeptime;
 
-	//wait 10s to make sure rg server's network service is ready
+	/* Wait 10s to make sure rg server's network service is ready. */
 	sleep(10);
 
 	hb_recv_buf = Master_infor->heart_beat_data[rg_index].recv_data;
 
-	//need to be fixed. in this case(hb_conn<0), need to tell rg server register is failed
+	/* TODO: in this case(hb_conn<0), need to tell rg server register is failed. */
 	if((hb_conn = conn_open(rg_addr->rg_addr, rg_addr->rg_port)) < 0)
 	{
 		perror("error in create connection to rg server when meta server start heart beat: ");
@@ -3441,7 +3480,6 @@ void * meta_heartbeat(void *args)
 
 			if (rg_addr->rg_stat & RANGER_IS_SUSPECT)
 			{
-				//conn_destroy_resp(resp);
 				goto finish;
 			}
 
@@ -3457,7 +3495,6 @@ void * meta_heartbeat(void *args)
 
 			if (rg_addr->rg_stat & RANGER_IS_SUSPECT)
 			{
-                        	//conn_destroy_resp(resp);
                         	goto finish;
 			}
 
@@ -3475,11 +3512,11 @@ void * meta_heartbeat(void *args)
 			sleeptime = HEARTBEAT_INTERVAL;
 		}
 
-		//conn_destroy_resp(resp);
-		
-		//to be fix here
-		//maybe more info will be added in hearbeat msg,  such as overload monitor
-		//so need to add some process routine on resp here in the future
+		/*
+		** TODO: maybe more info will be added in hearbeat msg,  such as 
+		** overload monitor, so need to add some process routine on resp
+		** here in the future
+		*/
 	}
 
 finish:
@@ -3884,7 +3921,6 @@ meta_failover_rg(char * req_buf)
 	SVR_IDX_FILE	*rglist;
 	int		found;
 	RANGE_PROF	*rg_addr;
-	int		rginfo_save;
 
 	
 	if (strncasecmp(RPC_FAILOVER, req_buf, STRLEN(RPC_FAILOVER)) != 0)
@@ -3894,7 +3930,7 @@ meta_failover_rg(char * req_buf)
 	
 	
 	str = req_buf + RPC_MAGIC_MAX_LEN;
-	rginfo_save = FALSE;
+
 
 	rglist = &(Master_infor->rg_list);
 	found = FALSE;
@@ -3916,12 +3952,10 @@ meta_failover_rg(char * req_buf)
 				/* Before failover, ranger server must be the suspected. */
 				Assert(rg_addr[i].rg_stat & RANGER_IS_SUSPECT);
 
-				//update rg list
+				/* Change the range state to the next state. */
 				rg_addr[i].rg_stat &= ~(RANGER_IS_ONLINE | RANGER_IS_SUSPECT);
 				rg_addr[i].rg_stat = RANGER_IS_OFFLINE | RANGER_NEED_RECOVERY;
-				//(rglist->nextrno)++;//do not modify this!	
-				rginfo_save = TRUE;
-				
+		
 				break;
 			}
 			else
@@ -3934,23 +3968,6 @@ meta_failover_rg(char * req_buf)
 	if (!found)
 	{
 		traceprint("\n error, rg server to be off_line is not exist in rg list \n");
-	}
-
-	for(i = 0; i < rglist->nextrno; i++)
-	{
-		if(rg_addr[i].rg_stat & RANGER_IS_ONLINE)
-			break;
-	}
-	if(i == rglist->nextrno)
-	{
-		
-		Master_infor->rg_list.stat |= SVR_STAT_NON_AVAIL_RG;
-		rginfo_save = TRUE;			
-	}
-
-	if (rginfo_save)
-	{
-		meta_save_rginfo();
 	}
 
 	V_SPINLOCK(Master_infor->rglist_spinlock);
@@ -4491,11 +4508,11 @@ meta_checkranger(TREE *command)
 
 		if (HB_RANGER_IS_ON(&(Master_infor->heart_beat_data[i])))
 		{
-			traceprint("Ranger %d (%s:%d) has been online.\n", i, rg_prof[i].rg_addr, rg_prof[i].rg_port);
+			traceprint("Ranger %d (%s:%d) has created the heartbeat with metaserver.\n", i, rg_prof[i].rg_addr, rg_prof[i].rg_port);
 		}
 		else
 		{
-			traceprint("Ranger %d (%s:%d) has been offline.\n", i, rg_prof[i].rg_addr, rg_prof[i].rg_port);
+			traceprint("Ranger %d (%s:%d) has not created the heartbeat with metaserver.\n", i, rg_prof[i].rg_addr, rg_prof[i].rg_port);
 		}
 	}
 
