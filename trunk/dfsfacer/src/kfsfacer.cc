@@ -25,7 +25,7 @@ using namespace KFS;
 //char *serverHost = "127.0.0.1";
 //int port = 20000;
 
-#define TABLE_READDIR_MAX_NUM		32
+#define TABLE_READDIR_MAX_NUM		1024
 #define TABLE_NAME_READDIR_MAX_LEN	128
 typedef struct mt_entries
 {
@@ -282,6 +282,12 @@ kfs_readdir(char *tab_dir, char *ent, char *serverHost, int port)
     	}
 
 	mt_entries->ent_num = entries.size();
+
+	if (mt_entries->ent_num > TABLE_READDIR_MAX_NUM)
+	{
+		cout << "File number extend the container." << endl;
+		exit(-1);
+	}
 	
 	vector<string>::size_type i;
 	for (i = 0; i < entries.size(); i++)
@@ -439,7 +445,7 @@ main(int argc, char **argv)
 	{	
 		//kfs_exist(rglog, serverIp, serverPort);
 		
-		nwrite = kfs_append(fd, filebuf, 1000, serverIp, serverPort);
+		nwrite = kfs_append(fd, filebuf, 500, serverIp, serverPort);
 
 		//kfs_exist(rglog, serverIp, serverPort);
 
@@ -451,7 +457,7 @@ main(int argc, char **argv)
 //		nwrite = kfs_write(fd,  filebuf, 1000, serverIp, serverPort);
 		//      nread = kfs_read(fd, filebuf1, 1024);
 
-		if (nwrite != 1000)
+		if (nwrite != 500)
 		{
 		        cout << "kfs: write error " << endl;
 		}

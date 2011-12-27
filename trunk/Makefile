@@ -1,7 +1,7 @@
-CC		= gcc -g -Wall
-CPP		= g++ -g -Wall
-#CC		= gcc -Wall
-#CPP		= g++ -Wall
+#CC		= gcc -g -Wall
+#CPP		= g++ -g -Wall
+CC		= gcc -Wall
+CPP		= g++ -Wall
 AR		= ar cr
 CFLAGS		= -I./common/include/ -I./client/include -I./master/include -I./ranger/include -I./interface/include -I./service/include -lpthread
 KFSFLAG		= -I${MT_DFS_INCLUDE_PATH} -L${MT_DFS_CLI_LIB_PATH} -lkfsClient -lboost_regex
@@ -50,10 +50,10 @@ kfsfacer_a: kfsfacer.o
 	$(AR) kfsfacer.a kfsfacer.o 
         
 master: ${COMMON_SRC} ${MASTER_SRC}
-	$(CC) $(CFLAGS) $(KFSFLAG) ${COMMON_SRC} ${MASTER_SRC} -L. kfsfacer.a -lstdc++ -D DEBUG -D MEMMGR_TEST -D MAXTABLE_BENCH_TEST -D MT_KFS_BACKEND ${MT_KEY_VALUE} -o startMaster
+	$(CC) $(CFLAGS) $(KFSFLAG) ${COMMON_SRC} ${MASTER_SRC} -L. kfsfacer.a -lstdc++ -D MEMMGR_TEST -D MAXTABLE_BENCH_TEST -D MT_KFS_BACKEND ${MT_KEY_VALUE} -o startMaster
 
 ranger: ${COMMON_SRC} ${REGION_SRC}
-	$(CC) $(CFLAGS) $(KFSFLAG) ${COMMON_SRC} ${REGION_SRC} -L. kfsfacer.a -lstdc++ -D DEBUG -D MEMMGR_TEST -D MAXTABLE_BENCH_TEST -D MT_KFS_BACKEND -D MT_ASYNC_IO ${MT_KEY_VALUE} -o startRanger
+	$(CC) $(CFLAGS) $(KFSFLAG) ${COMMON_SRC} ${REGION_SRC} -L. kfsfacer.a -lstdc++ -D MEMMGR_TEST -D MAXTABLE_BENCH_TEST -D MT_KFS_BACKEND -D MT_ASYNC_IO ${MT_KEY_VALUE} -o startRanger
 
 client: ${COMMON_SRC} ${CLI_SRC}
 	$(CC) $(CFLAGS) $(KFSFLAG) ${COMMON_SRC} ${CLI_SRC} -L. kfsfacer.a -lstdc++ -D MEMMGR_TEST -D MAXTABLE_UNIT_TEST -D MT_KFS_BACKEND ${MT_KEY_VALUE} -o startClient

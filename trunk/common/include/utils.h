@@ -40,7 +40,7 @@ extern "c" {
 
 
 /* Following definition is for the method of read dir, it sames with the definition in the kfsfacer.cc. */
-#define TABLE_READDIR_MAX_NUM		32
+#define TABLE_READDIR_MAX_NUM		1024
 #define TABLE_NAME_READDIR_MAX_LEN	128
 typedef struct mt_entries
 {

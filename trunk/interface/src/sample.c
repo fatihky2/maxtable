@@ -49,8 +49,11 @@ int main(int argc, char *argv[])
 	MT_CLI_EXEC_CONTEX *exec_ctx = &t_exec_ctx;
 	memset(exec_ctx, 0, sizeof(MT_CLI_EXEC_CONTEX));
 
+	
 	if(mt_cli_open_connection("172.16.10.11", 1959, &connection))
 	{
+		gettimeofday(&tpStart, NULL);
+		
 		if (match(argv[1], "create"))
 		{
 			
@@ -66,7 +69,7 @@ int main(int argc, char *argv[])
 
 		if (match(argv[1], "insert"))
 		{
-			gettimeofday(&tpStart, NULL);
+			
 				
 			/* Insert 10000 data rows into table */
 			for(i = 1; i < 10000; i++)
@@ -92,16 +95,13 @@ int main(int argc, char *argv[])
 	                                continue;
 				}
 				
-				printf("Client 1: %s\n", cmd);
+				//printf("Client 1: %s\n", cmd);
 
 				mt_cli_close_execute(exec_ctx);
 				
 			}
 
-			gettimeofday(&tpEnd, NULL);
-			timecost = 0.0f;
-			timecost = tpEnd.tv_sec - tpStart.tv_sec + (float)(tpEnd.tv_usec-tpStart.tv_usec)/1000000;
-			printf("time cost: %f\n", timecost);
+			
 	
 		}
 
@@ -155,11 +155,11 @@ int main(int argc, char *argv[])
 	                                continue;
 				}
 				
-				printf("Client 1: %s\n", cmd);
+				//printf("Client 1: %s\n", cmd);
 
 				int	rlen;
 				char	*rp = mt_cli_get_nextrow(exec_ctx, &rlen);
-
+#if 0
 				if (rp)
 				{
 					int	collen = 0;
@@ -167,7 +167,7 @@ int main(int argc, char *argv[])
 					col = mt_cli_get_colvalue(exec_ctx, rp, 6, &collen);
 					printf("col 6: %s\n", col);
 				}
-				
+#endif				
 				mt_cli_close_execute(exec_ctx);
 			
 			}
@@ -229,6 +229,11 @@ int main(int argc, char *argv[])
 			mt_cli_close_execute(exec_ctx);
 			
 		}
+
+		gettimeofday(&tpEnd, NULL);
+		timecost = 0.0f;
+		timecost = tpEnd.tv_sec - tpStart.tv_sec + (float)(tpEnd.tv_usec-tpStart.tv_usec)/1000000;
+		printf("time cost: %f\n", timecost);
 		
 		mt_cli_close_connection(connection);
 	}

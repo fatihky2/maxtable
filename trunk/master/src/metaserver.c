@@ -1246,8 +1246,6 @@ meta_droptab(TREE *command)
 	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
 
-	Assert(STAT(tab_dir, &st) == 0);
-
 	if (STAT(tab_dir, &st) != 0)
 	{
 		traceprint("Table %s is not exist!\n", tab_name);
@@ -1292,8 +1290,6 @@ meta_droptab(TREE *command)
 
 	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
-
-	Assert(STAT(tab_dir, &st) == 0);
 
 	if (STAT(tab_dir, &st) != 0)
 	{
@@ -1429,8 +1425,6 @@ meta_removtab(TREE *command)
 	
 	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
-
-	Assert(STAT(tab_dir, &st) == 0);
 
 	if (STAT(tab_dir, &st) != 0)
 	{
@@ -2342,7 +2336,7 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 	char		tab_meta_dir[TABLE_NAME_MAX_LEN];
 	int		fd1;
 	int		rtn_stat;
-	TABLEHDR	tab_hdr;
+	TABLEHDR	*tab_hdr;
 	char		*keycol;
 	int		keycolen;
 	char		*resp;
@@ -2358,6 +2352,7 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 	int		sstab_rlen;
 	char		*rg_addr;
 	int		rpc_status;
+	int		tabidx;
 
 
 	Assert(command);
@@ -2377,48 +2372,28 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
 
-	Assert(STAT(tab_dir, &st) == 0);
-
-	if (STAT(tab_dir, &st) != 0)
+	if ((tabidx = meta_table_is_exist(tab_dir)) == -1)
 	{
 		traceprint("Table %s is not exist!\n", tab_name);
+
 		rpc_status |= RPC_TABLE_NOT_EXIST;
 		goto exit;
 	}
+
+
+	tab_hdr = &(Master_infor->meta_sysobj->sysobject[tabidx]);
 	
-	str1_to_str2(tab_meta_dir, '/', "sysobjects");
+	Assert(tab_hdr->tab_tablet > 0);
 
-
-	OPEN(fd1, tab_meta_dir, (O_RDWR));
-	
-	if (fd1 < 0)
-	{
-		goto exit;
-	}
-
-	status = READ(fd1, &tab_hdr, sizeof(TABLEHDR));	
-
-	Assert(status == sizeof(TABLEHDR));
-	Assert(tab_hdr.tab_tablet > 0);
-
-	if (status != sizeof(TABLEHDR))
-	{
-		traceprint("Table %s sysobjects hit error!\n", tab_name);
-		CLOSE(fd1);
-		ex_raise(EX_ANY);
-	}
-
-	if (tab_hdr.tab_tablet == 0)
+	if (tab_hdr->tab_tablet == 0)
 	{
 		traceprint("Table %s should be has one tablet at least\n", tab_name);
-		CLOSE(fd1);
 		ex_raise(EX_ANY);
 	}
 
-	if (tab_hdr.tab_stat & TAB_DROPPED)
+	if (tab_hdr->tab_stat & TAB_DROPPED)
 	{
 		traceprint("This table has been dropped.\n");
-		CLOSE(fd1);
 		goto exit;
 	}
 		
@@ -2428,7 +2403,7 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 	int colen;
 	char *colptr = par_get_colval_by_colid(command, 2, &colen);
 
-	sstab_map = sstab_map_get(tab_hdr.tab_id, tab_dir, &tab_sstabmap);
+	sstab_map = sstab_map_get(tab_hdr->tab_id, tab_dir, &tab_sstabmap);
 	
 	int sstab_id;
 
@@ -2466,7 +2441,7 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 	tablet_min_rlen = tablet_bld_row(sstab_rp, sstab_rlen, tab_name, 
 					 tab_name_len, sstab_id, res_sstab_id,
 					 sstab_name, sstab_name_len, keycol, 
-					 keycolen, tab_hdr.tab_key_coltype);
+					 keycolen, tab_hdr->tab_key_coltype);
 
 
 	
@@ -2475,7 +2450,7 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 	str1_to_str2(tab_meta_dir, '/', "tabletscheme");
 
 	
-	rp = tablet_schm_srch_row(&tab_hdr, tab_hdr.tab_id, TABLETSCHM_ID, 
+	rp = tablet_schm_srch_row(tab_hdr, tab_hdr->tab_id, TABLETSCHM_ID, 
 				  tab_meta_dir, keycol, keycolen);
 
 	name = row_locate_col(rp, TABLETSCHM_TABLETNAME_COLOFF_INROW, 
@@ -2499,7 +2474,7 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 	tabletid = *(int *)row_locate_col(rp, TABLETSCHM_TABLETID_COLOFF_INROW, 
 					  ROW_MINLEN_IN_TABLETSCHM, &namelen);
 
-	if (tablet_ins_row(&tab_hdr, tab_hdr.tab_id, tabletid, tab_meta_dir, 
+	if (tablet_ins_row(tab_hdr, tab_hdr->tab_id, tabletid, tab_meta_dir, 
 			   sstab_rp, ROW_MINLEN_IN_TABLET))
 	{
 		meta_save_rginfo();
@@ -2508,22 +2483,12 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 	MEMFREEHEAP(sstab_rp);
 
 	
-	(tab_hdr.tab_sstab)++;
+	(tab_hdr->tab_sstab)++;
 
-#ifdef MT_KFS_BACKEND
-	CLOSE(fd1);
 	
 	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
 
-	Assert(STAT(tab_dir, &st) == 0);
-
-	if (STAT(tab_dir, &st) != 0)
-	{
-		traceprint("Table %s is not exist!\n", tab_name);
-		goto exit;
-	}
-	
 	str1_to_str2(tab_meta_dir, '/', "sysobjects");
 
 
@@ -2533,11 +2498,8 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 	{
 		goto exit;
 	}
-#else
-	LSEEK(fd1, 0, SEEK_SET);
-#endif	
 	
-	status = WRITE(fd1, &tab_hdr, sizeof(TABLEHDR));
+	status = WRITE(fd1, tab_hdr, sizeof(TABLEHDR));
 
 	Assert(status == sizeof(TABLEHDR));
 
@@ -2550,9 +2512,6 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 	
 	CLOSE(fd1);
 
-	
-	
-	
 	sstab_map_put(-1, tss->ttab_sstabmap);
 
 	rtn_stat = TRUE;
