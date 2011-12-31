@@ -699,6 +699,7 @@ log_redo_insdel(char *insdellogfile, int scan_first)
 	
 	logfilebuf = (char *)malloc(SSTABLE_SIZE);
 	status = FALSE;
+	memset(logfilebuf, 0, SSTABLE_SIZE);
 	
 	OPEN(fd, insdellogfile, (O_RDWR));
 
@@ -707,7 +708,7 @@ log_redo_insdel(char *insdellogfile, int scan_first)
 		goto exit;
 	}
 	
-	READ(fd, logfilebuf, SSTABLE_SIZE);
+	offset = READ(fd, logfilebuf, SSTABLE_SIZE);
 
 	offset = log_get_last_logoffset((LOGREC *)logfilebuf);
 

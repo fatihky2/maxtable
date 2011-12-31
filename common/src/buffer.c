@@ -418,7 +418,6 @@ bufdestroy(BUF *bp)
 	
 	if (SSTABLE_STATE(bp) & BUF_DIRTY)
 	{
-		;
 		SSTABLE_STATE(bp) &= ~BUF_DIRTY;
 	}
 

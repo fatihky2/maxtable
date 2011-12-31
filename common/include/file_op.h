@@ -162,7 +162,7 @@ kfs_copy(char * filename_src,char * filename_dest,char * serverHost,int port);
 
 #define	STAT(dir, state)	stat((dir), (state))
 
-#define APPEND(fd, buf, buf_len, status)					\
+#define APPEND_d(fd, buf, buf_len, status)					\
 	do{									\
 		int offset = LSEEK(fd, 0, SEEK_END);				\
 										\
@@ -172,11 +172,15 @@ kfs_copy(char * filename_src,char * filename_dest,char * serverHost,int port);
 		}								\
 		else								\
 		{								\
-			*(int *)(buf + buf_len - sizeof(int) - sizeof(int)) = offset;\
-			*(int *)(buf + buf_len - sizeof(int)) = offset + buf_len;\
 			status = WRITE(fd, buf, buf_len);			\
 		}								\
 	}while(0)
+
+#define APPEND(fd, buf, buf_len, status)					\
+	do{									\
+		status = WRITE(fd, buf, buf_len);				\
+	}while(0)
+
 
 #endif
 
