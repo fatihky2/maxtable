@@ -358,7 +358,7 @@ void msg_process(char * (*handler_request)(char *req_buf, int fd))
 		}
 		
 		fd = req_msg->fd;
-		  
+
 		if(req_msg->n_size)
 		{
 			resp = handler_request(req->data, fd);

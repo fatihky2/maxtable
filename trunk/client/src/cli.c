@@ -470,6 +470,8 @@ conn_again:
 			meta_only = TRUE;
 		    	break;
 		    case REBALANCE:
+		    	meta_again = FALSE;
+			meta_only = TRUE;
 		    	break;
 		
 		    default:

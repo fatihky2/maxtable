@@ -39,6 +39,14 @@ typedef struct rebalance_data
 #define		RBD_FILE_SENDER		0x0001
 #define		RBD_FILE_RECVER		0x0002
 
+typedef struct rebalance_statistics
+{
+	int	rbs_tablet_av_num;
+	int	rbs_tablet_tot_num;
+	int	rbs_rg_num;
+	int	pad;
+}REBALANCE_STATISTICS;
+
 RANGE_PROF *
 rebalan_get_rg_prof_by_addr(char *rg_addr, int rg_port);
 
