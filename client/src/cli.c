@@ -465,11 +465,18 @@ conn_again:
 			meta_again = FALSE;
 			meta_only = TRUE;
 		    	break;
+			
 		    case MCCRANGER:
 		    	meta_again = FALSE;
 			meta_only = TRUE;
 		    	break;
+			
 		    case REBALANCE:
+		    	meta_again = FALSE;
+			meta_only = TRUE;
+		    	break;
+			
+		    case SHARDING:
 		    	meta_again = FALSE;
 			meta_only = TRUE;
 		    	break;
@@ -847,6 +854,11 @@ conn_again:
 		
 	    case REBALANCE:
 	    	meta_only = TRUE;
+	    	break;
+
+	    case SHARDING:
+	    	meta_again = FALSE;
+		meta_only = TRUE;
 	    	break;
 		
 	    default:

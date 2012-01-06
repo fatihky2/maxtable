@@ -99,7 +99,7 @@ char *
 tablet_schm_srch_row(TABLEHDR *tablehdr, int tabid, int sstabid, char *systab, char *key, int keylen);
 
 char *
-tablet_schm_get_1st_or_last_row(TABLEHDR *tablehdr, int tabid, int sstabid, char *systab, int firstrow);
+tablet_schm_get_row(TABLEHDR *tablehdr, int tabid, int sstabid, char *systab, int rowno);
 
 void
 tablet_namebyname(char *old_sstab, char *new_sstab);
@@ -116,7 +116,8 @@ tablet_upd_col(char *newrp, char *oldrp, int rlen, int colid, char *newcolval, i
 void
 tablet_schm_upd_col(char *newrp, char *oldrp, int colid, char *newcolval, int newvalen);
 
-
+int
+tablet_sharding(TABLEHDR *tablehdr, char *rg_addr, int rg_port, char *tabdir, int tabid, char *tabletname, int tabletid);
 
 
 #endif

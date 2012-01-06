@@ -24,6 +24,10 @@
 #include "row.h"
 #include "buffer.h"
 #include "block.h"
+#include "strings.h"
+#include "file_op.h"
+#include "utils.h"
+
 
 COLINFO *
 meta_get_colinfor(int colid, int totcol, COLINFO *colinfor)
@@ -59,4 +63,47 @@ meta_get_coldata(BUF *bp, int rowoffset, int coloffset)
 	
 	return row_locate_col((char *)(bp->bblk) + rowoffset, coloffset, minrowlen, &ign);
 }
+
+
+
+int
+meta_save_sysobj(char *tab_dir, char *tab_hdr)
+{
+	char	tab_meta_dir[TABLE_NAME_MAX_LEN];
+	int	fd;
+	int	status;
+	int	rtn_stat;
+
+
+	rtn_stat = TRUE;
+	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
+	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
+
+	str1_to_str2(tab_meta_dir, '/', "sysobjects");
+
+
+	OPEN(fd, tab_meta_dir, (O_RDWR));
+
+	if (fd < 0)
+	{
+		return FALSE;
+	}
+
+
+	status = WRITE(fd, tab_hdr, sizeof(TABLEHDR));
+
+	Assert(status == sizeof(TABLEHDR));
+
+	if (status != sizeof(TABLEHDR))
+	{
+		traceprint("Table %s sysobjects hit error!\n", tab_dir);
+		rtn_stat = FALSE;
+		
+	}
+
+	CLOSE(fd);
+
+	return rtn_stat;
+}
+
 
