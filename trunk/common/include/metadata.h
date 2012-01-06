@@ -32,6 +32,9 @@ meta_get_colinfor(int colid, int totcol, struct col_info *colinfor);
 char *
 meta_get_coldata(struct buf *bp, int rowoffset, int coloffset);
 
+int
+meta_save_sysobj(char *tab_dir, char *tab_hdr);
+
 
 
 #endif

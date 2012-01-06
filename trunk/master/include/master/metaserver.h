@@ -380,4 +380,8 @@ do {											\
 }while (0)
 
 
+int
+meta_save_sysobj(char *tab_dir, char *tab_hdr);
+
+
 #endif 

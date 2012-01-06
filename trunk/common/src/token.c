@@ -39,6 +39,7 @@ TOKENS  MT_Tokens[] =
 	{MCCTABLE,	"mcc checktable"},
 	{SELECTWHERE,	"selectwhere"},
 	{MCCRANGER,	"mcc checkranger"},
+	{SHARDING,	"sharding"},
 };
 
 int

@@ -284,6 +284,10 @@ parser_open(char *s_str)
 	    case REBALANCE:
 	    	rtn_stat = par_dropremovrebalanmcc_tab(s_str + s_idx, REBALANCE);
 	    	break;
+		
+	    case SHARDING:
+	    	rtn_stat = par_dropremovrebalanmcc_tab(s_str + s_idx, SHARDING);
+	    	break;
 
 	    case SELECTWHERE:
 	    	rtn_stat = par_selwhere_tab(s_str + s_idx, SELECTWHERE);

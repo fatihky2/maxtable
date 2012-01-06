@@ -130,7 +130,6 @@ static RANGE_PROF *
 meta_get_next_rg(int *j);
 
 
-
 void
 meta_bld_rglist(char *filepath)
 {
@@ -716,7 +715,6 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 	char		tab_dir[TABLE_NAME_MAX_LEN];
 	char		tab_meta_dir[TABLE_NAME_MAX_LEN];
 	char		tab_tabletschm_dir[TABLE_NAME_MAX_LEN];
-	int		fd1;
 	int		rtn_stat;
 	TABLEHDR	*tab_hdr;
 	char		*keycol;
@@ -734,7 +732,6 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 	char		*name;
 	char		*rp;
 	char		*tabletschm_rp;
-	int		status;
 	char		*rg_addr;
 	int		rg_port;
 	int		sstab_id;
@@ -1082,35 +1079,11 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 
 	if (tabhdr_update)
 	{
-		MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
-		MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
-
-		str1_to_str2(tab_meta_dir, '/', "sysobjects");
-
-
-		OPEN(fd1, tab_meta_dir, (O_RDWR));
-		
-		if (fd1 < 0)
+		if (!meta_save_sysobj(tab_dir, (char *)tab_hdr))
 		{
 			goto exit;
 		}
-
-		
-		status = WRITE(fd1, tab_hdr, sizeof(TABLEHDR));
-		
-		Assert(status == sizeof(TABLEHDR));
-
-		if (status != sizeof(TABLEHDR))
-		{
-			traceprint("Table %s sysobjects hit error!\n", tab_name);
-			CLOSE(fd1);
-			ex_raise(EX_ANY);
-		}
-		
-		CLOSE(fd1);	
-	}
-	
-
+	}	
 	
 	col_buf_len = sizeof(INSMETA) + sizeof(TABLEHDR) 
 				+ tab_hdr->tab_col * (sizeof(COLINFO));
@@ -1898,15 +1871,15 @@ meta_selrangetab(TREE *command, TABINFO *tabinfo)
 			
 			if (k == 0)
 			{
-				rp = tablet_schm_get_1st_or_last_row(tab_hdr, 
+				rp = tablet_schm_get_row(tab_hdr, 
 						tab_hdr->tab_id, TABLETSCHM_ID,
-						tab_meta_dir, TRUE);
+						tab_meta_dir, 0);
 			}
 			else
 			{
-				rp = tablet_schm_get_1st_or_last_row(tab_hdr, 
+				rp = tablet_schm_get_row(tab_hdr, 
 						tab_hdr->tab_id, TABLETSCHM_ID,
-						tab_meta_dir, FALSE);
+						tab_meta_dir, -1);
 			}
 		}
 		else
@@ -2239,16 +2212,16 @@ meta_selwheretab(TREE *command, TABINFO *tabinfo)
 			if (k == 0)
 			{
 				
-				rp = tablet_schm_get_1st_or_last_row(tab_hdr,
+				rp = tablet_schm_get_row(tab_hdr,
 						tab_hdr->tab_id, TABLETSCHM_ID, 
-						tab_meta_dir, TRUE);
+						tab_meta_dir, 0);
 			}
 			else
 			{
 				
-				rp = tablet_schm_get_1st_or_last_row(tab_hdr, 
+				rp = tablet_schm_get_row(tab_hdr, 
 						tab_hdr->tab_id, TABLETSCHM_ID, 
-						tab_meta_dir, FALSE);
+						tab_meta_dir, -1);
 			}
 		}
 		else
@@ -2340,7 +2313,6 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 	int		tab_name_len;
 	char		tab_dir[TABLE_NAME_MAX_LEN];
 	char		tab_meta_dir[TABLE_NAME_MAX_LEN];
-	int		fd1;
 	int		rtn_stat;
 	TABLEHDR	*tab_hdr;
 	char		*keycol;
@@ -2350,7 +2322,6 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 	int		namelen;
 	char		*name;
 	char		*rp;
-	int		status;
 	char		*sstab_name;
 	int		sstab_name_len;
 	
@@ -2491,32 +2462,10 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 	
 	(tab_hdr->tab_sstab)++;
 
-	
-	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
-	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
-
-	str1_to_str2(tab_meta_dir, '/', "sysobjects");
-
-
-	OPEN(fd1, tab_meta_dir, (O_RDWR));
-	
-	if (fd1 < 0)
+	if (!meta_save_sysobj(tab_dir, (char *)tab_hdr))
 	{
 		goto exit;
 	}
-	
-	status = WRITE(fd1, tab_hdr, sizeof(TABLEHDR));
-
-	Assert(status == sizeof(TABLEHDR));
-
-	if (status != sizeof(TABLEHDR))
-	{
-		traceprint("Table %s sysobjects hit error!\n", tab_name);
-		CLOSE(fd1);
-		ex_raise(EX_ANY);
-	}
-	
-	CLOSE(fd1);
 
 	sstab_map_put(-1, tss->ttab_sstabmap);
 
@@ -3094,6 +3043,119 @@ exit:
 }
 
 
+char *
+meta_sharding(TREE *command)
+{
+	char		*tab_name;
+	int		tab_name_len;
+	char		tab_dir[256];
+	char 		*resp;
+	char		tab_tabletschm_dir[TABLE_NAME_MAX_LEN];
+	int		rtn_stat;
+	int		rpc_status;
+	int		tabidx;
+	int		tablet_is_sharding;
+
+
+	Assert(command);
+	
+	rtn_stat = FALSE;
+	tablet_is_sharding = FALSE;
+	resp = NULL;
+	rpc_status = 0;
+	tab_name = command->sym.command.tabname;
+	tab_name_len = command->sym.command.tabname_len;
+
+	MEMSET(tab_dir, 256);
+	MEMCPY(tab_dir, MT_META_TABLE, STRLEN(MT_META_TABLE));
+	str1_to_str2(tab_dir, '/', tab_name);
+
+	if ((tabidx = meta_table_is_exist(tab_dir)) == -1)
+	{
+		traceprint("Table %s is not exist!\n", tab_name);
+
+		rpc_status |= RPC_TABLE_NOT_EXIST;
+		goto exit;
+	}	
+
+	TABLEHDR		*tab_hdr;
+	
+	tab_hdr = &(Master_infor->meta_sysobj->sysobject[tabidx]);
+	
+	MEMSET(tab_tabletschm_dir, TABLE_NAME_MAX_LEN);
+	MEMCPY(tab_tabletschm_dir, tab_dir, STRLEN(tab_dir));
+
+	str1_to_str2(tab_tabletschm_dir, '/', "tabletscheme");
+
+	char 		*rp;
+	char		*rg_addr;
+	int		ign;
+	int 		rg_port;	
+	char 		* tabletname;
+	int		tabletid;
+	int		rowno;
+
+	rowno = 0;
+
+	while(TRUE)
+	{	
+		rp = tablet_schm_get_row(tab_hdr, tab_hdr->tab_id, 
+					TABLETSCHM_ID,  tab_tabletschm_dir,
+					rowno);	
+
+		if (rp == NULL)
+		{
+			break;
+		}
+		
+		rg_addr = row_locate_col(rp, TABLETSCHM_RGADDR_COLOFF_INROW,
+					ROW_MINLEN_IN_TABLETSCHM, &ign);
+		
+		rg_port = *(int *)row_locate_col(rp, 
+					TABLETSCHM_RGPORT_COLOFF_INROW,
+					ROW_MINLEN_IN_TABLETSCHM, &ign);
+
+		tabletname = row_locate_col(rp, 
+					TABLETSCHM_TABLETNAME_COLOFF_INROW,
+					ROW_MINLEN_IN_TABLETSCHM, &ign);
+
+		tabletid = *(int *)row_locate_col(rp, 
+					TABLETSCHM_TABLETID_COLOFF_INROW, 
+					ROW_MINLEN_IN_TABLETSCHM, &ign);
+
+		tablet_is_sharding = tablet_sharding(tab_hdr, rg_addr, rg_port,
+					tab_dir, tab_hdr->tab_id, tabletname, 
+					tabletid);
+
+		if (tablet_is_sharding)
+		{
+			rowno += 2;
+		}
+		else
+		{
+			rowno++;
+		}
+	}
+	
+	rtn_stat = TRUE;
+	
+exit:
+
+	if (rtn_stat)
+	{
+		rpc_status |= RPC_SUCCESS;
+		resp = conn_build_resp_byte(rpc_status, 0, NULL);
+	}
+	else
+	{
+		rpc_status |= RPC_FAIL;
+		resp = conn_build_resp_byte(rpc_status, 0, NULL);
+	}
+	
+	return resp;
+
+}
+
 static int
 meta_rg_statistics(char *tab_dir, int tab_id, REBALANCE_STATISTICS *rbs)
 {
@@ -3427,6 +3489,10 @@ parse_again:
 	    case REBALANCE:
 	    	resp = meta_rebalancer(command);
 	    	break;
+		
+	    case SHARDING:
+	    	resp = meta_sharding(command);
+		break;
 
 	    default:
 	    	break;
@@ -4826,7 +4892,6 @@ meta_load_sysmeta()
 
 	return TRUE;
 }
-
 
 int main(int argc, char *argv[])
 {

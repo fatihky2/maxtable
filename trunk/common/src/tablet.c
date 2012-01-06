@@ -32,6 +32,7 @@
 #include "session.h"
 #include "tabinfo.h"
 #include "rebalancer.h"
+#include "metadata.h"
 
 
 extern	TSS	*Tss;
@@ -669,13 +670,16 @@ tablet_schm_srch_row(TABLEHDR *tablehdr, int tabid, int sstabid,
 }
 
 char *
-tablet_schm_get_1st_or_last_row(TABLEHDR *tablehdr, int tabid, int sstabid, char *systab, int firstrow)
+tablet_schm_get_row(TABLEHDR *tablehdr, int tabid, int sstabid, char *systab, int rowno)
 {
 	TABINFO		*tabinfo;
 	int		minrowlen;
 	BUF		*bp;
 	int		offset;
 	BLK_ROWINFO	blk_rowinfo;
+	int		found;
+	int 		*offtab;
+	
 	
 	tabinfo = MEMALLOCHEAP(sizeof(TABINFO));
 	MEMSET(tabinfo, sizeof(TABINFO));
@@ -702,12 +706,18 @@ tablet_schm_get_1st_or_last_row(TABLEHDR *tablehdr, int tabid, int sstabid, char
 	
 	bp = blk_getsstable(tabinfo);
 	
-	if (firstrow)
+	found = FALSE;
+
+	if (bp->bblk->bnextrno == 0)
 	{
-		offset = BLKHEADERSIZE;
+		goto finish;
 	}
-	else
+
+	if (rowno == -1)
 	{
+		found = TRUE;
+		
+		/* Get the last row. */
 		BUF	*lastbp;
 		while(bp->bblk->bnextblkno != -1)
 		{	
@@ -721,11 +731,45 @@ tablet_schm_get_1st_or_last_row(TABLEHDR *tablehdr, int tabid, int sstabid, char
 			}
 		}		
 
-		int *offtab = ROW_OFFSET_PTR(bp->bblk);
+		offtab = ROW_OFFSET_PTR(bp->bblk);
 		
 		offset = offtab[-(bp->bblk->bnextrno - 1)];		
 	}
-	
+	else
+	{
+		offset = BLKHEADERSIZE;
+
+		if (rowno == 0)
+		{
+			found = TRUE;
+		}
+
+		while(rowno > 0)
+		{	
+			if (bp->bblk->bfreeoff == BLKHEADERSIZE)
+			{
+				found = FALSE;
+				break;
+			}	
+			
+			if (rowno < bp->bblk->bnextrno)
+			{
+				offtab = ROW_OFFSET_PTR(bp->bblk);
+				offset = offtab[-(rowno)];
+				found = TRUE;
+				break;
+			}
+
+			rowno -= bp->bblk->bnextrno;
+
+			if (bp->bblk->bnextblkno != -1)
+			{
+				bp++;				
+			}
+		}			
+	}
+
+finish:	
 	bufunkeep(bp->bsstab);
 	session_close(tabinfo);
 	
@@ -734,7 +778,7 @@ tablet_schm_get_1st_or_last_row(TABLEHDR *tablehdr, int tabid, int sstabid, char
 	
 	tabinfo_pop();
 
-	return ((char *)(bp->bblk) + offset);
+	return found ? ((char *)(bp->bblk) + offset) : NULL;
 }
 
 
@@ -939,5 +983,171 @@ tablet_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 	
 }
 
+
+int
+tablet_sharding(TABLEHDR *tablehdr, char *rg_addr, int rg_port,
+			char *tabdir, int tabid, char *tabletname, int tabletid)
+{
+	BUF		*destbuf;
+	TABINFO		*srctabinfo;
+	BLOCK		*nextblk;
+	BLOCK		*blk;
+	char		*tablet_key;
+	int		tablet_keylen;
+	int		table_nameidx;
+	char		tab_meta_dir[TABLE_NAME_MAX_LEN];
+	BLK_ROWINFO	blk_rowinfo;
+	char		tab_tabletschm_dir[TABLE_NAME_MAX_LEN];
+	char		*tablet_schm_bp;
+	int		minrowlen;
+	BUF		*bp;
+	int		i;
+	int		rtn_stat;
+
+
+	MEMSET(tab_tabletschm_dir, TABLE_NAME_MAX_LEN);
+	MEMCPY(tab_tabletschm_dir, tabdir, STRLEN(tabdir));
+	
+	str1_to_str2(tab_tabletschm_dir, '/', tabletname);
+	
+
+	srctabinfo = MEMALLOCHEAP(sizeof(TABINFO));
+	MEMSET(srctabinfo, sizeof(TABINFO));
+
+	srctabinfo->t_sinfo = (SINFO *)MEMALLOCHEAP(sizeof(SINFO));
+	MEMSET(srctabinfo->t_sinfo, sizeof(SINFO));
+
+	srctabinfo->t_rowinfo = &blk_rowinfo;
+	MEMSET(srctabinfo->t_rowinfo, sizeof(BLK_ROWINFO));
+
+	srctabinfo->t_dold = srctabinfo->t_dnew = (BUF *) srctabinfo;
+
+	srctabinfo->t_split_tabletid = tablehdr->tab_tablet;
+
+	tabinfo_push(srctabinfo);
+
+	minrowlen = ROW_MINLEN_IN_TABLET;
+
+	TABINFO_INIT(srctabinfo, tab_tabletschm_dir, srctabinfo->t_sinfo,
+			minrowlen, TAB_SCHM_SRCH, tabid, tabletid);
+	SRCH_INFO_INIT(srctabinfo->t_sinfo, NULL, 0, TABLET_KEY_COLID_INROW, 
+		       VARCHAR, -1);
+
+	bp = blk_getsstable(srctabinfo);
+
+	tablet_schm_bp = (char *)(bp->bsstab->bblk);
+		
+	
+	for(i = 0; i < BLK_CNT_IN_SSTABLE; i ++)
+	{
+		blk = (BLOCK *)(tablet_schm_bp + i * BLOCKSIZE);
+
+		if (blk->bnextrno == 0)
+		{
+			break;
+		}
+	}
+
+
+	if (i > 1)
+	{
+		nextblk = (BLOCK *)(tablet_schm_bp + (i / 2) * BLOCKSIZE);
+		rtn_stat = TRUE;
+	}
+	else
+	{
+		/* Do nothing. */
+		bufunkeep(bp->bsstab);
+
+		rtn_stat = FALSE;
+		goto finish;
+	}
+	
+
+	/* srctabinfo should be initialization. */
+	srctabinfo->t_stat |= TAB_TABLET_SPLIT;
+
+	if ((destbuf = bufsearch(srctabinfo)) == NULL)
+	{
+		destbuf = bufgrab(srctabinfo);
+		bufhash(destbuf);
+	}
+	
+	blk = destbuf->bblk;
+		
+	blk_init(blk);
+
+	while((nextblk->bblkno != -1) && (nextblk->bnextrno > 0))
+	{
+		BLOCK_MOVE(blk,nextblk);
+		
+		if (nextblk->bnextblkno == -1)
+		{
+			break;
+		}
+		
+		nextblk = (BLOCK *) ((char *)nextblk + BLOCKSIZE);
+		blk = (BLOCK *) ((char *)blk + BLOCKSIZE);
+	}
+
+
+	MEMSET(destbuf->bsstab_name, 256);
+
+	tablet_namebyid(srctabinfo, destbuf->bsstab_name);
+
+	srctabinfo->t_stat &= ~TAB_TABLET_SPLIT;
+
+	table_nameidx = str01str(srctabinfo->t_sstab_name, "tablet", 
+				 STRLEN(srctabinfo->t_sstab_name));
+
+	/* Flush the new tablet into disk. */
+	bufpredirty(destbuf);
+	bufdirty(destbuf);
+
+	tablet_key = row_locate_col(destbuf->bblk->bdata, -1, destbuf->bblk->bminlen,
+				    &tablet_keylen);
+	
+	int rlen = ROW_MINLEN_IN_TABLETSCHM + tablet_keylen + sizeof(int) + sizeof(int);
+	char *temprp = (char *)MEMALLOCHEAP(rlen);
+
+	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
+	MEMCPY(tab_meta_dir, srctabinfo->t_sstab_name, table_nameidx);
+	str1_to_str2(tab_meta_dir, '/', "tabletscheme");
+
+	table_nameidx = str01str(destbuf->bsstab_name, "tablet", 
+					STRLEN(destbuf->bsstab_name));
+	tablet_schm_bld_row(temprp, rlen, srctabinfo->t_split_tabletid,
+			    destbuf->bsstab_name + table_nameidx + 1, 
+			    rg_addr, tablet_key, tablet_keylen, 
+			    rg_port);
+
+	/* Propagate the split to the tabletscheme. */
+	tablet_schm_ins_row(srctabinfo->t_tabid, TABLETSCHM_ID, tab_meta_dir, temprp, 
+			    INVALID_TABLETID);
+
+	
+	(tablehdr->tab_tablet)++;
+
+	/* TODO: rollback update if hit failure. */
+	meta_save_sysobj(tabdir,(char *)tablehdr);
+	
+	MEMFREEHEAP(temprp);
+
+	/* Flush the splited tablet into disk. */
+	bufpredirty(bp->bsstab);
+	bufdirty(bp->bsstab);
+
+
+finish:		
+	session_close(srctabinfo);
+
+	MEMFREEHEAP(srctabinfo->t_sinfo);
+	MEMFREEHEAP(srctabinfo);
+
+	tabinfo_pop();
+
+	return rtn_stat;
+	
+}
 
 

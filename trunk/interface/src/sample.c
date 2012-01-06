@@ -72,8 +72,9 @@ int main(int argc, char *argv[])
 			
 				
 			/* Insert 10000 data rows into table */
-			for(i = 1; i < 10000; i++)
-			{			
+			for(i = 1; i < 200; i++)
+			{
+#if 0
 				char	*c = "cccccccccccccccccccccccccccccccccccccccccccccccccccccc";
 				char	*d = "dddddddddddddddddddddddddddddddddddddddddddddddddddddd";
 				char	*e = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
@@ -82,7 +83,16 @@ int main(int argc, char *argv[])
 				char	*g = "gggggggggggggggggggggggggggggggggggggggggggggggggggggg";
 
 				char	*h = "hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh";
+#endif
+				char	*c = "cccccc";
+				char	*d = "dddddd";
+				char	*e = "eeeeee";
 
+				char 	*f = "ffffff";
+				char	*g = "gggggg";
+
+				char	*h = "hhhhhh";
+				
 				sprintf(cmd, "insert into gu(aaaa%d, bbbb%d, %d, %s%d, %s%d, %s%d, %s%d, %s%d, %s%d)", i,i,i,c,i,d, i,e, i,f,i,g,i,h,i);
 
 				//sprintf(cmd, "insert into gu(aaaa%d, bbbb%d)", i,i);
