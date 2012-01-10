@@ -1,3 +1,23 @@
+/*
+** interface.h 2011-07-05 xueyingfei
+**
+** Copyright flying/xueyingfei.
+**
+** This file is part of MaxTable.
+**
+** Licensed under the Apache License, Version 2.0
+** (the "License"); you may not use this file except in compliance with
+** the License. You may obtain a copy of the License at
+**
+** http://www.apache.org/licenses/LICENSE-2.0
+**
+** Unless required by applicable law or agreed to in writing, software
+** distributed under the License is distributed on an "AS IS" BASIS,
+** WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+** implied. See the License for the specific language governing
+** permissions and limitations under the License.
+*/
+
 #ifndef	__INTERFACE_H
 #define __INTERFACE_H
 
@@ -19,33 +39,45 @@
 
 #define SUC_RET "client operation finished successfully"
 
+/* The connection context of ranger server. */
 typedef struct _rg_conn
 {
-	char rg_server_ip[24];
-	int rg_server_port;
-	int status;
-	int connection_fd;
+	char	rg_server_ip[32];	/* Ranger server address. */
+	int	rg_server_port;		/* Port. */
+	int	status;			/* Status for the ranger server. */
+	int	connection_fd;		/* Socket id. */
+	int	pad;
 }rg_conn;
 
+/* The connection context of master server. */
 typedef struct _conn
 {
-	char meta_server_ip[24];
-	int meta_server_port;
-	int connection_fd;
-	int status;
-	rg_conn * rg_list[MAX_RG_NUM];
-	int rg_list_len;
+	char	meta_server_ip[32];	/* Meta server address. */
+	int	meta_server_port;	/* Port. */
+	int	connection_fd;		/* Socket id. */
+	int	status;			/* Status for the meta server. */
+	rg_conn *rg_list[MAX_RG_NUM];	/* Rangers connected by the client. */
+	int	rg_list_len;		/* The # of rangers connected by the 
+					** client.
+					*/
 	
 }conn;
 
+/* The context of range query. */
 typedef struct range_query_contex
 {
-	int	status;
-	int	first_rowpos;
-	int	end_rowpos;
-	int	cur_rowpos;
-	int	rowminlen;
-	char	data[BLOCKSIZE];
+	int	status;			/* Status for the range query. */
+	int	first_rowpos;		/* The index of first row in the current 
+					** query context. 
+					*/
+	int	end_rowpos;		/* The index of last row in the current 
+					** query context. 
+					*/
+	int	cur_rowpos;		/* The index of current row in the 
+					** current  query context. 
+					*/
+	int	rowminlen;		/* The min-length of row. */
+	char	data[BLOCKSIZE];	/* The data context from ranger server. */
 }RANGE_QUERYCTX;
 
 typedef struct mt_cli_context
@@ -54,28 +86,39 @@ typedef struct mt_cli_context
 	SPINLOCK mutex;
 }MT_CLI_CONTEXT;
 
-#define	DATA_CONT	0x0001	
-#define DATA_DONE	0x0002
-#define DATA_EMPTY	0x0004
+#define	DATA_CONT	0x0001		/* There're still some data in the ranger
+					** and The ranger is waitting for the 
+					** response of data sending.
+					*/
+#define DATA_DONE	0x0002		/* No data need to be read from the 
+					** ranger.
+					*/
+#define DATA_EMPTY	0x0004		/* There're no data in the current query
+					** context. 
+					*/
 
 
 /* Following definition is for the return value of mt_cli_exec_crtseldel(). */
-#define	CLI_FAIL		0x0001
-#define	CLI_SUCCESS		0x0002
-#define	CLI_RPC_FAIL		0x0004
-#define	CLI_TABLE_NOT_EXIST	0x0008
-
+#define	CLI_FAIL		0x0001	/* The operation is failed. */
+#define	CLI_SUCCESS		0x0002	/* Success. */
+#define	CLI_RPC_FAIL		0x0004	/* Hit the RPC issue, such as error or 
+					** no response.
+					*/
+#define	CLI_TABLE_NOT_EXIST	0x0008	/* Table is not exist, this flag can 
+					** warnning user to create the table.
+					*/
+/* The contex of user query execution. */
 typedef struct mt_cli_exec_contex
 {
-	int	status;
-	int	querytype;
-	int	first_rowpos;
-	int	end_rowpos;
-	int	cur_rowpos;
-	int	rowminlen;
+	int	status;		/* Status for the query execution. */
+	int	querytype;	/* Query type. */
+	int	first_rowpos;	/* For the SELECT query. */
+	int	end_rowpos;	/* For the SELECT query. */
+	int	cur_rowpos;	/* For the SELECT query. */
+	int	rowminlen;	/* The min-length of row. */
 	int	socketid;	/* connection for the bigport. */
-	char	*rg_resp;
-	char	*meta_resp;
+	char	*rg_resp;	/* The response of ranger that contains the data. */
+	char	*meta_resp;	/* The response of meta that contains the meta data. */
 }MT_CLI_EXEC_CONTEX;
 
 #define	CLICTX_DATA_BUF_HAS_DATA	0x0001		/* has data */
