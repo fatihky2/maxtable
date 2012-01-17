@@ -23,18 +23,18 @@ class connection
 public:
 	explicit connection(const string &ip, int port)
 	{
-		mt_cli_context_crt();
-		if(!mt_cli_connection(ip.c_str(), port, &clientConn))
+		mt_cli_crt_context();
+		if(!mt_cli_open_connection(ip.c_str(), port, &clientConn))
 		{
 			cout << "error when connecting to maxtable." << endl;
-			mt_cli_context_destroy();
+			mt_cli_destroy_context();
 		}
 	}
 
 	~connection()
 	{
-		mt_cli_exit(clientConn);
-		mt_cli_context_destroy();
+		mt_cli_close_connection(clientConn);
+		mt_cli_destroy_context();
 	}
 
 	conn * getConnection()
@@ -117,6 +117,7 @@ public:
 	#define rowSize 1024
 	bool selectRow(const string &key, const T &out) 
 	{
+		int	rlen;
 		ostringstream oss;
 		oss << "select " << tableName << "(" << key << ")";
 		string selectStr = oss.str();
@@ -131,7 +132,7 @@ public:
 			cout << "error when select table: " << resp << endl;
 			return false;
 		}
-		resp = mt_cli_get_row(&exec_ctx, 0);//0 is right?...
+		resp = mt_cli_get_nextrow(&exec_ctx, &rlen);//0 is right?...
 		//string respStr(resp);
 		out.getSelectValue(&exec_ctx, resp);
 		mt_cli_close_execute(&exec_ctx); 
