@@ -1419,6 +1419,7 @@ retry:
 		{
 			exec_ctx->cur_rowpos++;
 			rp = ((RPCRESP *)(exec_ctx->rg_resp))->result;
+			*rlen = ((RPCRESP *)(exec_ctx->rg_resp))->result_length;
 		}
 
 		break;
@@ -1530,6 +1531,7 @@ mt_cli_get_rowcnt(MT_CLI_EXEC_CONTEX *exec_ctx)
 **	None.
 **
 */
+
 char *
 mt_cli_get_colvalue(MT_CLI_EXEC_CONTEX *exec_ctx, char *rowbuf, int col_idx, 
 			int *collen)
@@ -1565,9 +1567,50 @@ mt_cli_get_colvalue(MT_CLI_EXEC_CONTEX *exec_ctx, char *rowbuf, int col_idx,
 	meta_buf += sizeof(TABLEHDR);
 
 	COLINFO *col_info = (COLINFO *)meta_buf;
-
-	return row_locate_col(rowbuf, (col_info + col_idx)->col_offset,
+	
+	*collen = (col_info + col_idx)->col_len;
+	char *ret_rp =  row_locate_col(rowbuf, (col_info + col_idx)->col_offset,
 				tab_hdr->tab_row_minlen, collen);
+
+	return ret_rp;
+}
+
+int
+mt_cli_coltype_fixed(MT_CLI_EXEC_CONTEX *exec_ctx, int col_idx)
+{
+	char		*meta_buf;	/* Ptr to the meta data information. */
+
+
+	/* Meta data information. */
+	meta_buf = ((RPCRESP *)(exec_ctx->meta_resp))->result;
+
+	if (exec_ctx->querytype == SELECTRANGE)
+	{			
+		meta_buf += sizeof(SELRANGE);
+	}
+	else if (exec_ctx->querytype == SELECTWHERE)
+	{
+		meta_buf += (sizeof(SELWHERE) + sizeof(SVR_IDX_FILE));
+	}
+	else
+	{
+		meta_buf += sizeof(INSMETA);
+	}	
+
+	TABLEHDR *tab_hdr = (TABLEHDR *)meta_buf;
+
+	/* Validation. */
+	if ((col_idx < 0) || ((col_idx + 1) > tab_hdr->tab_col))
+	{
+		traceprint("Can't find the column.\n");
+		return FALSE;
+	}
+	
+	meta_buf += sizeof(TABLEHDR);
+
+	COLINFO *col_info = (COLINFO *)meta_buf;
+
+	return TYPE_IS_FIXED((col_info + col_idx)->col_type);
 }
 
 

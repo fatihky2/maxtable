@@ -3,7 +3,7 @@ CPP		= g++ -g -Wall
 #CC		= gcc -Wall
 #CPP		= g++ -Wall
 AR		= ar cr
-CFLAGS		= -I./common/include/ -I./client/include -I./master/include -I./ranger/include -I./interface/include -I./service/include -lpthread
+CFLAGS		= -I./common/include/ -I./client/include -I./master/include -I./ranger/include -I./interface/include -I./service/include -lpthread -I/usr/lib/jvm/java-6-openjdk/include/
 KFSFLAG		= -I${MT_DFS_INCLUDE_PATH} -L${MT_DFS_CLI_LIB_PATH} -lkfsClient -lboost_regex
 COMMON_SRC	= common/src/*.c
 REGION_SRC	= ranger/src/*.c
@@ -19,6 +19,10 @@ LIB_OBJS_C	= $(patsubst %.c,%.o,$(LIB_SRCS_C))
 LIB_SRCS_CPP	= $(wildcard ${SERVICE_SRC})
 LIB_OBJS_CPP	= $(patsubst %.cpp,%.o,$(LIB_SRCS_CPP))
 
+JNI_DIRS        = interface/src/*.c common/src/*.c interface/jni/*.c
+JNI_SRCS	= $(wildcard ${JNI_DIRS})
+JNI_OBJS	= $(patsubst %.c,%.o,$(JNI_SRCS))
+
 ifeq (${MT_SCHEME}, KEY_VALUE)
 MT_KEY_VALUE	= -D MT_KEY_VALUE
 else
@@ -27,11 +31,11 @@ endif
 
 ifeq (${MT_BACKEND}, KFS)
 
-all: kfsfacer_o kfsfacer_a client master ranger kfsmain memTest sample client_lib clients_lib
+all: kfsfacer_o kfsfacer_a client master ranger kfsmain memTest sample client_lib clients_lib jni_lib java_api
 
 else ifeq (${MT_BACKEND}, LOCAL)
 
-all: client master ranger memTest sample client_lib clients_lib
+all: client master ranger memTest sample client_lib clients_lib jni_lib java_api
 
 endif
 
@@ -101,6 +105,14 @@ client_lib: ${LIB_OBJS_C}
 clients_lib: ${LIB_OBJS_C}
 	$(AR) libmtcli.a ${LIB_OBJS_C}
 
+jni_lib: ${JNI_OBJS}
+	$(CC) -shared -fPIC -o libmt_access.so ${JNI_OBJS}
+
+java_api:
+	ant -f build.xml jar
+	ant -f build.xml examples
+
 clean: 
-	rm -rf startClient startMaster startRanger imql kfsmain memTest benchmark sample libmtService.a libmtcli.a ${LIB_OBJS_C} ${LIB_OBJS_CPP} libmtClient.so kfsfacer.o kfsfacer.a
+	rm -rf startClient startMaster startRanger imql kfsmain memTest benchmark sample libmtService.a libmtcli.a ${LIB_OBJS_C} ${LIB_OBJS_CPP} ${JNI_OBJS} libmtClient.so kfsfacer.o kfsfacer.a libmt_access.so
 	rm -rf ./table ./index ./rg_server ./rg_table ./meta_table ./rgbackup ./rglog
+	ant -f build.xml clean
