@@ -119,6 +119,10 @@ typedef struct sstab_scancontext
 #define	SSTABSCAN_BLK_IS_FULL	0x0002	/* The block hit the issue of overload. */
 
 
+/* Defines for the function rg_get_sstab_tablet(). */
+#define	RG_TABLET_1ST_SSTAB	0
+#define	RG_TABLET_LAST_SSTAB	1
+#define	RG_TABLET_ANYONE_SSTAB	2
 
 typedef struct tablet_scancontext
 {
@@ -185,6 +189,16 @@ rg_sstable_is_exist(char *sstabname, int tabidx);
 
 static int
 rg_sstable_regist(char *sstabname, int tabidx);
+
+static int
+rg__selrangetab(TABINFO *tabinfo, char *sstab_left, char *sstab_right, int connfd,
+		char *key_left, int keylen_left, char *key_right, int keylen_right,
+		int left_expand, int right_expand, char *tabdir);
+
+static int
+rg_get_sstab_tablet(char *tabletbp, char *key, int keylen, char **sstabname, 
+				int *namelen, int *sstabid, int flag);
+
 
 
 char *
@@ -760,6 +774,7 @@ exit:
 #define DATA_EMPTY	0x0004
 
 
+/* Single node operation for the whole range query. */
 char *
 rg_selrangetab(TREE *command, TABINFO *tabinfo, int fd)
 {
@@ -853,7 +868,7 @@ rg_selrangetab(TREE *command, TABINFO *tabinfo, int fd)
 	char	*right_rangekey;
 	int	right_keylen;
 
-	/* Same with the left key. */
+	/* Right key ID is the '2'. */
 	right_rangekey = par_get_colval_by_colid(command, 2, &right_keylen);
 
 	if ((right_keylen == 1) && (!strncasecmp("*", right_rangekey, 
@@ -1127,6 +1142,237 @@ exit:
 
 
 
+
+/* Single node operation for the whole range query. */
+static int
+rg__selrangetab(TABINFO *tabinfo, char *sstab_left, char *sstab_right, int connfd,
+		char *key_left, int keylen_left, char *key_right, int keylen_right,
+		int left_expand, int right_expand, char *tabdir)
+{
+	char		*resp;
+	int		resp_size;
+	BUF		*bp;
+	int		offset;
+	char		last_sstab[SSTABLE_NAME_MAX_LEN];
+	B_SRCHINFO	srchinfo;
+	char		tab_sstab_dir[SSTABLE_NAME_MAX_LEN];
+
+
+	bp = NULL;
+
+	
+	
+	MEMSET(tab_sstab_dir, TABLE_NAME_MAX_LEN);
+	MEMCPY(tab_sstab_dir, tabdir, STRLEN(tabdir));
+	str1_to_str2(tab_sstab_dir, '/', sstab_left);	
+	
+
+	TABINFO_INIT(tabinfo, tab_sstab_dir, tabinfo->t_sinfo, 
+			tabinfo->t_row_minlen, 0, tabinfo->t_tabid, 
+			tabinfo->t_sstab_id);
+	SRCH_INFO_INIT(tabinfo->t_sinfo, key_left, keylen_left, 1, VARCHAR, -1);
+
+	if (left_expand)
+	{
+		bp = blk_getsstable(tabinfo);
+	}
+	else
+	{
+		bp = blkget(tabinfo);
+	
+	
+		if (tabinfo->t_stat & TAB_RETRY_LOOKUP)
+		{
+			return FALSE;
+		}
+	}
+	
+
+	if (left_expand)
+	{
+		offset = BLKHEADERSIZE;
+	}
+	else
+	{
+		Assert(tabinfo->t_rowinfo->rblknum == bp->bblk->bblkno);
+		Assert(tabinfo->t_rowinfo->rsstabid == bp->bblk->bsstabid);
+
+		if ((tabinfo->t_rowinfo->rblknum != bp->bblk->bblkno)
+		    || (tabinfo->t_rowinfo->rsstabid != bp->bblk->bsstabid))
+		{
+			traceprint("Hit a buffer error!\n");
+			bufunkeep(bp->bsstab);
+			ex_raise(EX_ANY);
+		}
+		
+		offset = tabinfo->t_rowinfo->roffset;
+	}
+
+	RANGE_QUERYCTX	rgsel_cont;
+
+	char	resp_cli[8];
+	int 	*offtab = ROW_OFFSET_PTR(bp->bblk);
+	int	i;
+		
+	for (i = 0; i < bp->bblk->bnextrno; i++)
+	{
+		if (offtab[-i] == offset)
+		{
+			break;
+		}
+	}
+
+	rgsel_cont.first_rowpos = i;
+
+	Assert(i < bp->bblk->bnextrno);
+
+
+	int	n;
+	int	data_cont = FALSE;
+	
+	while (TRUE)
+	{		
+		if (right_expand)
+		{
+			rgsel_cont.rowminlen = bp->bblk->bminlen;
+			
+			rgsel_cont.cur_rowpos = rgsel_cont.first_rowpos;
+			rgsel_cont.end_rowpos = bp->bblk->bnextrno - 1;
+			rgsel_cont.status = DATA_CONT;
+			data_cont = TRUE;
+		}
+		else
+		{	
+			TABINFO_INIT(tabinfo, tabinfo->t_sstab_name,
+					tabinfo->t_sinfo, tabinfo->t_row_minlen, 
+					0, tabinfo->t_tabid, tabinfo->t_sstab_id);
+			
+			SRCH_INFO_INIT(tabinfo->t_sinfo, key_right, 
+					keylen_right, 1, VARCHAR, -1);			
+
+			MEMSET(&srchinfo, sizeof(B_SRCHINFO));
+			SRCHINFO_INIT((&srchinfo), 0, 
+					BLK_GET_NEXT_ROWNO(bp->bblk) - 1, 
+					BLK_GET_NEXT_ROWNO(bp->bblk), LE);
+
+			b_srch_block(tabinfo, bp, &srchinfo);
+
+			rgsel_cont.rowminlen = bp->bblk->bminlen;
+			
+			rgsel_cont.cur_rowpos = rgsel_cont.first_rowpos;
+	
+			/* Stamp the status code. */
+			if (srchinfo.brownum < (bp->bblk->bnextrno - 1))
+			{
+				rgsel_cont.end_rowpos = srchinfo.brownum;
+				rgsel_cont.status = DATA_DONE;
+				data_cont = FALSE;
+			}
+			else
+			{
+				Assert(srchinfo.brownum == (bp->bblk->bnextrno - 1));
+
+				if (srchinfo.bcomp == GR)
+				{
+					rgsel_cont.end_rowpos = srchinfo.brownum;
+					rgsel_cont.status = DATA_CONT;
+					data_cont = TRUE;
+				}
+				else
+				{
+					if (srchinfo.bcomp == LE)
+					{
+						rgsel_cont.end_rowpos = 
+							srchinfo.brownum - 1;
+					}
+					else
+					{
+						rgsel_cont.end_rowpos = 
+							srchinfo.brownum;
+					}
+					
+					rgsel_cont.status = DATA_DONE;
+					data_cont = FALSE;
+				}
+			}
+
+		}
+
+		MEMCPY(rgsel_cont.data, (char *)(bp->bblk), BLOCKSIZE);
+	
+	 	resp = conn_build_resp_byte(RPC_SUCCESS, sizeof(RANGE_QUERYCTX), 
+						(char *)&rgsel_cont);
+		
+		resp_size = conn_get_resp_size((RPCRESP *)resp);
+
+		tcp_put_data(connfd, resp, resp_size);
+
+		conn_destroy_resp_byte(resp);	
+
+		
+		/* TODO: placeholder for the TCP/IP check. */
+		MEMSET(resp_cli, 8);
+		n = conn_socket_read(connfd,resp_cli, 8);
+
+		if (n != 8)
+		{
+			return FALSE;
+		}
+
+		if (!data_cont)
+		{
+			/* We already hit all the data. */
+			break;
+		}
+		
+nextblk:			
+		if (bp->bblk->bnextblkno != -1)
+		{
+			bp++;
+		}
+		else if (bp->bsstab->bblk->bnextsstabnum != -1)
+		{
+			/* Hit the right bound. */
+			if (!strncmp(tabinfo->t_sstab_name, sstab_right, 
+					STRLEN(tabinfo->t_sstab_name)))
+			{
+				return TRUE;
+			}
+			
+			MEMSET(last_sstab, SSTABLE_NAME_MAX_LEN);
+			MEMCPY(last_sstab, tabinfo->t_sstab_name, 
+					STRLEN(tabinfo->t_sstab_name));
+			
+			MEMSET(tabinfo->t_sstab_name, SSTABLE_NAME_MAX_LEN);			
+			
+			sstab_namebyid(last_sstab, tabinfo->t_sstab_name, 
+						bp->bsstab->bblk->bnextsstabnum);
+
+			tabinfo->t_sstab_id = bp->bsstab->bblk->bnextsstabnum;
+
+			bufunkeep(bp->bsstab);
+			
+			bp = blk_getsstable(tabinfo);			
+		}
+		else
+		{
+			return TRUE;
+		}
+
+		if (bp->bblk->bfreeoff > BLKHEADERSIZE)
+		{
+			rgsel_cont.first_rowpos = 0;
+		}
+		else
+		{
+			goto nextblk;
+		}		
+			
+	}
+
+	return TRUE;
+}
+
 char *
 rg_selwheretab(TREE *command, SELWHERE *selwhere, int fd)
 {
@@ -1149,6 +1395,7 @@ rg_selwheretab(TREE *command, SELWHERE *selwhere, int fd)
 	RANGE_QUERYCTX	rgsel_cont;
 	char		rg_tab_dir[TABLE_NAME_MAX_LEN];
 	int		tabidx;
+	int		querytype;
 
 
 	Assert(command);
@@ -1159,6 +1406,7 @@ rg_selwheretab(TREE *command, SELWHERE *selwhere, int fd)
 	tablet_scanctx 	= NULL;
 	tab_name	= command->sym.command.tabname;
 	tab_name_len 	= command->sym.command.tabname_len;
+	querytype	= command->sym.command.querytype;
 
 	MEMSET(tab_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_dir, MT_META_TABLE, STRLEN(MT_META_TABLE));
@@ -1186,6 +1434,7 @@ rg_selwheretab(TREE *command, SELWHERE *selwhere, int fd)
 
 		tabidx = rg_table_regist(tab_dir);
 	}
+
 	
 	str1_to_str2(tab_meta_dir, '/', "sysobjects");
 
@@ -1219,7 +1468,7 @@ rg_selwheretab(TREE *command, SELWHERE *selwhere, int fd)
 		traceprint("Table should have one tablet at least! \n");
 		goto exit;
 	}
-
+	
 	
 	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
@@ -1250,6 +1499,7 @@ rg_selwheretab(TREE *command, SELWHERE *selwhere, int fd)
 	int		result;
 	char		*tabletname;
 	char		tab_tablet_dir[TABLE_NAME_MAX_LEN];
+	char		tab_rg_dir[TABLE_NAME_MAX_LEN];
 	int		ign;
 	char		tablet_bp[SSTABLE_SIZE];	
 
@@ -1260,6 +1510,14 @@ rg_selwheretab(TREE *command, SELWHERE *selwhere, int fd)
 	int		leftbegin = FALSE;
 	/* Check if we got the last tablet. */	
 	int 		rightend = FALSE;
+
+	/* For selectrange. */
+	int		left_expand;
+	int		right_expand; 
+	char		*key_left;
+	char		*key_right;
+	int		keycolen_left;
+	int		keycolen_right;
 
 	int listenfd = conn_socket_open(Range_infor->bigdataport);
 
@@ -1286,16 +1544,46 @@ rg_selwheretab(TREE *command, SELWHERE *selwhere, int fd)
 		goto exit;
 	}
 		
+	if (querytype == SELECTWHERE)
+	{
+		par_fill_colinfo(tab_dir, tab_hdr.tab_col, command);
 
-	par_fill_colinfo(tab_dir, tab_hdr.tab_col, command);
+		tablet_scanctx = (TABLET_SCANCTX *)MEMALLOCHEAP(sizeof(TABLET_SCANCTX));
+		MEMSET(tablet_scanctx, sizeof(TABLET_SCANCTX));
 
-	tablet_scanctx = (TABLET_SCANCTX *)MEMALLOCHEAP(sizeof(TABLET_SCANCTX));
-	MEMSET(tablet_scanctx, sizeof(TABLET_SCANCTX));
+		tablet_scanctx->andplan = par_get_andplan(command);
+		tablet_scanctx->orplan = par_get_orplan(command);
+		tablet_scanctx->connfd = connfd;
+	}
+	else if (querytype == SELECTRANGE)
+	{
+		left_expand = right_expand = FALSE;
 
-	tablet_scanctx->andplan = par_get_andplan(command);
-	tablet_scanctx->orplan = par_get_orplan(command);
-	tablet_scanctx->connfd = connfd;
+		/* Left key ID is the '1' that's not the true column ID. */
+		key_left = par_get_colval_by_colid(command, 1, &keycolen_left);
+
+		if ((keycolen_left == 1) && (!strncasecmp("*", key_left, keycolen_left)))
+		{
+			left_expand = TRUE;
+		}
+		
+		
+		/* Right key ID is the '2'. */
+		key_right = par_get_colval_by_colid(command, 2, &keycolen_right);
+
+		if ((keycolen_right == 1) && (!strncasecmp("*", key_right, 
+								keycolen_right)))
+		{
+			right_expand = TRUE;
+		}
+
+		
+		MEMSET(tab_rg_dir, TABLE_NAME_MAX_LEN);
+		MEMCPY(tab_rg_dir, MT_RANGE_TABLE, STRLEN(MT_RANGE_TABLE));
 	
+		
+		str1_to_str2(tab_rg_dir, '/', tab_name);
+	}
 
 	while (TRUE)
 	{
@@ -1316,6 +1604,7 @@ rg_selwheretab(TREE *command, SELWHERE *selwhere, int fd)
 			wanted_tablet = (!leftbegin)?  selwhere->lefttabletname 
 						   : selwhere->righttabletname;			
 
+			/* Check if it got the left or right tablet. */
 			result = row_col_compare(VARCHAR, tabletname, 
 						STRLEN(tabletname), 
 						wanted_tablet,
@@ -1368,6 +1657,10 @@ rg_selwheretab(TREE *command, SELWHERE *selwhere, int fd)
 					
 			if (result == EQ)
 			{
+				/* 
+				** We got the tablet that locates at the current
+				** ranger server.
+				*/
 				MEMSET(tab_tablet_dir, TABLE_NAME_MAX_LEN);
 				MEMCPY(tab_tablet_dir, tab_dir, STRLEN(tab_dir));
 				str1_to_str2(tab_tablet_dir, '/', tabletname);  
@@ -1384,19 +1677,87 @@ rg_selwheretab(TREE *command, SELWHERE *selwhere, int fd)
 
 				CLOSE(fd1);
 
-				tablet_scanctx->tablet = tablet_bp;
-				tablet_scanctx->keycolid = tab_hdr.tab_key_colid;
-				tablet_scanctx->rminlen = tab_hdr.tab_row_minlen;
-				tablet_scanctx->tabdir = rg_tab_dir;
-				tablet_scanctx->tabid = tab_hdr.tab_id;
-
-				/* 
-				** Scan the tablet and get the sstabname for the 
-				** every row to be wanted. 
-				*/
-				if (!rg_tabletscan(tablet_scanctx))
+				if (querytype == SELECTWHERE)
 				{
-					goto exit;
+					tablet_scanctx->tablet = tablet_bp;
+					tablet_scanctx->keycolid = 
+							tab_hdr.tab_key_colid;
+					tablet_scanctx->rminlen = 
+							tab_hdr.tab_row_minlen;
+					tablet_scanctx->tabdir = rg_tab_dir;
+					tablet_scanctx->tabid = tab_hdr.tab_id;
+
+					/* 
+					** Scan the tablet and get the sstabname
+					** for the every row to be wanted. 
+					*/
+					if (!rg_tabletscan(tablet_scanctx))
+					{
+						goto exit;
+					}
+				}
+				else if (querytype == SELECTRANGE)
+				{
+					char	*sstab;
+					int 	sstabid;
+					int	flag;
+					
+
+					flag = (left_expand)? RG_TABLET_1ST_SSTAB 
+							: RG_TABLET_ANYONE_SSTAB;
+					
+					/* Check if left key is in this scope. */
+					if (!rg_get_sstab_tablet(tablet_bp, key_left, 
+							keycolen_left, &sstab, &namelen,
+							&sstabid, flag))
+					{
+						goto exit;
+					}
+
+					
+					char	sstab_left[TABLE_NAME_MAX_LEN];
+					char	sstab_right[TABLE_NAME_MAX_LEN];
+					TABINFO tabinfo;
+					SINFO	psinfo;
+					BLK_ROWINFO blk_rowinfo;
+					
+					
+					MEMSET(sstab_left, TABLE_NAME_MAX_LEN);
+					MEMSET(sstab_right, TABLE_NAME_MAX_LEN);
+					MEMSET(&tabinfo,sizeof(TABINFO));
+					MEMSET(&psinfo, sizeof(SINFO));
+
+					/* TODO: it needs to re-get the length of fixed column. */
+					MEMCPY(sstab_left, sstab, STRLEN(sstab));
+					
+					tabinfo.t_tabid = tab_hdr.tab_id;
+					tabinfo.t_row_minlen = tab_hdr.tab_row_minlen;
+					tabinfo.t_sstab_id = sstabid;
+					tabinfo.t_sinfo = &psinfo;
+					tabinfo.t_rowinfo = &blk_rowinfo;
+					MEMSET(tabinfo.t_rowinfo, sizeof(BLK_ROWINFO));
+
+					flag = (right_expand)? RG_TABLET_LAST_SSTAB 
+							: RG_TABLET_ANYONE_SSTAB;
+
+					/* It must get the one right sstab. */
+					if (!rg_get_sstab_tablet(tablet_bp, key_right, 
+						keycolen_right, &sstab, &namelen, &sstabid,
+						RG_TABLET_ANYONE_SSTAB))
+					{
+						goto exit;
+					}
+					
+					MEMCPY(sstab_right, sstab, STRLEN(sstab));				
+
+					if (!rg__selrangetab(&tabinfo, sstab_left,
+							sstab_right, connfd,key_left, 
+							keycolen_left, key_right,
+							keycolen_right, left_expand,
+							right_expand, tab_rg_dir))
+					{
+						goto exit;
+					}
 				}
 				
 			}
@@ -1667,6 +2028,137 @@ rg_sstabscan(SSTAB_SCANCTX *scanctx)
 finish:	
 	
 	return TRUE;
+}
+
+
+static int
+rg_get_sstab_tablet(char *tabletbp, char *key, int keylen, char **sstabname, 
+				int *namelen, int *sstabid, int flag)
+{
+	BLOCK		*blk;
+	BLOCK		*last_blk;
+	int		rowno;
+	int		*offset;
+	char		*rp;
+	int		i;
+	char		*tabletkey;
+	int		tabletkeyln;
+	char		*lastrp;
+	int		result;
+	int		ign;
+	
+
+	lastrp = NULL;
+	last_blk = NULL;
+	i = 0;
+
+	blk = (BLOCK *)(tabletbp + BLOCKSIZE);
+	
+	if (blk->bfreeoff == BLKHEADERSIZE)
+	{
+		/* Error case 1. */
+		return FALSE;
+	}
+
+	while (TRUE)
+	{
+		blk = (BLOCK *)(tabletbp + i * BLOCKSIZE);
+
+			       
+		for(rowno = 0, offset = ROW_OFFSET_PTR(blk); 
+			       rowno < blk->bnextrno; rowno++, offset--)
+		{
+			rp = (char *)blk + *offset;
+
+			/* Skip the deleted row. */
+			if (ROW_IS_DELETED(rp))
+			{
+				continue;
+			}
+
+			assert(*offset < blk->bfreeoff);
+
+
+			
+			if (flag & RG_TABLET_1ST_SSTAB)
+			{
+				goto finish;
+			}
+			else if (flag & RG_TABLET_LAST_SSTAB)
+			{
+				break;;
+			}		
+
+			tabletkey = row_locate_col(rp, 
+						TABLET_KEY_COLOFF_INROW,
+						ROW_MINLEN_IN_TABLET, &tabletkeyln);
+
+			result = row_col_compare(VARCHAR, tabletkey, tabletkeyln, key, keylen);
+
+			if (result != LE)
+			{
+				/* Return for the case GR or EQ. */
+				if (result == GR)
+				{
+					if (lastrp == NULL)
+					{
+						/* 
+						** Error case 2: if the 1st key 
+						** is greater than the input key, 
+						** it will hit this error. 
+						*/
+						return FALSE;
+					}
+
+					rp = lastrp;
+				}
+				
+				goto finish;
+			}
+
+			lastrp = rp;			
+		}
+
+		if (flag & RG_TABLET_LAST_SSTAB)
+		{
+			if (blk->bfreeoff == BLKHEADERSIZE)
+			{
+				blk = last_blk;
+				goto finish;
+			}
+			
+			last_blk = blk;
+		}
+	
+		if (blk->bnextblkno != -1)
+		{
+			i = blk->bnextblkno;
+		}
+		else
+		{
+			break;
+		}
+		
+	}
+
+finish:
+
+	if (flag & RG_TABLET_LAST_SSTAB)
+	{
+		Assert(blk != NULL);
+		int *offtab = ROW_OFFSET_PTR(blk);
+		rp = (char *)blk + offtab[-(blk->bnextrno - 1)];
+	}
+
+	*sstabname = row_locate_col(rp,
+				TABLET_SSTABNAME_COLOFF_INROW, 
+				ROW_MINLEN_IN_TABLET, namelen);
+
+	*sstabid = *(int *)row_locate_col(rp, 
+				TABLET_SSTABID_COLOFF_INROW,
+				ROW_MINLEN_IN_TABLET, &ign);
+	
+	return TRUE;			
 }
 
 
@@ -2046,7 +2538,8 @@ rg_handler(char *req_buf, int fd)
 
 		command = tss->tcmd_parser;
 
-		Assert(command->sym.command.querytype == SELECTWHERE);
+		Assert(   (command->sym.command.querytype == SELECTWHERE)
+			||(command->sym.command.querytype == SELECTRANGE));
 
 		resp = rg_selwheretab(command, (SELWHERE *)(req_buf), fd);
 

@@ -111,6 +111,7 @@ typedef struct mt_cli_context
 typedef struct mt_cli_exec_contex
 {
 	int	status;		/* Status for the query execution. */
+	int	rg_cnt;		/* The # of online ranger. */
 	int	querytype;	/* Query type. */
 	int	first_rowpos;	/* For the SELECT query. */
 	int	end_rowpos;	/* For the SELECT query. */
@@ -212,7 +213,7 @@ mt_cli_close_connection(conn * connection);
 ** 
 */
 extern int 
-mt_cli_open_execute(conn *connection, char *cmd, MT_CLI_EXEC_CONTEX *exec_ctx);
+mt_cli_open_execute(conn *connection, char *cmd, MT_CLI_EXEC_CONTEX **exec_ctx);
 
 
 /*
