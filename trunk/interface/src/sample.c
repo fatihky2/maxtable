@@ -50,7 +50,7 @@ int main(int argc, char *argv[])
 	memset(exec_ctx, 0, sizeof(MT_CLI_EXEC_CONTEX));
 
 	
-	if(mt_cli_open_connection("172.16.10.11", 1959, &connection))
+	if(mt_cli_open_connection("172.16.10.42", 1959, &connection))
 	{
 		gettimeofday(&tpStart, NULL);
 		
@@ -61,7 +61,7 @@ int main(int argc, char *argv[])
 			memset(resp, 0, 256);
 			memset(cmd , 0, 256);
 
-			sprintf(cmd, "create table gu(id1 varchar, id2 varchar,id3 int, id4 varchar,id5 varchar,id6 varchar,id7 varchar,id8 varchar,id9 varchar)");
+			sprintf(cmd, "create table lbs(id1 varchar, id2 varchar,id3 int)");
 			mt_cli_open_execute(connection, cmd, exec_ctx);
 
 			mt_cli_close_execute(exec_ctx);			
@@ -72,7 +72,7 @@ int main(int argc, char *argv[])
 			
 				
 			/* Insert 10000 data rows into table */
-			for(i = 1; i < 200; i++)
+			for(i = 1; i < 2; i++)
 			{
 #if 0
 				char	*c = "cccccccccccccccccccccccccccccccccccccccccccccccccccccc";
@@ -84,16 +84,8 @@ int main(int argc, char *argv[])
 
 				char	*h = "hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh";
 #endif
-				char	*c = "cccccc";
-				char	*d = "dddddd";
-				char	*e = "eeeeee";
-
-				char 	*f = "ffffff";
-				char	*g = "gggggg";
-
-				char	*h = "hhhhhh";
 				
-				sprintf(cmd, "insert into gu(aaaa%d, bbbb%d, %d, %s%d, %s%d, %s%d, %s%d, %s%d, %s%d)", i,i,i,c,i,d, i,e, i,f,i,g,i,h,i);
+				sprintf(cmd, "insert into lbs(aaaa%d, bbbb%d, %d)", i,i,i);
 
 				//sprintf(cmd, "insert into gu(aaaa%d, bbbb%d)", i,i);
 				rtn_stat = mt_cli_open_execute(connection, cmd, exec_ctx);
@@ -150,11 +142,11 @@ int main(int argc, char *argv[])
 		if (match(argv[1], "select"))
 		{
 			/* Select datas from table */
-			for(i = 1; i < 10000; i++)
+			for(i = 1; i < 2; i++)
 			{
 				memset(resp, 0, 256);
 				memset(cmd, 0, 256);
-				sprintf(cmd, "select gu(aaaa%d)", i);
+				sprintf(cmd, "select gu(aaaa)");
 
 				rtn_stat = mt_cli_open_execute(connection, cmd, exec_ctx);
 
@@ -169,13 +161,20 @@ int main(int argc, char *argv[])
 
 				int	rlen;
 				char	*rp = mt_cli_get_nextrow(exec_ctx, &rlen);
-#if 0
+				printf("row length: %d\n", rlen);
+				printf("original rp: %s\n", rp);
+#if 1
 				if (rp)
 				{
 					int	collen = 0;
 					char	*col;
-					col = mt_cli_get_colvalue(exec_ctx, rp, 6, &collen);
-					printf("col 6: %s\n", col);
+					col = mt_cli_get_colvalue(exec_ctx, rp, 0, &collen);
+					printf("%d, col 1: %s\n", collen, col);
+					col = mt_cli_get_colvalue(exec_ctx, rp, 1, &collen);
+                                        printf("%d, col 2: %s\n", collen, col);
+					collen = 0;
+					col = mt_cli_get_colvalue(exec_ctx, rp, 2, &collen);
+                                        printf("%d, col 3: %s, %d\n", collen, col, *((int*)col));
 				}
 #endif				
 				mt_cli_close_execute(exec_ctx);

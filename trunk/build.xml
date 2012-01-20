@@ -1,0 +1,73 @@
+<!-- Maxtable -->
+<project name="maxtable" default="compile" basedir=".">
+
+  <property name="name" value="maxtable"/>
+  <property name="version" value="0.1.5"/>
+  <property name="final.name" value="${name}-${version}"/>
+  <property name="examples.name" value="${name}-${version}-examples"/>
+
+  <property name="clientsrc.dir" value="${basedir}/java/client"/>
+  <property name="examples.dir" value="${basedir}/java/test"/>
+
+
+  <property name="build.dir" value="${basedir}/java/build"/>
+  <property name="build.classes" value="${basedir}/java/classes"/>
+
+  <target name="prepare">
+    <mkdir dir="${build.classes}"/>
+    <mkdir dir="${build.dir}"/>
+  </target>
+
+  <target name="compile" depends="prepare" description="Standard compile">
+    <javac srcdir="${clientsrc.dir}" destdir="${build.classes}" deprecation="yes"
+           debug="true">
+    </javac>
+
+    <javac srcdir="${examples.dir}" destdir="${build.classes}" deprecation="yes"
+           debug="true">
+    </javac>
+  </target>
+
+  <target name="jar" depends="clean, compile">
+    <copy todir="/usr/local/lib">
+       <fileset dir="${basedir}" includes="libmt_access.so"/>
+    </copy>
+
+    <jar destfile="${build.dir}/${final.name}.jar" basedir="${build.classes}" excludes="**/${examples.name}.jar,**/examples/**">
+      <manifest>
+        <section name="org/maxtable">
+          <attribute name="Implementation-Title" value="maxtable"/>
+          <attribute name="Implementation-Version" value="${version}"/>
+        </section>
+      </manifest>
+    </jar>
+  </target>
+
+  <target name="clean">
+    <delete dir="${build.dir}"/>
+    <delete dir="${build.classes}"/>
+  </target>
+
+  <target name="examples" depends="jar" description="Example programs">
+    <mkdir dir="${build.classes}/lib" />
+    <copy todir="${build.classes}/lib">
+       <fileset dir="${build.dir}" includes="${final.name}.jar"/>
+    </copy>
+    <manifest file="MANIFEST.MF">
+      <attribute name="Main-Class" value="org.maxtable.examples.JClientTest"/>
+      <attribute name="Class-Path" value="maxtable-0.1.5.jar"/>
+    </manifest>
+ 
+    <jar destfile="${build.dir}/${examples.name}.jar" basedir="${build.classes}" includes="**/examples/**/*.class **/${final.name}.jar" excludes="**/${examples.name}.jar" manifest="MANIFEST.MF">
+      <!--<manifest file="MANIFEST.MF">
+	<attribute name="Main-Class" value="org.maxtable.examples.JClientTest"/>
+        <section name="org/maxtable/examples">
+          <attribute name="Implementation-Title" value="maxtable"/>
+          <attribute name="Implementation-Version" value="${version}"/>
+        </section>
+      </manifest>-->
+    </jar>
+  </target>
+
+
+</project>
