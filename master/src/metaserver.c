@@ -1851,13 +1851,14 @@ meta_selrangetab(TREE *command, TABINFO *tabinfo)
 	int	keycolen;
 	int	k;
 
-	col_buf_len = sizeof(SELRANGE) + sizeof(TABLEHDR) + 
+	col_buf_len = sizeof(SELRANGE) + sizeof(SVR_IDX_FILE) + sizeof(TABLEHDR) + 
 					tab_hdr->tab_col * (sizeof(COLINFO));
 	col_buf = MEMALLOCHEAP(col_buf_len);
 	MEMSET(col_buf, col_buf_len);
 	col_buf_idx = 0;
 
-	
+
+	/* Get the left and right boud. */
 	for (k = 0; k < 2; k++)
 	{
 		key_is_expand = FALSE;
@@ -1867,6 +1868,7 @@ meta_selrangetab(TREE *command, TABINFO *tabinfo)
 
 		if ((keycolen == 1) && (!strncasecmp("*", keycol, keycolen)))
 		{
+			/* Case for the expand. */
 			key_is_expand = TRUE;
 			
 			if (k == 0)
@@ -1884,6 +1886,7 @@ meta_selrangetab(TREE *command, TABINFO *tabinfo)
 		}
 		else
 		{
+			/* Case for the key user specified. */
 			rp = tablet_schm_srch_row(tab_hdr, tab_hdr->tab_id,
 						TABLETSCHM_ID, tab_meta_dir, 
 						keycol, keycolen);
@@ -2043,6 +2046,10 @@ meta_selrangetab(TREE *command, TABINFO *tabinfo)
 		col_buf_idx += sizeof(int);
 
 	}
+
+	MEMCPY((col_buf + col_buf_idx), &(Master_infor->rg_list), 
+					sizeof(SVR_IDX_FILE));
+	col_buf_idx += sizeof(SVR_IDX_FILE);
 	
 	MEMCPY((col_buf + col_buf_idx), tab_hdr, sizeof(TABLEHDR));
 	col_buf_idx += sizeof(TABLEHDR);
@@ -2106,6 +2113,7 @@ meta_selwheretab(TREE *command, TABINFO *tabinfo)
 	SELWHERE	selwhere;
 	int		rpc_status;
 	int		tabidx;
+	int		querytype;
 
 
 	Assert(command);
@@ -2117,6 +2125,7 @@ meta_selwheretab(TREE *command, TABINFO *tabinfo)
 	rpc_status = 0;
 	tab_name = command->sym.command.tabname;
 	tab_name_len = command->sym.command.tabname_len;
+	querytype = command->sym.command.querytype;
 
 	MEMSET(tab_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_dir, MT_META_TABLE, STRLEN(MT_META_TABLE));
@@ -2149,50 +2158,62 @@ meta_selwheretab(TREE *command, TABINFO *tabinfo)
 		goto exit;
 	}
 
-
-	Assert(Master_infor->meta_syscol->colnum[tabidx] == tab_hdr->tab_col);
-	
-	col_buf = (char *)(&(Master_infor->meta_syscol->colinfor[tabidx]));
-
-	int i;
-
-	for (i = 0; i < tab_hdr->tab_col; i++)
-	{
-		
-		if (((COLINFO *)col_buf)[i].col_id == 1)
-		{
-			break;
-		}
-	}	
-
-	MEMSET(&selwhere, sizeof(SELWHERE));
-	
-	CONSTANT *cons = par_get_constant_by_colname(command, 
-					((COLINFO *)col_buf)[i].col_name);
-
 	char	*range_leftkey;
 	int	leftkeylen;
 	char	*range_rightkey;
 	int	rightkeylen;
 	
+
+	Assert(Master_infor->meta_syscol->colnum[tabidx] == tab_hdr->tab_col);
+	
+	col_buf = (char *)(&(Master_infor->meta_syscol->colinfor[tabidx]));
+			
+	if (querytype == SELECTWHERE)
+	{
+		int i;
+
+		for (i = 0; i < tab_hdr->tab_col; i++)
+		{
+			
+			if (((COLINFO *)col_buf)[i].col_id == 1)
+			{
+				break;
+			}
+		}	
+
+		MEMSET(&selwhere, sizeof(SELWHERE));
+		
+		CONSTANT *cons = par_get_constant_by_colname(command, 
+						((COLINFO *)col_buf)[i].col_name);
+
+	
+
+		if (cons == NULL)
+		{
+			range_leftkey = "*\0";
+			range_rightkey = "*\0";
+			leftkeylen = 1;
+			rightkeylen= 1;
+		}
+		else
+		{
+			range_leftkey = cons->value;
+			range_rightkey = cons->rightval;
+			leftkeylen = cons->len;
+			rightkeylen= cons->rightlen;
+		}
+	}
+	else if (querytype == SELECTRANGE)
+	{
+		range_leftkey = par_get_colval_by_colid(command, 1, &leftkeylen);
+		range_rightkey = par_get_colval_by_colid(command, 2, &rightkeylen);	
+	}
+
+
+	
 	char	*keycol;
 	int	keycolen;
 	int	k;
-
-	if (cons == NULL)
-	{
-		range_leftkey = "*\0";
-		range_rightkey = "*\0";
-		leftkeylen = 1;
-		rightkeylen= 1;
-	}
-	else
-	{
-		range_leftkey = cons->value;
-		range_rightkey = cons->rightval;
-		leftkeylen = cons->len;
-		rightkeylen= cons->rightlen;
-	}
 	
 	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
@@ -3448,6 +3469,7 @@ parse_again:
 	    	break;
 
 	    case SELECTRANGE:
+#if 0
 	    	resp = meta_selrangetab(command, tabinfo);
 		if (DEBUG_TEST(tss))
 		{
@@ -3455,7 +3477,7 @@ parse_again:
 		}
 		
 	    	break;
-		
+#endif		
   	    case SELECTWHERE:
 		resp = meta_selwheretab(command, tabinfo);
 		

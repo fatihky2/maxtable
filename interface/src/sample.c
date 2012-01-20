@@ -45,10 +45,7 @@ int main(int argc, char *argv[])
 
 	mt_cli_crt_context();
 
-	MT_CLI_EXEC_CONTEX t_exec_ctx;
-	MT_CLI_EXEC_CONTEX *exec_ctx = &t_exec_ctx;
-	memset(exec_ctx, 0, sizeof(MT_CLI_EXEC_CONTEX));
-
+	MT_CLI_EXEC_CONTEX *exec_ctx = NULL;
 	
 	if(mt_cli_open_connection("172.16.10.42", 1959, &connection))
 	{
@@ -62,7 +59,7 @@ int main(int argc, char *argv[])
 			memset(cmd , 0, 256);
 
 			sprintf(cmd, "create table lbs(id1 varchar, id2 varchar,id3 int)");
-			mt_cli_open_execute(connection, cmd, exec_ctx);
+			mt_cli_open_execute(connection, cmd, &exec_ctx);
 
 			mt_cli_close_execute(exec_ctx);			
 		}
@@ -72,7 +69,7 @@ int main(int argc, char *argv[])
 			
 				
 			/* Insert 10000 data rows into table */
-			for(i = 1; i < 2; i++)
+			for(i = 1; i < 10000; i++)
 			{
 #if 0
 				char	*c = "cccccccccccccccccccccccccccccccccccccccccccccccccccccc";
@@ -88,7 +85,7 @@ int main(int argc, char *argv[])
 				sprintf(cmd, "insert into lbs(aaaa%d, bbbb%d, %d)", i,i,i);
 
 				//sprintf(cmd, "insert into gu(aaaa%d, bbbb%d)", i,i);
-				rtn_stat = mt_cli_open_execute(connection, cmd, exec_ctx);
+				rtn_stat = mt_cli_open_execute(connection, cmd, &exec_ctx);
 
 				if (!(rtn_stat & CLI_SUCCESS))
 				{
@@ -111,30 +108,41 @@ int main(int argc, char *argv[])
 		{	
 			memset(resp, 0, 256);
 			memset(cmd, 0, 256);
-			sprintf(cmd, "selectwhere gu where id1(aaaa7, aaaa9) and id2(bbbb6, bbbb8)");
+			sprintf(cmd, "selectwhere gu where id1(aaaa38, aaaa47) and id2(bbbb35, bbbb46)");
 //			sprintf(cmd, "selectwhere gu where id2(bbbb3, bbbb8)");
 
 			
-			rtn_stat = mt_cli_open_execute(connection, cmd, exec_ctx);
+			rtn_stat = mt_cli_open_execute(connection, cmd, &exec_ctx);
 
 			printf("Client 1: %s\n", cmd);
 
 			int	rlen;
 			char	*rp = NULL;
+			MT_CLI_EXEC_CONTEX	*t_exec_ctx;
 
-			do{
-				rp = mt_cli_get_nextrow(exec_ctx, &rlen);
+			t_exec_ctx = exec_ctx;
+
+			int	test = 0;
+			
+			for (i = 0; i < exec_ctx->rg_cnt; i++, t_exec_ctx++)
+			{
+				test++;
 				
-				if (rp)
-				{
-					int	collen = 0;				
-					char	*col;
+				do{
+					rp = mt_cli_get_nextrow(t_exec_ctx, &rlen);
 					
-					col = mt_cli_get_colvalue(exec_ctx, rp, 6, &collen);
+					if (rp)
+					{
+						int	collen = 0;				
+						char	*col;
+						
+						col = mt_cli_get_colvalue(t_exec_ctx, rp, 6, &collen);
 
-					printf ("col: %s\n", col);
-				}			
-			} while(rp);
+						printf ("col: %s\n", col);
+					}			
+				} while(rp);
+
+			}
 			
 			mt_cli_close_execute(exec_ctx);
 		}
@@ -148,7 +156,7 @@ int main(int argc, char *argv[])
 				memset(cmd, 0, 256);
 				sprintf(cmd, "select gu(aaaa)");
 
-				rtn_stat = mt_cli_open_execute(connection, cmd, exec_ctx);
+				rtn_stat = mt_cli_open_execute(connection, cmd, &exec_ctx);
 
 				if (!(rtn_stat & CLI_SUCCESS))
 				{
@@ -186,25 +194,39 @@ int main(int argc, char *argv[])
 		{
 			memset(resp, 0, 256);
 			memset(cmd, 0, 256);
-			sprintf(cmd, "selectrange gu(aaaa7, aaaa8)");
+			sprintf(cmd, "selectrange gu(aaaa38, aaaa46)");
 
 			int	row_cnt = 0;
 
-			mt_cli_open_execute(connection, cmd, exec_ctx);
+			mt_cli_open_execute(connection, cmd, &exec_ctx);
 
 			int	rlen;
 			char	*rp = NULL;
-			int	collen = 0;				
-			char	*col;
+			MT_CLI_EXEC_CONTEX	*t_exec_ctx;
 
-			while ((rp = mt_cli_get_nextrow(exec_ctx, &rlen)))
-			{					
-				col = mt_cli_get_colvalue(exec_ctx, rp, 6, &collen);
+			t_exec_ctx = exec_ctx;
 
-				printf ("row: %d, col 6: %s\n", row_cnt, col);
+			int	test = 0;
+			
+			for (i = 0; i < exec_ctx->rg_cnt; i++, t_exec_ctx++)
+			{
+				test++;
+				
+				do{
+					rp = mt_cli_get_nextrow(t_exec_ctx, &rlen);
+					
+					if (rp)
+					{
+						int	collen = 0;				
+						char	*col;
+						
+						col = mt_cli_get_colvalue(t_exec_ctx, rp, 6, &collen);
 
-				row_cnt++;
-			};
+						printf ("col: %s\n", col);
+					}			
+				} while(rp);
+
+			}
 			
 			mt_cli_close_execute(exec_ctx);
 		}
@@ -219,7 +241,7 @@ int main(int argc, char *argv[])
 				memset(resp, 0, 256);
 				memset(cmd, 0, 256);
 				sprintf(cmd, "delete gu(aaaa%d)", i);
-				mt_cli_open_execute(connection, cmd, exec_ctx);
+				mt_cli_open_execute(connection, cmd, &exec_ctx);
 
 				mt_cli_close_execute(exec_ctx);
 			
@@ -233,7 +255,7 @@ int main(int argc, char *argv[])
 			memset(cmd, 0, 256);
 			sprintf(cmd, "drop gu");
 			
-			mt_cli_open_execute(connection, cmd, exec_ctx);
+			mt_cli_open_execute(connection, cmd, &exec_ctx);
 
 			mt_cli_close_execute(exec_ctx);
 			
