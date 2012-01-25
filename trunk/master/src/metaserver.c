@@ -2114,6 +2114,7 @@ meta_selwheretab(TREE *command, TABINFO *tabinfo)
 	int		rpc_status;
 	int		tabidx;
 	int		querytype;
+	char		*resp_buf;
 
 
 	Assert(command);
@@ -2123,6 +2124,7 @@ meta_selwheretab(TREE *command, TABINFO *tabinfo)
 	sstab_rlen = 0;
 	sstab_idx = 0;
 	rpc_status = 0;
+	resp_buf = NULL;
 	tab_name = command->sym.command.tabname;
 	tab_name_len = command->sym.command.tabname_len;
 	querytype = command->sym.command.querytype;
@@ -2271,7 +2273,7 @@ meta_selwheretab(TREE *command, TABINFO *tabinfo)
 	}	
 
 
-	char	*resp_buf;
+	
 
 	col_buf_len = sizeof(SELWHERE) + sizeof(SVR_IDX_FILE) + sizeof(TABLEHDR) + 
 					tab_hdr->tab_col * (sizeof(COLINFO));

@@ -29,6 +29,16 @@
 #include "netconn.h"
 #include "m_socket.h"
 
+
+/*
+**  Returns:
+**
+**	number of bytes read if successful
+**	-2 if sender has quit sending
+**	-3 if an attention packet arrived while the packet was being read
+**	-4 if recv failed because connection has gone away abnormally
+**	-1 otherwise
+*/
 int
 m_recvdata(int socket, char *recvbp, int count)
 {

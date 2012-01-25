@@ -1522,14 +1522,25 @@ retry:
 				mt_cli_write_range(exec_ctx->socketid);
 				
 				conn_destroy_resp((RPCRESP *)(exec_ctx->rg_resp));
-
+				
 				exec_ctx->rg_resp = NULL;
 				exec_ctx->status &= ~CLICTX_DATA_BUF_HAS_DATA;
 				exec_ctx->status |= CLICTX_DATA_BUF_NO_DATA;
+				
 				goto retry;
 			}
 		}
-
+#if 0
+		else
+		{
+			mt_cli_write_range(exec_ctx->socketid);
+			conn_destroy_resp((RPCRESP *)(exec_ctx->rg_resp));
+				
+			exec_ctx->rg_resp = NULL;
+			exec_ctx->status &= ~CLICTX_DATA_BUF_HAS_DATA;
+			exec_ctx->status |= CLICTX_DATA_BUF_NO_DATA;
+		}
+#endif
 		break;
 
 	    default:
@@ -1587,11 +1598,7 @@ mt_cli_get_colvalue(MT_CLI_EXEC_CONTEX *exec_ctx, char *rowbuf, int col_idx,
 	/* Meta data information. */
 	meta_buf = ((RPCRESP *)(exec_ctx->meta_resp))->result;
 
-	if (exec_ctx->querytype == SELECTRANGE)
-	{			
-		meta_buf += sizeof(SELRANGE);
-	}
-	else if (exec_ctx->querytype == SELECTWHERE)
+	if ((exec_ctx->querytype == SELECTWHERE) || (exec_ctx->querytype == SELECTRANGE))
 	{
 		meta_buf += (sizeof(SELWHERE) + sizeof(SVR_IDX_FILE));
 	}
@@ -1835,6 +1842,7 @@ mt_cli_close_execute(MT_CLI_EXEC_CONTEX *exec_ctx)
 			if (!(t_exec_ctx->status & CLICTX_BAD_SOCKET))
 			{
 				mt_cli_close_range(t_exec_ctx->socketid);
+				mt_cli_write_range(t_exec_ctx->socketid);
 			}
 		}
 		
