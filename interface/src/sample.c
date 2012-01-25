@@ -47,7 +47,7 @@ int main(int argc, char *argv[])
 
 	MT_CLI_EXEC_CONTEX *exec_ctx = NULL;
 	
-	if(mt_cli_open_connection("172.16.10.42", 1959, &connection))
+	if(mt_cli_open_connection("127.0.0.1", 1959, &connection))
 	{
 		gettimeofday(&tpStart, NULL);
 		
@@ -58,7 +58,8 @@ int main(int argc, char *argv[])
 			memset(resp, 0, 256);
 			memset(cmd , 0, 256);
 
-			sprintf(cmd, "create table lbs(id1 varchar, id2 varchar,id3 int)");
+			sprintf(cmd, "create table gu(id1 varchar, id2 varchar,id3 int, id4 varchar,id5 varchar,id6 varchar,id7 varchar,id8 varchar,id9 varchar)");
+			//sprintf(cmd, "create table lbs(id1 varchar, id2 varchar,id3 int)");
 			mt_cli_open_execute(connection, cmd, &exec_ctx);
 
 			mt_cli_close_execute(exec_ctx);			
@@ -81,8 +82,17 @@ int main(int argc, char *argv[])
 
 				char	*h = "hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh";
 #endif
+
+				char	*c = "cccccc";
+				char	*d = "dddddd";
+				char	*e = "eeeeee";
+				char 	*f = "ffffff";
+				char	*g = "gggggg";
+				char	*h = "hhhhhh";
+ 
+				sprintf(cmd, "insert into gu(aaaa%d, bbbb%d, %d, %s%d, %s%d, %s%d, %s%d, %s%d, %s%d)", i,i,i,c,i,d, i,e, i,f,i,g,i,h,i);
 				
-				sprintf(cmd, "insert into lbs(aaaa%d, bbbb%d, %d)", i,i,i);
+//				sprintf(cmd, "insert into lbs(aaaa%d, bbbb%d, %d)", i,i,i);
 
 				//sprintf(cmd, "insert into gu(aaaa%d, bbbb%d)", i,i);
 				rtn_stat = mt_cli_open_execute(connection, cmd, &exec_ctx);
@@ -194,9 +204,7 @@ int main(int argc, char *argv[])
 		{
 			memset(resp, 0, 256);
 			memset(cmd, 0, 256);
-			sprintf(cmd, "selectrange gu(aaaa38, aaaa46)");
-
-			int	row_cnt = 0;
+			sprintf(cmd, "selectrange gu(aaaa45, aaaa46)");
 
 			mt_cli_open_execute(connection, cmd, &exec_ctx);
 
