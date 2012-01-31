@@ -40,6 +40,7 @@ TOKENS  MT_Tokens[] =
 	{SELECTWHERE,	"selectwhere"},
 	{MCCRANGER,	"mcc checkranger"},
 	{SHARDING,	"sharding"},
+	{SELECTCOUNT,	"selectcount"},
 };
 
 int

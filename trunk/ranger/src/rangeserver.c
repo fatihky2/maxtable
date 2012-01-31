@@ -109,6 +109,8 @@ typedef struct sstab_scancontext
 	ORANDPLAN	*andplan;
 	char		*sstab;
 	RANGE_QUERYCTX	*rgsel;
+	int		rowcnt;		/* For the selectcount. */
+	int		pad;
 }SSTAB_SCANCTX;
 
 /* 
@@ -137,6 +139,7 @@ typedef struct tablet_scancontext
 	int		keycolid;
 	int		tabid;
 	int		connfd;
+	int		rowcnt;		/* For the selectcount. */
 }TABLET_SCANCTX;
 
 #define	SCANCTX_HIT_END		0x0001
@@ -201,6 +204,12 @@ static int
 rg_get_sstab_tablet(char *tabletbp, char *key, int keylen, char **sstabname, 
 				int *namelen, int *sstabid, int flag);
 
+
+static int
+rg_count_data_tablet(TABLET_SCANCTX *scanctx);
+
+static int
+rg_count_data_sstable(SSTAB_SCANCTX *scanctx);
 
 
 char *
@@ -1866,6 +1875,324 @@ exit:
 }
 
 
+
+/* Clone from rg_selwheretab(). */
+char *
+rg_selcounttab(TREE *command, SELWHERE *selwhere, int fd)
+{
+	char		*tab_name;
+	int		tab_name_len;
+	char		tab_dir[TABLE_NAME_MAX_LEN];
+	char		tab_meta_dir[TABLE_NAME_MAX_LEN];
+	int		fd1;
+	int		rtn_stat;
+	TABLEHDR	tab_hdr;
+	int		sstab_rlen;
+	int		sstab_idx;
+	char		*resp;
+	char		*rp;
+	int		namelen;
+	char		*rg_addr;
+	int		rg_port;
+	TABLET_SCANCTX	*tablet_scanctx;
+	char		rg_tab_dir[TABLE_NAME_MAX_LEN];
+	int		tabidx;
+	int		querytype;
+	int		rowcnt;		/* The # of row to be wanted. */
+
+
+	Assert(command);
+
+	rtn_stat	= FALSE;
+	sstab_rlen 	= 0;
+	sstab_idx 	= 0;
+	tablet_scanctx 	= NULL;
+	tab_name	= command->sym.command.tabname;
+	tab_name_len 	= command->sym.command.tabname_len;
+	querytype	= command->sym.command.querytype;
+	rowcnt		= 0;
+
+	MEMSET(tab_dir, TABLE_NAME_MAX_LEN);
+	MEMCPY(tab_dir, MT_META_TABLE, STRLEN(MT_META_TABLE));
+
+	
+	str1_to_str2(tab_dir, '/', tab_name);
+
+	MEMSET(rg_tab_dir, TABLE_NAME_MAX_LEN);
+	MEMCPY(rg_tab_dir, MT_RANGE_TABLE, STRLEN(MT_RANGE_TABLE));
+
+	
+	str1_to_str2(rg_tab_dir, '/', tab_name);
+
+	
+	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
+	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
+
+	if ((tabidx = rg_table_is_exist(tab_dir)) == -1)
+	{
+		if (STAT(tab_dir, &st) != 0)
+		{
+			traceprint("Table %s is not exist.\n", tab_name);
+			goto exit;
+		}
+
+		tabidx = rg_table_regist(tab_dir);
+	}
+
+	
+	str1_to_str2(tab_meta_dir, '/', "sysobjects");
+
+	OPEN(fd1, tab_meta_dir, (O_RDONLY));
+	
+	if (fd1 < 0)
+	{
+		traceprint("Table is not exist! \n");
+		goto exit;
+	}
+
+	
+	READ(fd1, &tab_hdr, sizeof(TABLEHDR));	
+
+	CLOSE(fd1);
+
+	if (tab_hdr.tab_tablet == 0)
+	{
+		traceprint("Table %s has no data.\n", tab_name);
+		goto exit;
+	}
+
+	if (tab_hdr.tab_stat & TAB_DROPPED)
+	{
+		traceprint("This table has been dropped.\n");
+		goto exit;
+	}
+
+	if (tab_hdr.tab_tablet == 0)
+	{
+		traceprint("Table should have one tablet at least! \n");
+		goto exit;
+	}
+	
+	
+	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
+	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
+	str1_to_str2(tab_meta_dir, '/', "tabletscheme");
+		
+
+
+	char	*tablet_schm_bp = NULL;
+	
+	OPEN(fd1, tab_meta_dir, (O_RDONLY));
+
+	if (fd1 < 0)
+	{
+	       printf("Table is not exist! \n");
+	       goto exit;
+	}
+
+	tablet_schm_bp = (char *)MEMALLOCHEAP(SSTABLE_SIZE);
+	MEMSET(tablet_schm_bp, SSTABLE_SIZE);
+
+	READ(fd1, tablet_schm_bp, SSTABLE_SIZE); 
+
+	CLOSE(fd1);
+	
+	BLOCK		*blk;
+	int		i = 0, rowno;
+	int		*offset;
+	int		result;
+	char		*tabletname;
+	char		tab_tablet_dir[TABLE_NAME_MAX_LEN];
+	int		ign;
+	char		tablet_bp[SSTABLE_SIZE];	
+
+	/* The tablet to be interested. */
+	char		*wanted_tablet;
+
+	/* Check if we got the first tablet. */
+	int		leftbegin = FALSE;
+	/* Check if we got the last tablet. */	
+	int 		rightend = FALSE;
+
+	/* For selectrange. */
+		
+	/* Initialization. */
+	par_fill_colinfo(tab_dir, tab_hdr.tab_col, command);
+
+	tablet_scanctx = (TABLET_SCANCTX *)MEMALLOCHEAP(sizeof(TABLET_SCANCTX));
+	MEMSET(tablet_scanctx, sizeof(TABLET_SCANCTX));
+
+	tablet_scanctx->andplan = par_get_andplan(command);
+	tablet_scanctx->orplan = par_get_orplan(command);
+	tablet_scanctx->connfd = -1;
+	
+
+	/* Working for the query. */
+	while (TRUE)
+	{
+		blk = (BLOCK *)(tablet_schm_bp + i * BLOCKSIZE);
+
+
+		for(rowno = 0, offset = ROW_OFFSET_PTR(blk); 
+			       rowno < blk->bnextrno; rowno++, offset--)
+		{
+			rp = (char *)blk + *offset;
+
+			assert(*offset < blk->bfreeoff);
+
+			tabletname = row_locate_col(rp, 
+					TABLETSCHM_TABLETNAME_COLOFF_INROW,
+					ROW_MINLEN_IN_TABLETSCHM, &namelen);
+
+			wanted_tablet = (!leftbegin)?  selwhere->lefttabletname 
+						   : selwhere->righttabletname;			
+
+			/* Check if it got the left or right tablet. */
+			result = row_col_compare(VARCHAR, tabletname, 
+						STRLEN(tabletname), 
+						wanted_tablet,
+						STRLEN(wanted_tablet));
+			
+
+			if ((result != EQ) && (leftbegin == FALSE))
+			{
+				continue;
+			}
+			
+			if (result == EQ)
+			{	
+				if (leftbegin == TRUE)
+				{
+					/* 
+					** Hit the right side of range, that's
+					** to say, hit the last tablet. 
+					*/
+					rightend = TRUE;
+				}
+				else if (leftbegin == FALSE)
+				{
+					/*
+					** Hit the left side of the range, 
+					** that's to say, hit the fisrt tablet.
+					*/
+					leftbegin = TRUE;
+				}
+			}
+
+			/* Check if this tablet locates at this range. */
+			rg_addr = row_locate_col(rp, 
+					TABLETSCHM_RGADDR_COLOFF_INROW,
+					ROW_MINLEN_IN_TABLETSCHM, &ign);
+
+			result = row_col_compare(VARCHAR, Range_infor->rg_ip,
+						STRLEN(Range_infor->rg_ip), 
+						rg_addr, STRLEN(rg_addr));
+			
+			
+			if (result == EQ)
+			{
+				rg_port = *(int *)row_locate_col(rp, 
+						TABLETSCHM_RGPORT_COLOFF_INROW, 
+						ROW_MINLEN_IN_TABLETSCHM, &ign);
+
+				result = (Range_infor->port == rg_port) ? EQ : GR;
+			}
+					
+			if (result == EQ)
+			{
+				/* 
+				** We got the tablet that locates at the current
+				** ranger server.
+				*/
+				MEMSET(tab_tablet_dir, TABLE_NAME_MAX_LEN);
+				MEMCPY(tab_tablet_dir, tab_dir, STRLEN(tab_dir));
+				str1_to_str2(tab_tablet_dir, '/', tabletname);  
+
+				OPEN(fd1, tab_tablet_dir, (O_RDONLY));
+
+				if (fd1 < 0)
+				{
+				       traceprint("Tablet %s is not exist! \n", tab_tablet_dir);
+				       goto exit;
+				}
+
+				READ(fd1, tablet_bp, SSTABLE_SIZE); 
+
+				CLOSE(fd1);
+
+				
+				tablet_scanctx->tablet = tablet_bp;
+				tablet_scanctx->keycolid = 
+						tab_hdr.tab_key_colid;
+				tablet_scanctx->rminlen = 
+						tab_hdr.tab_row_minlen;
+				tablet_scanctx->tabdir = rg_tab_dir;
+				tablet_scanctx->tabid = tab_hdr.tab_id;
+				tablet_scanctx->rowcnt = 0;
+
+				/* 
+				** Scan the tablet and get the sstabname
+				** for the every row to be wanted. 
+				*/
+				if (!rg_count_data_tablet(tablet_scanctx))
+				{
+					goto exit;
+				}
+
+				rowcnt += tablet_scanctx->rowcnt;
+								
+			}
+
+			if (rightend)
+			{
+				goto finish;
+			}		       
+		}
+
+		if (blk->bnextblkno != -1)
+		{
+			i = blk->bnextblkno;
+		}
+		else
+		{
+			break;
+		}
+	}
+
+finish:
+	
+	rtn_stat = TRUE;
+
+exit:
+
+	if (rtn_stat)
+	{
+		
+		resp = conn_build_resp_byte(RPC_SUCCESS, sizeof(int), (char *)&rowcnt);
+	}
+	else
+	{
+		resp = conn_build_resp_byte(RPC_FAIL, 0, NULL);
+	}
+
+	if (tablet_scanctx)
+	{
+		par_release_orandplan(tablet_scanctx->andplan);
+		par_release_orandplan(tablet_scanctx->orplan);
+
+		MEMFREEHEAP(tablet_scanctx);
+	}
+
+	if (tablet_schm_bp)
+	{
+		MEMFREEHEAP(tablet_schm_bp);
+	}
+	
+	return resp;
+
+}
+
+
 static int
 rg_process_orplan(ORANDPLAN	*cmd, char *rp, int minrowlen)
 {
@@ -2315,6 +2642,7 @@ scan_cont:
 			{
 				/* Finding the next sstable to fill the sending block. */
 				bufunkeep(bp->bsstab);
+				bp = NULL;
 				
 				continue;
 			}
@@ -2421,6 +2749,190 @@ exit:
 			
 	return scan_result;
 }
+
+
+/* Clone from the rg_tabletscan(). */
+static int
+rg_count_data_tablet(TABLET_SCANCTX *scanctx)
+{
+	
+	BLOCK 		*blk;
+	int		i = 0, rowno;
+	int     	*offset;
+	char    	*rp;
+	char		*sstabname;
+	int		sstabid;
+	char		tab_sstab_dir[TABLE_NAME_MAX_LEN];
+	int		namelen;
+	int		ign;
+	SSTAB_SCANCTX	sstab_scanctx;
+	RANGE_QUERYCTX	rgsel_cont;
+	TABINFO		*tabinfo;
+	BLK_ROWINFO	blk_rowinfo;
+	int		minrowlen;
+	BUF		*bp;
+	int		scan_result;
+				
+
+	scan_result = FALSE;
+	sstab_scanctx.andplan	= scanctx->andplan;
+	sstab_scanctx.orplan	= scanctx->orplan;
+	sstab_scanctx.rminlen	= scanctx->rminlen;
+	rgsel_cont.rowminlen	= scanctx->rminlen;
+	sstab_scanctx.rgsel	= &rgsel_cont;
+	sstab_scanctx.stat	= 0;
+	sstab_scanctx.rowcnt	= 0;
+	bp = NULL;
+
+	tabinfo = MEMALLOCHEAP(sizeof(TABINFO));
+	MEMSET(tabinfo, sizeof(TABINFO));
+	tabinfo->t_sinfo = (SINFO *)MEMALLOCHEAP(sizeof(SINFO));
+
+	tabinfo->t_rowinfo = &blk_rowinfo;
+
+	tabinfo->t_dold = tabinfo->t_dnew = (BUF *) tabinfo;
+
+	tabinfo_push(tabinfo);
+	
+	while (TRUE)
+	{
+		blk = (BLOCK *)(scanctx->tablet + i * BLOCKSIZE);
+
+			       
+		for(rowno = 0, offset = ROW_OFFSET_PTR(blk); 
+			       rowno < blk->bnextrno; rowno++, offset--)
+		{
+			rp = (char *)blk + *offset;
+
+			/* Skip the deleted row. */
+			if (ROW_IS_DELETED(rp))
+			{
+				continue;
+			}
+
+			assert(*offset < blk->bfreeoff);
+
+			sstabname = row_locate_col(rp,
+					TABLET_SSTABNAME_COLOFF_INROW, 
+					ROW_MINLEN_IN_TABLET, &namelen);
+
+			sstabid = *(int *)row_locate_col(rp, 
+						TABLET_SSTABID_COLOFF_INROW,
+						ROW_MINLEN_IN_TABLET, &ign);
+
+			
+			MEMSET(tab_sstab_dir, TABLE_NAME_MAX_LEN);
+			MEMCPY(tab_sstab_dir, scanctx->tabdir, 
+						STRLEN(scanctx->tabdir));
+			str1_to_str2(tab_sstab_dir, '/', sstabname);	
+			
+
+			minrowlen = scanctx->rminlen;
+
+			MEMSET(tabinfo->t_sinfo, sizeof(SINFO));
+			MEMSET(tabinfo->t_rowinfo, sizeof(BLK_ROWINFO));
+			
+			TABINFO_INIT(tabinfo, tab_sstab_dir, tabinfo->t_sinfo, 
+					minrowlen, 0, scanctx->tabid, sstabid);
+			
+			SRCH_INFO_INIT(tabinfo->t_sinfo, NULL, 0,
+					scanctx->keycolid, VARCHAR, -1);
+					
+			bp = blk_getsstable(tabinfo);	
+
+			sstab_scanctx.sstab = (char *)(bp->bblk);
+
+		
+			rg_count_data_sstable(&sstab_scanctx);
+
+			/* Buffer unkept. */
+			bufunkeep(bp->bsstab);
+			bp = NULL;
+
+		}
+
+		if (blk->bnextblkno != -1)
+		{
+			i = blk->bnextblkno;
+		}
+		else
+		{
+			/* Sending the last block of data in one Tablet. */
+			break;
+		}
+	}
+
+	scan_result = TRUE;
+	scanctx->rowcnt += sstab_scanctx.rowcnt;
+
+	if (bp)
+	{
+		bufunkeep(bp->bsstab);
+	}
+	session_close(tabinfo);
+
+	MEMFREEHEAP(tabinfo->t_sinfo);
+	MEMFREEHEAP(tabinfo);
+
+	tabinfo_pop();
+			
+	return scan_result;
+}
+
+
+
+/* Clone from rg_sstabscan(). */
+/* Get the row for the OR and AND clause in the query plan. */
+static int
+rg_count_data_sstable(SSTAB_SCANCTX *scanctx)
+{	
+	BLOCK	*blk;
+	int     *offset;
+	char    *rp;
+	int	minrowlen;
+
+
+	minrowlen= scanctx->rminlen;
+
+	while (TRUE)
+	{
+		blk = (BLOCK *)(scanctx->sstab + scanctx->curblk * BLOCKSIZE);
+
+		offset = ROW_OFFSET_PTR(blk);
+
+		offset -= scanctx->currow;
+			       
+		for(; scanctx->currow < blk->bnextrno; (scanctx->currow)++, 
+							offset--)
+		{
+			rp = (char *)blk + *offset;
+
+			Assert(*offset < blk->bfreeoff);
+
+			if (   rg_process_orplan(scanctx->orplan, rp, minrowlen)
+			    && rg_process_andplan(scanctx->andplan, rp, 
+			    				minrowlen))
+			{
+				/* Count the row. */
+				(scanctx->rowcnt)++;				
+			}
+		}
+
+		if (blk->bnextblkno == -1)
+		{
+			scanctx->curblk = 0;
+			scanctx->currow = 0;
+
+			break;
+		}
+
+		(scanctx->curblk)++;
+		scanctx->currow = 0;
+	}
+
+	return TRUE;
+}
+
 
 int
 rg_get_meta(char *req_buf, INSMETA **ins_meta, SELRANGE **sel_rg,
@@ -2586,11 +3098,19 @@ rg_handler(char *req_buf, int fd)
 
 		command = tss->tcmd_parser;
 
-		Assert(   (command->sym.command.querytype == SELECTWHERE)
-			||(command->sym.command.querytype == SELECTRANGE));
+		if (command->sym.command.querytype == SELECTCOUNT)
+		{
+			resp = rg_selcounttab(command, (SELWHERE *)(req_buf), fd);
+		}
+		else
+		{
+			Assert(   (command->sym.command.querytype == SELECTWHERE)
+				||(command->sym.command.querytype == SELECTRANGE));
 
-		resp = rg_selwheretab(command, (SELWHERE *)(req_buf), fd);
+			resp = rg_selwheretab(command, (SELWHERE *)(req_buf), fd);
+		}
 
+		
 		goto finish;
 	}
 	/* Rebalancer case. */
