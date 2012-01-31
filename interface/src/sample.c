@@ -156,15 +156,45 @@ int main(int argc, char *argv[])
 			
 			mt_cli_close_execute(exec_ctx);
 		}
-		
+
+		if (match(argv[1], "selectcount"))
+		{	
+			memset(resp, 0, 256);
+			memset(cmd, 0, 256);
+			sprintf(cmd, "selectcount gu where id1(aaaa38, aaaa47) and id2(bbbb35, bbbb46)");
+//			sprintf(cmd, "selectwhere gu where id2(bbbb3, bbbb8)");
+
+			
+			rtn_stat = mt_cli_open_execute(connection, cmd, &exec_ctx);
+
+			printf("Client 1: %s\n", cmd);
+
+			MT_CLI_EXEC_CONTEX	*t_exec_ctx;
+
+			t_exec_ctx = exec_ctx;
+
+			int	total_rowcnt = 0;
+			
+			for (i = 0; i < exec_ctx->rg_cnt; i++, t_exec_ctx++)
+			{
+				mt_cli_exec_builtin(t_exec_ctx);
+
+				total_rowcnt += t_exec_ctx->rowcnt;
+			}
+
+			printf(" The total row # is %d\n", total_rowcnt);
+			
+			mt_cli_close_execute(exec_ctx);
+		}
+				
 		if (match(argv[1], "select"))
 		{
 			/* Select datas from table */
-			for(i = 1; i < 2; i++)
+			for(i = 1; i < 100; i++)
 			{
 				memset(resp, 0, 256);
 				memset(cmd, 0, 256);
-				sprintf(cmd, "select gu(aaaa)");
+				sprintf(cmd, "select gu(aaaa%d)", i);
 
 				rtn_stat = mt_cli_open_execute(connection, cmd, &exec_ctx);
 

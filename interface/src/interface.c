@@ -152,7 +152,10 @@ mt_cli_open_connection(char * meta_ip, int meta_port, conn ** connection)
 	P_SPINLOCK(Cli_context->mutex);
 
 	/* Allocate the context for the meta connection. */
-	conn * new_conn = (conn *)MEMALLOCHEAP(sizeof(conn));
+	conn * new_conn = (conn *)malloc(sizeof(conn));
+
+	MEMSET(new_conn, sizeof(conn));
+	
 	new_conn->meta_server_port = meta_port;
 	strcpy(new_conn->meta_server_ip, meta_ip);
 
@@ -198,16 +201,16 @@ mt_cli_close_connection(conn * connection)
 	
 	for(i = 0; i < connection->rg_list_len; i++)
 	{
-		if(connection->rg_list[i]->status == ESTABLISHED)
+		if(connection->rg_list[i].status == ESTABLISHED)
 		{
-			close(connection->rg_list[i]->connection_fd);
+			close(connection->rg_list[i].connection_fd);
 		}
 		
-		MEMFREEHEAP(connection->rg_list[i]);
+//		MEMFREEHEAP(connection->rg_list[i]);
 	}
 
 	/* Free the connection context. */
-	MEMFREEHEAP(connection);
+	free(connection);
 
 	V_SPINLOCK(Cli_context->mutex);
 }
@@ -377,19 +380,26 @@ retry:
 		/* Ptr to the context of ranger connection. */
 		rg_conn * rg_connection;
 		int i;
+		int k = -1;
 		//printf("rg server: %s/%d\n", resp_ins->i_hdr.rg_info.rg_addr, resp_ins->i_hdr.rg_info.rg_port);
 
 		/* Find the right ranger from the ranger list. */
 		for(i = 0; i < connection->rg_list_len; i++)
 		{
 			if(   (resp_ins->i_hdr.rg_info.rg_port == 
-				connection->rg_list[i]->rg_server_port)
+				connection->rg_list[i].rg_server_port)
 			   && (!strcmp(resp_ins->i_hdr.rg_info.rg_addr, 
-				connection->rg_list[i]->rg_server_ip))
-			   && (connection->rg_list[i]->status == ESTABLISHED))
+				connection->rg_list[i].rg_server_ip))
+			   && (connection->rg_list[i].status == ESTABLISHED))
 			{
-				rg_connection = connection->rg_list[i];
+				rg_connection = &(connection->rg_list[i]);
 				break;
+			}
+
+			
+			if (connection->rg_list[i].status == CLOSED)
+			{
+				k = i;
 			}
 		}
 		
@@ -400,7 +410,21 @@ retry:
 			** list, we need to create the new connection to the 
 			** ranger server.
 			*/
-			rg_connection = (rg_conn *)MEMALLOCHEAP(sizeof(rg_conn));
+			if (k != -1)
+			{
+				/* Re-use the context of zomb connection. */
+				Assert(connection->rg_list[k].status == CLOSED);
+
+				rg_connection = &(connection->rg_list[k]);
+
+				MEMSET(rg_connection, sizeof(rg_conn));
+			}
+			else
+			{
+				rg_connection = &(connection->rg_list[i]);
+			}
+			
+			//rg_connection = (rg_conn *)MEMALLOCHEAP(sizeof(rg_conn));
 			rg_connection->rg_server_port = 
 						resp_ins->i_hdr.rg_info.rg_port;
 			strcpy(rg_connection->rg_server_ip, 
@@ -422,9 +446,12 @@ retry:
 			rg_connection->status = ESTABLISHED;
 
 			/* Add the new connection into the connection context. */
-			connection->rg_list[connection->rg_list_len] = rg_connection;
-			connection->rg_list_len++;
+			//connection->rg_list[connection->rg_list_len] = rg_connection;
 
+			if (k == -1)
+			{
+				connection->rg_list_len++;
+			}
 		}
 
 		/* 
@@ -687,6 +714,7 @@ finish:
 		/* Save the response infor into the SELECT execution context. */
 		t_exec_ctx->meta_resp = (char *)resp;
 		t_exec_ctx->rg_resp = (char *)rg_resp;
+		t_exec_ctx->querytype = querytype;
 		t_exec_ctx->end_rowpos = 1;
 	}
 	else
@@ -735,7 +763,6 @@ mt_cli_exec_selrang(conn * connection, char * cmd, MT_CLI_EXEC_CONTEX **exec_ctx
 {
 	char		*ip;		/* Ranger address. */
 	int		port;		/* Ranger port. */
-	SELRANGE	*selrg;		/* Ptr to the context of the SELECTRANGE. */
 	SELWHERE	*selwh;		/* Ptr to the context of the SELECTWHERE. */
 	SVR_IDX_FILE	*rglist;	/* Ptr to the list of ranger. */
 	int		rtn_state;	/* Return state. */
@@ -831,9 +858,18 @@ mt_cli_send_bigdata_req_rg(conn * connection, char * cmd, MT_CLI_EXEC_CONTEX *ex
 	rg_connection = mt_cli_rgsel_ranger(connection, cmd, exec_ctx, ip, port);
 
 	if (   (rg_connection == NULL) 
-	    || (!mt_cli_rgsel_is_bigdata(rg_connection, &bigdataport)))
+	    || (   (exec_ctx->querytype != SELECTCOUNT) 
+		&& (!mt_cli_rgsel_is_bigdata(rg_connection, &bigdataport))))
 	{
 		rtn_state = FALSE;
+		goto exit;
+	}
+
+	/* The result from SELECTCOUNT doesn't need to be sent by the bigdata port. */
+	if (exec_ctx->querytype == SELECTCOUNT)
+	{
+		rtn_state = TRUE;
+		exec_ctx->rg_conn = rg_connection;
 		goto exit;
 	}
 	
@@ -1086,18 +1122,25 @@ mt_cli_rgsel_ranger(conn * connection, char * cmd, MT_CLI_EXEC_CONTEX *exec_ctx,
 						** server.
 						*/
 	int 	i;
+	int	k;
 
 
 	rg_connection = NULL;
+	k = -1;
 	
 	for(i = 0; i < connection->rg_list_len; i++)
 	{
-		if(   (port == connection->rg_list[i]->rg_server_port)
-		   && (!strcmp(ip, connection->rg_list[i]->rg_server_ip))
-		   && (connection->rg_list[i]->status == ESTABLISHED))
+		if(   (port == connection->rg_list[i].rg_server_port)
+		   && (!strcmp(ip, connection->rg_list[i].rg_server_ip))
+		   && (connection->rg_list[i].status == ESTABLISHED))
 		{
-			rg_connection = connection->rg_list[i];
+			rg_connection = &(connection->rg_list[i]);
 			break;
+		}
+
+		if (connection->rg_list[i].status == CLOSED)
+		{
+			k = i;
 		}
 	}
 
@@ -1109,7 +1152,20 @@ mt_cli_rgsel_ranger(conn * connection, char * cmd, MT_CLI_EXEC_CONTEX *exec_ctx,
 	*/
 	if(i == connection->rg_list_len)
 	{
-		rg_connection = (rg_conn *)MEMALLOCHEAP(sizeof(rg_conn));
+		if (k != -1)
+		{
+			/* Re-use the context of zomb connection. */
+			Assert(connection->rg_list[k].status == CLOSED);
+
+			rg_connection = &(connection->rg_list[k]);
+
+			MEMSET(rg_connection, sizeof(rg_conn));
+		}
+		else
+		{
+			rg_connection = &(connection->rg_list[i]);
+		}
+		
 		rg_connection->rg_server_port = port;
 		strcpy(rg_connection->rg_server_ip, ip);
 
@@ -1118,7 +1174,7 @@ mt_cli_rgsel_ranger(conn * connection, char * cmd, MT_CLI_EXEC_CONTEX *exec_ctx,
 		{
 			perror("error in create connection with rg server: ");
 
-			MEMFREEHEAP(rg_connection);
+//			MEMFREEHEAP(rg_connection);
 			rtn_stat = FALSE;
 
 			return NULL;
@@ -1127,9 +1183,11 @@ mt_cli_rgsel_ranger(conn * connection, char * cmd, MT_CLI_EXEC_CONTEX *exec_ctx,
 		
 		rg_connection->status = ESTABLISHED;
 
-		connection->rg_list[connection->rg_list_len] = rg_connection;
-		connection->rg_list_len++;
-
+//		connection->rg_list[connection->rg_list_len] = rg_connection;
+		if (k == -1)
+		{
+			connection->rg_list_len++;
+		}
 	}
 
 	int send_buf_size = strlen(cmd);
@@ -1282,9 +1340,20 @@ mt_cli_read_range(MT_CLI_EXEC_CONTEX *exec_ctx)
 	RPCRESP		*rg_resp;
 	int		rtn_stat;
 	int		retry_cnt = 0;
+	int		sockfd;
 	
-retry:
-	rg_resp = conn_recv_resp_abt(exec_ctx->socketid);
+
+	if (exec_ctx->querytype == SELECTCOUNT)
+	{
+		sockfd = exec_ctx->rg_conn->connection_fd;
+	}
+	else
+	{
+		sockfd = exec_ctx->socketid;
+	}
+
+retry:	
+	rg_resp = conn_recv_resp_abt(sockfd);
 
 	switch (rg_resp->status_code)
 	{
@@ -1292,8 +1361,15 @@ retry:
 	
 		traceprint("\n need to re-get rg meta \n");
 		
-		
-		conn_close(exec_ctx->socketid, NULL, rg_resp);
+		if (exec_ctx->querytype == SELECTCOUNT)
+		{
+			exec_ctx->rg_conn->status = CLOSED;
+		}
+		else
+		{
+			exec_ctx->status |= CLICTX_SOCKET_CLOSED;
+		}
+		conn_close(sockfd, NULL, rg_resp);
 		
 		sleep(HEARTBEAT_INTERVAL + 1);
 
@@ -1551,6 +1627,39 @@ retry:
 	return rp;
 }
 
+
+
+int
+mt_cli_exec_builtin(MT_CLI_EXEC_CONTEX *exec_ctx)
+{
+	int	rtn_stat;
+
+
+	rtn_stat = TRUE;
+
+	switch (exec_ctx->querytype)
+	{
+	    case SELECTCOUNT:
+
+		/* Fetch data from the range server. */
+		if (!mt_cli_read_range(exec_ctx))
+		{
+			exec_ctx->status |= CLICTX_RANGER_IS_UNCONNECT;
+			rtn_stat = FALSE;
+		}
+
+		exec_ctx->rowcnt = *(int *)(((RPCRESP *)(exec_ctx->rg_resp))->result);
+		
+		break;
+
+	    default:
+	    	break;
+
+	}
+
+	return rtn_stat;
+}
+
 /*
 ** Get the row count in the execution context.
 **
@@ -1598,7 +1707,8 @@ mt_cli_get_colvalue(MT_CLI_EXEC_CONTEX *exec_ctx, char *rowbuf, int col_idx,
 	/* Meta data information. */
 	meta_buf = ((RPCRESP *)(exec_ctx->meta_resp))->result;
 
-	if ((exec_ctx->querytype == SELECTWHERE) || (exec_ctx->querytype == SELECTRANGE))
+	if (   (exec_ctx->querytype == SELECTWHERE) 
+	    || (exec_ctx->querytype == SELECTRANGE))
 	{
 		meta_buf += (sizeof(SELWHERE) + sizeof(SVR_IDX_FILE));
 	}
@@ -1636,11 +1746,8 @@ mt_cli_coltype_fixed(MT_CLI_EXEC_CONTEX *exec_ctx, int col_idx)
 	/* Meta data information. */
 	meta_buf = ((RPCRESP *)(exec_ctx->meta_resp))->result;
 
-	if (exec_ctx->querytype == SELECTRANGE)
-	{			
-		meta_buf += sizeof(SELRANGE);
-	}
-	else if (exec_ctx->querytype == SELECTWHERE)
+	if (   (exec_ctx->querytype == SELECTWHERE)
+	    || (exec_ctx->querytype == SELECTRANGE))
 	{
 		meta_buf += (sizeof(SELWHERE) + sizeof(SVR_IDX_FILE));
 	}
@@ -1747,7 +1854,11 @@ mt_cli_open_execute(conn *connection, char *cmd, MT_CLI_EXEC_CONTEX **exec_ctx)
 	    	break;
 		
 	    case SELECTWHERE:
-	    	rtn_stat = par_selwhere_tab(cmd + s_idx, SELECTWHERE);
+	    	rtn_stat = par_selwherecnt_tab(cmd + s_idx, SELECTWHERE);
+		break;
+
+	    case SELECTCOUNT:
+	    	rtn_stat = par_selwherecnt_tab(cmd + s_idx, SELECTCOUNT);
 		break;
 
 	    default:
@@ -1776,6 +1887,7 @@ mt_cli_open_execute(conn *connection, char *cmd, MT_CLI_EXEC_CONTEX **exec_ctx)
     		
 	    case SELECTRANGE:
 	    case SELECTWHERE:
+	    case SELECTCOUNT:
 	    	rtn_stat = mt_cli_exec_selrang(connection, cmd, exec_ctx, querytype);
 	    	
 		break;
@@ -1839,7 +1951,8 @@ mt_cli_close_execute(MT_CLI_EXEC_CONTEX *exec_ctx)
 		if (   (t_exec_ctx->querytype == SELECTRANGE) 
 		    || (t_exec_ctx->querytype == SELECTWHERE))
 		{
-			if (!(t_exec_ctx->status & CLICTX_BAD_SOCKET))
+			if (!(   (t_exec_ctx->status & CLICTX_BAD_SOCKET)
+			      || (t_exec_ctx->status & CLICTX_SOCKET_CLOSED)))
 			{
 				mt_cli_close_range(t_exec_ctx->socketid);
 				mt_cli_write_range(t_exec_ctx->socketid);

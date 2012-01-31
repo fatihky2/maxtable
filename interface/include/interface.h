@@ -56,7 +56,7 @@ typedef struct _conn
 	int	meta_server_port;	/* Port. */
 	int	connection_fd;		/* Socket id. */
 	int	status;			/* Status for the meta server. */
-	rg_conn *rg_list[MAX_RG_NUM];	/* Rangers connected by the client. */
+	rg_conn rg_list[MAX_RG_NUM];	/* Rangers connected by the client. */
 	int	rg_list_len;		/* The # of rangers connected by the 
 					** client.
 					*/
@@ -116,17 +116,21 @@ typedef struct mt_cli_exec_contex
 	int	first_rowpos;	/* For the SELECT query. */
 	int	end_rowpos;	/* For the SELECT query. */
 	int	cur_rowpos;	/* For the SELECT query. */
+	int	rowcnt;		/* For the SELECTCOUNT. */
+	int	pad;
 	int	rowminlen;	/* The min-length of row. */
 	int	socketid;	/* connection for the bigport. */
 	char	*rg_resp;	/* The response of ranger that contains the data. */
 	char	*meta_resp;	/* The response of meta that contains the meta data. */
+	rg_conn	*rg_conn;	/* For the SELECTCOUNT. */
 }MT_CLI_EXEC_CONTEX;
 
 #define	CLICTX_DATA_BUF_HAS_DATA	0x0001		/* has data */
 #define	CLICTX_DATA_BUF_NO_DATA		0x0002		/* no data and need to read if we want the next */
 #define	CLICTX_IS_OPEN			0x0004		/* client context has been openned. */
 #define	CLICTX_BAD_SOCKET		0x0008		/* fail to get the socket from bigport. */
-#define	CLICTX_RANGER_IS_UNCONNECT	0x0010		/* fail to connect to the ranger server. */	
+#define	CLICTX_RANGER_IS_UNCONNECT	0x0010		/* fail to connect to the ranger server. */
+#define	CLICTX_SOCKET_CLOSED		0x0020		/* socket (bigdata port) has been closed. */
 
 
 /* 
@@ -269,6 +273,10 @@ mt_cli_get_nextrow(MT_CLI_EXEC_CONTEX *exec_ctx, int *rlen);
 */
 extern char *
 mt_cli_get_colvalue(MT_CLI_EXEC_CONTEX *exec_ctx, char *rowbuf, int col_idx, int *collen);
+
+extern int
+mt_cli_exec_builtin(MT_CLI_EXEC_CONTEX *exec_ctx);
+
 
 
 #endif

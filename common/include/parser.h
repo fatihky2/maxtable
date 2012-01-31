@@ -171,7 +171,7 @@ int
 par_col_info4where(char *cmd, int cmd_len, int querytype, char *colname);
 
 int 
-par_selwhere_tab(char *s_str, int querytype);
+par_selwherecnt_tab(char *s_str, int querytype);
 
 int
 par_op_where(char *cmd, int len);

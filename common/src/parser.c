@@ -290,7 +290,11 @@ parser_open(char *s_str)
 	    	break;
 
 	    case SELECTWHERE:
-	    	rtn_stat = par_selwhere_tab(s_str + s_idx, SELECTWHERE);
+	    	rtn_stat = par_selwherecnt_tab(s_str + s_idx, SELECTWHERE);
+		break;
+
+	    case SELECTCOUNT:
+	    	rtn_stat = par_selwherecnt_tab(s_str + s_idx, SELECTCOUNT);
 		break;
 
 	    default:
@@ -904,7 +908,7 @@ par_selrange_tab(char *s_str, int querytype)
 
 
 int 
-par_selwhere_tab(char *s_str, int querytype)
+par_selwherecnt_tab(char *s_str, int querytype)
 {
 	LOCALTSS(tss);
 	int		len;
@@ -1383,7 +1387,7 @@ par_col_info4where(char *cmd, int cmd_len, int querytype, char *colname)
 	char	*rightdata;
 
 
-	Assert(querytype == SELECTWHERE);
+	Assert((querytype == SELECTWHERE) || (querytype == SELECTCOUNT));
 	
 	rg_insert = ((tss->topid & TSS_OP_RANGESERVER) && (tss->topid & TSS_OP_INSTAB)) ? TRUE : FALSE;
 

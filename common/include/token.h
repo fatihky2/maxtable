@@ -52,9 +52,10 @@ typedef struct tokens
 #define SELECTWHERE	13
 #define MCCRANGER	14
 #define SHARDING	15
+#define	SELECTCOUNT	16
 	
 
-#define MAXSI_FIXED_TOKENS	15
+#define MAXSI_FIXED_TOKENS	16
 
 int
 token_validate(char *token);

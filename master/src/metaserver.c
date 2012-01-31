@@ -2170,7 +2170,7 @@ meta_selwheretab(TREE *command, TABINFO *tabinfo)
 	
 	col_buf = (char *)(&(Master_infor->meta_syscol->colinfor[tabidx]));
 			
-	if (querytype == SELECTWHERE)
+	if ((querytype == SELECTWHERE) || (querytype == SELECTCOUNT))
 	{
 		int i;
 
@@ -3481,6 +3481,7 @@ parse_again:
 	    	break;
 #endif		
   	    case SELECTWHERE:
+	    case SELECTCOUNT:
 		resp = meta_selwheretab(command, tabinfo);
 		
 		if (DEBUG_TEST(tss))
