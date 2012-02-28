@@ -51,7 +51,8 @@
 #include "b_search.h"
 #include "log.h"
 #include "m_socket.h"
-
+#include "interface.h"
+#include <pthread.h>
 
 extern TSS	*Tss;
 extern KERNEL	*Kernel;
@@ -88,16 +89,6 @@ typedef struct rg_info
 	RG_SYSTABLE	rg_systab;
 }RANGEINFO;
 
-
-typedef struct range_query_contex
-{
-	int	status;
-	int	first_rowpos;
-	int	end_rowpos;
-	int	cur_rowpos;
-	int	rowminlen;
-	char	data[BLOCKSIZE];
-}RANGE_QUERYCTX;
 
 typedef struct sstab_scancontext
 {
@@ -210,6 +201,9 @@ rg_count_data_tablet(TABLET_SCANCTX *scanctx);
 
 static int
 rg_count_data_sstable(SSTAB_SCANCTX *scanctx);
+
+static char *
+rg_mapred_setup(char * req_buf);
 
 
 char *
@@ -3148,6 +3142,11 @@ rg_handler(char *req_buf, int fd)
 
 		return resp;
 	}
+	/* process with map reduce req */
+	else if (req_op & RPC_REQ_MAPRED_GET_DATAPORT_OP)
+	{
+		return rg_mapred_setup(req_buf);
+	}
 	
 	volatile struct
 	{
@@ -4315,7 +4314,357 @@ rg_table_unregist(char *tabname)
 	return TRUE;
 }
 
+typedef struct _mapred_arg
+{
+	char * table_name;
+	char * tablet_name;
+	int data_port;
+}mapred_arg;
 
+void * rg_mapred_process(void *args)
+{
+	pthread_detach(pthread_self());
+
+	mapred_arg * in = (mapred_arg *) args;
+	char * table_name = in->table_name;
+	char * tablet_name = in->tablet_name;
+	int data_port = in->data_port;
+
+	char tab_dir[TABLE_NAME_MAX_LEN];
+	char rg_tab_dir[TABLE_NAME_MAX_LEN];
+	char tab_meta_dir[TABLE_NAME_MAX_LEN];
+	char tab_tablet_dir[TABLE_NAME_MAX_LEN];
+
+	int fd1;
+
+	TABLEHDR tab_hdr;
+
+	char		tablet_bp[SSTABLE_SIZE];
+	char		sstable_buf[SSTABLE_SIZE];
+
+	int listenfd = 0;
+	int connfd = 0;
+
+	MEMSET(tab_dir, TABLE_NAME_MAX_LEN);
+	MEMCPY(tab_dir, MT_META_TABLE, STRLEN(MT_META_TABLE));
+	str1_to_str2(tab_dir, '/', table_name);
+
+	MEMSET(rg_tab_dir, TABLE_NAME_MAX_LEN);
+	MEMCPY(rg_tab_dir, MT_RANGE_TABLE, STRLEN(MT_RANGE_TABLE));
+	str1_to_str2(rg_tab_dir, '/', table_name);
+
+	
+	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
+	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
+	str1_to_str2(tab_meta_dir, '/', "sysobjects");
+
+	OPEN(fd1, tab_meta_dir, (O_RDONLY));
+	if (fd1 < 0)
+	{
+		traceprint("Table is not exist! \n");
+		goto exit;
+	}
+	READ(fd1, &tab_hdr, sizeof(TABLEHDR));	
+	CLOSE(fd1);
+
+	if (tab_hdr.tab_tablet == 0)
+	{
+		traceprint("Table %s has no data.\n", table_name);
+		goto exit;
+	}
+
+	if (tab_hdr.tab_stat & TAB_DROPPED)
+	{
+		traceprint("This table has been dropped.\n");
+		goto exit;
+	}	
+	
+	
+	MEMSET(tab_tablet_dir, TABLE_NAME_MAX_LEN);
+	MEMCPY(tab_tablet_dir, tab_dir, STRLEN(tab_dir));
+	str1_to_str2(tab_tablet_dir, '/', tablet_name);	
+	
+	OPEN(fd1, tab_tablet_dir, (O_RDONLY));
+	if (fd1 < 0)
+	{
+		   traceprint("Tablet %s is not exist! \n", tab_tablet_dir);
+		   goto exit;
+	}
+	READ(fd1, tablet_bp, SSTABLE_SIZE); 
+	CLOSE(fd1);
+
+	/* Create the socket fot the transferring of bigdata. */
+	listenfd = conn_socket_open(data_port);
+	if (!listenfd)
+	{
+		goto exit;
+	}
+
+	connfd = conn_socket_accept(listenfd);
+	if (connfd < 0)
+	{
+		traceprint("hit accept issue\n");
+		goto exit;
+	}
+
+	BLOCK *blk;
+	int i, rowno;
+	int *offset;
+	char *rp;
+	char tab_sstab_dir[TABLE_NAME_MAX_LEN];
+
+	mt_block_cache block_cache;
+	char data_req[RPC_MAGIC_MAX_LEN];
+	
+	for(i = 0; i < BLK_CNT_IN_SSTABLE; i ++)
+	{
+		blk = (BLOCK *)(tablet_bp + i * BLOCKSIZE);
+			       
+		for(rowno = 0, offset = ROW_OFFSET_PTR(blk); 
+			       rowno < blk->bnextrno; rowno++, offset--)
+		{
+			//process each sstable
+			
+			rp = (char *)blk + *offset;
+			
+			int sstabname_length;
+			char * sstabname = row_locate_col(rp, TABLET_SSTABNAME_COLOFF_INROW, ROW_MINLEN_IN_TABLET, &sstabname_length);
+			int sstabid_length;
+			int sstabid = *(int *)row_locate_col(rp,TABLET_SSTABID_COLOFF_INROW,ROW_MINLEN_IN_TABLET,&sstabid_length);
+
+			
+			MEMSET(tab_sstab_dir, TABLE_NAME_MAX_LEN);
+			MEMCPY(tab_sstab_dir, rg_tab_dir, STRLEN(rg_tab_dir));
+			str1_to_str2(tab_sstab_dir, '/', sstabname);
+				
+			OPEN(fd1, tab_sstab_dir, (O_RDONLY));
+			if (fd1 < 0)
+			{
+				traceprint("sstable %s is not exist! \n", tab_sstab_dir);
+				goto exit;
+			}
+			READ(fd1, sstable_buf, SSTABLE_SIZE); 
+			CLOSE(fd1);
+
+			/*TABINFO tabinfo;
+			SINFO	psinfo;
+			BLK_ROWINFO blk_rowinfo;			
+						
+			MEMSET(&tabinfo,sizeof(TABINFO));
+			MEMSET(&psinfo, sizeof(SINFO));
+	
+			tabinfo.t_tabid = tab_hdr.tab_id;
+			tabinfo.t_row_minlen = tab_hdr.tab_row_minlen;
+			tabinfo.t_sstab_id = sstabid;
+			tabinfo.t_sinfo = &psinfo;
+			tabinfo.t_rowinfo = &blk_rowinfo;
+			MEMSET(tabinfo.t_rowinfo, sizeof(BLK_ROWINFO));
+
+			MEMSET(tab_sstab_dir, TABLE_NAME_MAX_LEN);
+			MEMCPY(tab_sstab_dir, rg_tab_dir, STRLEN(rg_tab_dir));
+			str1_to_str2(tab_sstab_dir, '/', sstabname);
+
+			TABINFO_INIT(&tabinfo, tab_sstab_dir, tabinfo.t_sinfo, 
+				tabinfo.t_row_minlen, 0, tabinfo.t_tabid, 
+				tabinfo.t_sstab_id);
+			SRCH_INFO_INIT(tabinfo.t_sinfo, NULL, 0, 1, VARCHAR, -1);
+
+			BUF *sstable = blk_getsstable(&tabinfo);
+			//int sstable_offset = BLKHEADERSIZE;*/
+			char *sstable_bp = sstable_buf;//(char *)(sstable->bsstab->bblk);
+			BLOCK * sstable_blk;
+			int j;
+
+			for(j = 0; j < BLK_CNT_IN_SSTABLE; j ++)
+			{
+				sstable_blk = (BLOCK *)(sstable_bp + j * BLOCKSIZE);
+
+				if(!sstable_blk->bnextrno)
+				{
+					break;
+				}
+
+				//wait req
+				MEMSET(data_req, RPC_MAGIC_MAX_LEN);
+				int data_req_len = read(connfd, data_req, RPC_MAGIC_MAX_LEN);
+				
+				if (data_req_len != RPC_MAGIC_MAX_LEN)
+				{
+					traceprint("\n ERROR in response \n");
+					goto exit;
+				}
+
+				//process one req
+				if (!strncasecmp(RPC_MAPRED_GET_NEXT_VALUE, data_req, STRLEN(RPC_MAPRED_GET_NEXT_VALUE)))
+				{
+					MEMSET(&block_cache, sizeof(mt_block_cache));
+					MEMCPY(block_cache.data_cache, (char *)sstable_blk, BLOCKSIZE);
+					MEMCPY(block_cache.current_sstable_name, sstabname, sstabname_length);
+					block_cache.current_block_index = j;
+					block_cache.cache_index = 0;
+					block_cache.max_row_count = sstable_blk->bnextrno;
+					block_cache.row_min_len = sstable_blk->bminlen;
+					
+					char * resp = conn_build_resp_byte(RPC_SUCCESS, sizeof(mt_block_cache), 
+						(char *)&block_cache);
+					int resp_size = conn_get_resp_size((RPCRESP *)resp);
+					/* Send the result to the client. */
+					tcp_put_data(connfd, resp, resp_size);
+					conn_destroy_resp_byte(resp);	
+				}
+				else
+				{
+					traceprint("\n the request can only be RPC_MAPRED_GET_NEXT_VALUE \n");
+					Assert(0);
+				}
+			}
+
+			//bufunkeep(sstable->bsstab);
+			
+		}
+	}
+
+	while(TRUE)
+	{
+		MEMSET(data_req, RPC_MAGIC_MAX_LEN);
+		int data_req_len = read(connfd, data_req, RPC_MAGIC_MAX_LEN);
+				
+		if(data_req_len == 0)
+		{
+			traceprint("\n map reduce exit in this tablet \n");
+			goto exit;
+		}
+		else if (data_req_len != RPC_MAGIC_MAX_LEN)
+		{
+			traceprint("\n ERROR in response \n");
+			goto exit;
+		}
+
+		if (!strncasecmp(RPC_MAPRED_GET_NEXT_VALUE, data_req, STRLEN(RPC_MAPRED_GET_NEXT_VALUE)))
+		{
+			traceprint("\n no value left for value get in mapreduce \n");
+			
+			char * resp = conn_build_resp_byte(RPC_NO_VALUE, 0,	NULL);
+			int resp_size = conn_get_resp_size((RPCRESP *)resp);
+			/* Send the result to the client. */
+			tcp_put_data(connfd, resp, resp_size);
+			conn_destroy_resp_byte(resp);	
+		}
+		else if(!strncasecmp(RPC_MAPRED_EXIT, data_req, STRLEN(RPC_MAPRED_EXIT)))
+		{
+			traceprint("\n map reduce exit in this tablet \n");
+
+			char * resp = conn_build_resp_byte(RPC_SUCCESS, 0,	NULL);
+			int resp_size = conn_get_resp_size((RPCRESP *)resp);
+			/* Send the result to the client. */
+			tcp_put_data(connfd, resp, resp_size);
+			conn_destroy_resp_byte(resp);
+			
+			goto exit;
+		}
+		else
+		{
+			traceprint("\n the request can only be RPC_MAPRED_GET_NEXT_VALUE or RPC_MAPRED_EXIT \n");
+			Assert(0);
+		}
+	}
+					
+
+exit:
+	if(connfd)
+		conn_socket_close(connfd);
+	if(listenfd)
+		conn_socket_close(listenfd);
+
+	MEMFREEHEAP(in);
+	
+	return NULL;	
+}
+
+pthread_mutex_t port_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+int mapred_data_port = 40000;
+int max_data_port = 40100;
+int init_data_port = 40000;
+
+//max 100 simultaneous map, the port is from 50000 to 50099
+int rg_mapred_gen_port()
+{
+	pthread_mutex_lock(&port_mutex);
+	int ret = mapred_data_port++;
+	if(mapred_data_port == max_data_port)
+	{
+		mapred_data_port = init_data_port;
+	}
+	pthread_mutex_unlock(&port_mutex);
+	return ret;
+}
+
+static char *
+rg_mapred_setup(char * req_buf)
+{
+	char tab_dir[TABLE_NAME_MAX_LEN];
+	char tablet_dir[TABLE_NAME_MAX_LEN];
+
+	int tabidx;
+	int ret = TRUE;
+	
+	char * table_name = req_buf + RPC_MAGIC_MAX_LEN;
+	char * tablet_name = req_buf + RPC_MAGIC_MAX_LEN + strlen(table_name) + 1;
+
+	MEMSET(tab_dir, TABLE_NAME_MAX_LEN);
+	MEMCPY(tab_dir, MT_META_TABLE, STRLEN(MT_META_TABLE));
+	str1_to_str2(tab_dir, '/', table_name);
+	
+	MEMSET(tablet_dir, TABLE_NAME_MAX_LEN);
+	MEMCPY(tablet_dir, tab_dir, STRLEN(tab_dir));
+	str1_to_str2(tablet_dir, '/', tablet_name);
+	
+	if ((tabidx = rg_table_is_exist(tab_dir)) == -1)
+	{
+		if (STAT(tab_dir, &st) != 0)
+		{
+			traceprint("Table %s is not exist.\n", table_name);
+			ret = FALSE;
+			goto exit;
+		}
+	
+		tabidx = rg_table_regist(tab_dir);
+	}
+
+	if (STAT(tablet_dir, &st) != 0)
+	{
+		traceprint("Tablet %s is not exist.\n", tablet_name);
+		ret = FALSE;
+		goto exit;
+	}
+
+	pthread_t pthread_id;
+	//int	*tmpid;
+
+	int data_port = rg_mapred_gen_port();
+
+	mapred_arg* args = MEMALLOCHEAP(sizeof(mapred_arg));
+	args->table_name = table_name;
+	args->tablet_name = tablet_name;
+	args->data_port = data_port;
+
+	pthread_create(&pthread_id, NULL, rg_mapred_process, (void *)args);
+	
+	char *resp;
+
+exit:
+	if(ret)
+	{
+		resp = conn_build_resp_byte(RPC_BIGDATA_CONN, sizeof(int),
+						(char *)(&data_port));
+	}
+	else
+	{
+		resp = conn_build_resp_byte(RPC_FAIL, 0, NULL);
+	}
+	return resp;
+}
 
 int 
 main(int argc, char *argv[])

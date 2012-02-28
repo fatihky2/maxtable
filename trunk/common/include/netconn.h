@@ -38,6 +38,13 @@
 #define RPC_MASTER2RG_NOTIFY	"rsync"
 #define RPC_SELECTWHERE_MAGIC	"sel_wh"
 #define	RPC_RECOVERY		"rg_reco"
+#define RPC_MAPRED_GET_SPLITS "rgsplit"
+#define RPC_MAPRED_GET_META "rgmeta"
+#define RPC_MAPRED_GET_DATAPORT "dataport"
+#define RPC_MAPRED_GET_NEXT_VALUE "nextval"
+#define RPC_MAPRED_EXIT "rg_exit"
+
+
 
 
 
@@ -72,6 +79,7 @@ typedef struct rpcresp
 #define RPC_UNAVAIL		0x0020
 #define RPC_BIGDATA_CONN	0x0040
 #define	RPC_TABLE_NOT_EXIST	0x0080
+#define RPC_NO_VALUE 0x0100
 
 /*
 ** Copy data from the transmission buffer to the location
@@ -98,6 +106,8 @@ typedef struct rpcresp
 #define RPC_REQ_M2RHEARTBEAT_OP	0x0020
 #define	RPC_REQ_SELECWHERE_OP	0x0040
 #define	RPC_REQ_RECOVERY_RG_OP	0x0080
+#define RPC_REQ_MAPRED_GET_DATAPORT_OP 		0x0100
+#define RPC_REQ_MAPRED_GET_NEXT_VALUE_OP	0x0200
 
 
 char *

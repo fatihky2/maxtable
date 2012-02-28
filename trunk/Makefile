@@ -35,7 +35,7 @@ all: kfsfacer_o kfsfacer_a client master ranger kfsmain memTest sample client_li
 
 else ifeq (${MT_BACKEND}, LOCAL)
 
-all: client master ranger memTest sample client_lib clients_lib jni_lib java_api
+all: client master ranger memTest sample client_lib clients_lib mapred_sample
 
 endif
 
@@ -105,14 +105,17 @@ client_lib: ${LIB_OBJS_C}
 clients_lib: ${LIB_OBJS_C}
 	$(AR) libmtcli.a ${LIB_OBJS_C}
 
-jni_lib: ${JNI_OBJS}
-	$(CC) -shared -fPIC -o libmt_access.so ${JNI_OBJS}
+#jni_lib: ${JNI_OBJS}
+#	$(CC) -shared -fPIC -o libmt_access.so ${JNI_OBJS}
 
-java_api:
-	ant -f build.xml jar
-	ant -f build.xml examples
+#java_api:
+#	ant -f build.xml jar
+#	ant -f build.xml examples
+
+mapred_sample:
+	$(CC) $(CFLAGS) mapreduce_test.c libmtcli.a -o mapred_sample
 
 clean: 
-	rm -rf startClient startMaster startRanger imql kfsmain memTest benchmark sample libmtService.a libmtcli.a ${LIB_OBJS_C} ${LIB_OBJS_CPP} ${JNI_OBJS} libmtClient.so kfsfacer.o kfsfacer.a libmt_access.so
+	rm -rf startClient startMaster startRanger mapred_sample imql kfsmain memTest benchmark sample libmtService.a libmtcli.a ${LIB_OBJS_C} ${LIB_OBJS_CPP} ${JNI_OBJS} libmtClient.so kfsfacer.o kfsfacer.a libmt_access.so
 	rm -rf ./table ./index ./rg_server ./rg_table ./meta_table ./rgbackup ./rglog
-	ant -f build.xml clean
+	#ant -f build.xml clean

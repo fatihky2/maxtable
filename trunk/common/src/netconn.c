@@ -375,6 +375,8 @@ conn_send_req(RPCREQ* req, int sockfd)
     
 }
 
+
+
 RPCRESP * 
 conn_recv_resp(int sockfd)
 {
@@ -449,7 +451,7 @@ conn_recv_resp_abt(int sockfd)
 		}
 		else
 		{
-			traceprint("Client receive response error for unknown reason!\n");
+			traceprint("Client receive response error for unknown reason!, %d, %d\n", n, errno);
 			perror("Error in rg server response");
 		}
 		resp = conn_build_resp(NULL);
@@ -566,6 +568,14 @@ conn_chk_reqmagic(char *str)
 	else if (!strncasecmp(RPC_RECOVERY, str, STRLEN(RPC_RECOVERY)))
 	{
 		return RPC_REQ_RECOVERY_RG_OP;
+	}
+	else if (!strncasecmp(RPC_MAPRED_GET_DATAPORT, str, STRLEN(RPC_MAPRED_GET_DATAPORT)))
+	{
+		return RPC_REQ_MAPRED_GET_DATAPORT_OP;
+	}
+	else if (!strncasecmp(RPC_MAPRED_GET_NEXT_VALUE, str, STRLEN(RPC_MAPRED_GET_NEXT_VALUE)))
+	{
+		return RPC_REQ_MAPRED_GET_NEXT_VALUE_OP;
 	}
 		
 
@@ -692,10 +702,10 @@ conn_socket_accept(int sockfd)
 	struct sockaddr_in cliaddr;
 	socklen_t cliaddr_len = sizeof(cliaddr);
 	
-	struct timeval tv;
-	tv.tv_sec = RECVIO_TIMEOUT;
-	tv.tv_usec = 0;
-	setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));	
+	//struct timeval tv;
+	//tv.tv_sec = RECVIO_TIMEOUT;
+	//tv.tv_usec = 0;
+	//setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));	
 
 	connfd = accept(sockfd, (struct sockaddr *)&cliaddr, &cliaddr_len);
 

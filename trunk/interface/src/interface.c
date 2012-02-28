@@ -1999,3 +1999,414 @@ mt_cli_prt_help(char *cmd)
 	return FALSE;
 }
 
+int
+mt_mapred_get_splits(conn *connection, mt_split ** splits, int * split_count, char * table_name)
+{
+	//LOCALTSS(tss);
+	char		send_buf[LINE_BUF_SIZE];/* Buffer for the data sending. */
+	int 	send_buf_size;		/* Buffer size. */
+	RPCRESP 	*resp;			/* Ptr to the response information. */
+	int 	rtn_stat;		/* Return state. */
+	
+	
+	/* initialization. */
+	rtn_stat = TRUE;
+	
+	send_buf_size = 0;
+	MEMSET(send_buf, LINE_BUF_SIZE);
+	
+	PUT_TO_BUFFER(send_buf, send_buf_size, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
+	PUT_TO_BUFFER(send_buf, send_buf_size, RPC_MAPRED_GET_SPLITS, RPC_MAGIC_MAX_LEN);
+	PUT_TO_BUFFER(send_buf, send_buf_size, table_name, strlen(table_name)+1);
+	
+	/* Send the requirment to the meta server. */
+	tcp_put_data(connection->connection_fd, send_buf, send_buf_size);
+	
+	/* Get the splits info from the meta server. */
+	resp = conn_recv_resp(connection->connection_fd);
+	
+	if ((resp == NULL) || (!(resp->status_code & RPC_SUCCESS)))
+	{
+		traceprint("\n ERROR in response: in get splits from meta \n");
+		rtn_stat = FALSE;
+		return rtn_stat;
+	
+	}
+	
+	if(resp)
+	{
+		*splits= (mt_split*)resp->result;
+		*split_count = resp->result_length/sizeof(mt_split);
+
+		int i;
+
+		for(i = 0; i < *split_count; i++)
+		{
+		
+			MEMCPY(((*splits)+i)->meta_ip, connection->meta_server_ip, sizeof(connection->meta_server_ip));
+			((*splits)+i)->meta_port = connection->meta_server_port;
+		}
+		
+		MEMFREEHEAP(resp);
+
+	}
+	
+	return rtn_stat;
+}
+
+
+
+int mt_mapred_free_splits(mt_split * splits)
+{
+	MEMFREEHEAP(splits);
+	return TRUE;
+}
+
+int mt_mapred_get_reader_meta(mt_reader * reader)
+{
+	char		send_buf[LINE_BUF_SIZE];/* Buffer for the data sending. */
+	int 	send_buf_size;		/* Buffer size. */
+	RPCRESP 	*resp;			/* Ptr to the response information. */
+	int 	rtn_stat;		/* Return state. */
+		
+	/* initialization. */
+	rtn_stat = TRUE;
+		
+	send_buf_size = 0;
+	MEMSET(send_buf, LINE_BUF_SIZE);
+		
+	PUT_TO_BUFFER(send_buf, send_buf_size, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
+	PUT_TO_BUFFER(send_buf, send_buf_size, RPC_MAPRED_GET_META, RPC_MAGIC_MAX_LEN);
+	PUT_TO_BUFFER(send_buf, send_buf_size, reader->table_name, strlen(reader->table_name)+1);
+		
+	/* Send the requirment to the meta server. */
+	int fd;
+	if((fd = conn_open(reader->meta_ip, reader->meta_port)) < 0)
+	{
+		perror("error in create connection with meta server: ");
+	
+		rtn_stat = FALSE;
+
+		reader->status |= READER_BAD_SOCKET;
+	
+		return rtn_stat;
+	
+	}
+	tcp_put_data(fd, send_buf, send_buf_size);
+		
+	/* Get the splits info from the meta server. */
+	resp = conn_recv_resp(fd);
+		
+	if ((resp == NULL) || (!(resp->status_code & RPC_SUCCESS)))
+	{
+		traceprint("\n ERROR in response: in get meta from meta \n");
+		rtn_stat = FALSE;
+		return rtn_stat;
+		
+	}
+		
+	if(resp)
+	{
+		char * resp_buf = resp->result;
+		
+		reader->table_header= resp_buf;	
+
+		resp_buf += sizeof(TABLEHDR);
+
+		reader->col_info = resp_buf;
+
+		MEMFREEHEAP(resp);
+	}
+
+	conn_close(fd, NULL, NULL);
+		
+	return rtn_stat;
+
+}
+
+int mt_mapred_create_reader(mt_reader ** mtreader, mt_split * split)
+{
+	mt_reader * reader = (mt_reader *)MEMALLOCHEAP(sizeof(mt_reader));
+	MEMSET(reader, sizeof(mt_reader));
+	*mtreader = reader;
+	
+	char	send_rg_buf[LINE_BUF_SIZE]; 
+	int rtn_stat;			/* return state. */
+	rg_conn *rg_connection = &(reader->connection); 		
+
+	rg_connection->rg_server_port = split->range_port;
+	strcpy(rg_connection->rg_server_ip, split->range_ip);
+	
+	if((rg_connection->connection_fd = conn_open(rg_connection->rg_server_ip,
+		rg_connection->rg_server_port)) < 0)
+	{
+		perror("error in create connection with rg server: ");
+	
+		rtn_stat = FALSE;
+
+		reader->status |= READER_BAD_SOCKET;
+	
+		return rtn_stat;
+	
+	}
+			
+	rg_connection->status = ESTABLISHED;
+
+	MEMCPY(reader->table_name, split->table_name, strlen(split->table_name));
+	MEMCPY(reader->tablet_name, split->tablet_name, strlen(split->tablet_name));
+	
+	int send_buf_size = 0;
+	MEMSET(send_rg_buf, LINE_BUF_SIZE);
+	
+	PUT_TO_BUFFER(send_rg_buf, send_buf_size, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
+	PUT_TO_BUFFER(send_rg_buf, send_buf_size, RPC_MAPRED_GET_DATAPORT, RPC_MAGIC_MAX_LEN);
+	PUT_TO_BUFFER(send_rg_buf, send_buf_size, reader->table_name, strlen(reader->table_name)+1);
+	PUT_TO_BUFFER(send_rg_buf, send_buf_size, reader->tablet_name, strlen(reader->tablet_name)+1);	
+
+	/* Send the requirment to the range server. */
+	tcp_put_data(rg_connection->connection_fd, send_rg_buf, send_buf_size);
+
+	RPCRESP		*rg_resp;
+	int data_port;
+	
+	rg_resp = conn_recv_resp_abt(rg_connection->connection_fd);
+
+	switch (rg_resp->status_code)
+	{
+	    case RPC_BIGDATA_CONN:
+	    	/* Successfully. */
+	    	data_port = *(int *)rg_resp->result;
+	    	rtn_stat = TRUE;
+		break;
+		
+	    default:
+
+			traceprint("\nfailed to create reader from rg\n");
+			conn_close(rg_connection->connection_fd, NULL, rg_resp);
+			reader->status |= READER_PORT_INVALID;
+			rtn_stat = FALSE;
+			return rtn_stat;
+	
+	}
+
+	conn_destroy_resp(rg_resp);
+	rg_resp = NULL;
+
+	rg_conn *data_connection = &(reader->data_connection); 		
+
+	data_connection->rg_server_port = data_port;
+	strcpy(data_connection->rg_server_ip, split->range_ip);
+	
+	while((data_connection->connection_fd = conn_open(data_connection->rg_server_ip,
+		data_connection->rg_server_port)) < 0)
+	{
+		perror("error in create connection with rg server data port: ");
+	
+		sleep(1);	
+	}
+			
+	data_connection->status = ESTABLISHED;
+
+	reader->status |= READER_IS_OPEN;
+	MEMCPY(reader->meta_ip, split->meta_ip, sizeof(split->meta_ip));
+	reader->meta_port = split->meta_port;
+	reader->block_cache = NULL;
+
+	rtn_stat = mt_mapred_get_reader_meta(reader);
+
+	return rtn_stat;
+	
+}
+
+char*
+mt_mapred_get_cache_nextvalue(mt_reader * reader, int * rp_len)
+{
+	mt_block_cache *cache = reader->block_cache;
+	assert(cache);
+	assert(cache->cache_index < cache->max_row_count);
+
+	int * offset = ROW_OFFSET_PTR(cache->data_cache);
+
+	offset -= cache->cache_index;
+
+	char * rp = cache->data_cache + *offset;
+	*rp_len = ROW_GET_LENGTH(rp, cache->row_min_len);
+
+	cache->cache_index++;
+
+	if(cache->cache_index == cache->max_row_count)
+	{
+		reader->status |= READER_CACHE_NO_DATA;
+	}
+
+	return rp;
+}
+
+int
+mt_mapred_get_rg_nextvalue(mt_reader * reader)
+{
+	if(reader->block_cache)
+	{
+		MEMFREEHEAP(reader->block_cache);
+		reader->block_cache = NULL;
+	}
+
+	char	send_rg_buf[LINE_BUF_SIZE]; 
+	rg_conn *rg_connection = &(reader->data_connection);		
+		
+	assert(rg_connection->status == ESTABLISHED);
+	
+	int send_buf_size = 0;
+	MEMSET(send_rg_buf, LINE_BUF_SIZE);
+			
+	//PUT_TO_BUFFER(send_rg_buf, send_buf_size, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
+	PUT_TO_BUFFER(send_rg_buf, send_buf_size, RPC_MAPRED_GET_NEXT_VALUE, RPC_MAGIC_MAX_LEN);
+	//PUT_TO_BUFFER(send_rg_buf, send_buf_size, reader->table_name, strlen(reader->table_name)+1);
+	//PUT_TO_BUFFER(send_rg_buf, send_buf_size, reader->tablet_name, strlen(reader->tablet_name)+1);	
+		
+	/* Send the requirment to the range server. */
+	tcp_put_data(rg_connection->connection_fd, send_rg_buf, send_buf_size);
+		
+	RPCRESP 	*rg_resp;
+			
+	rg_resp = conn_recv_resp_abt(rg_connection->connection_fd);
+	
+	switch (rg_resp->status_code)
+	{
+		case RPC_UNAVAIL: //to fix me, need to re-get split for this tablet from meta server
+		
+		traceprint("\n need to re-get split info \n");
+			
+		rg_connection->status = CLOSED;
+		conn_close(rg_connection->connection_fd, NULL, rg_resp);
+		conn_close(reader->connection.connection_fd, NULL, NULL);
+		rg_resp = NULL;
+			
+		sleep(HEARTBEAT_INTERVAL + 1);
+	
+		reader->status |= READER_RG_INVALID;
+	
+		return FALSE;
+	
+		case RPC_NO_VALUE:
+		traceprint("\n get rpc: RPC_NO_VALUE \n");
+		reader->status |= READER_RG_NO_DATA;
+		return FALSE;
+			
+		default:
+		if (!(rg_resp->status_code & RPC_SUCCESS))
+		{
+			traceprint("\n ERROR in rg_server response \n");
+
+			reader->status |= READER_READ_ERROR;
+	
+			return FALSE;
+		}
+	}
+			
+
+	assert(rg_resp->result != NULL);
+		
+	reader->block_cache = (mt_block_cache *)rg_resp->result;
+	reader->block_cache->cache_index = 0;
+		
+	reader->status &= ~READER_CACHE_NO_DATA;
+
+	MEMFREEHEAP(rg_resp);
+	
+	return TRUE;
+
+}
+
+char *
+mt_mapred_get_nextvalue(mt_reader * reader, int * rp_len)
+{
+	if(reader->status & READER_RG_NO_DATA)
+	{		
+		traceprint("\n current split in range server come to eof\n");
+		return NULL;
+	}
+	if((!reader->block_cache) || (reader->status & READER_CACHE_NO_DATA))
+	{
+		traceprint("\n current cache in reader come to eof\n");
+		int ret = mt_mapred_get_rg_nextvalue(reader);
+
+		if(!ret)
+		{
+			if(reader->status & READER_RG_NO_DATA)
+			{
+				traceprint("\n current split in range server come to eof\n");
+				return NULL;
+			}
+			else
+			{
+				traceprint("\n error when get new value from rg, status: %d\n", reader->status);
+				assert(0);
+			}
+		}
+	}
+
+	assert(!(reader->status & READER_CACHE_NO_DATA));
+
+	return mt_mapred_get_cache_nextvalue(reader, rp_len);
+}
+
+char * mt_mapred_get_currentvalue(mt_reader * reader, char * row, int col_idx, int * value_len)
+{
+	TABLEHDR *table_hdr = (TABLEHDR *)reader->table_header;
+	COLINFO * col_info = (COLINFO *)reader->col_info;
+	/* Validation. */
+	if ((col_idx < 0) || ((col_idx + 1) > table_hdr->tab_col))
+	{
+		traceprint("Can't find the column.\n");
+		return NULL;
+	}
+		
+	*value_len = (col_info + col_idx)->col_len;
+	char *ret_rp =  row_locate_col(row, (col_info + col_idx)->col_offset,
+				table_hdr->tab_row_minlen, value_len);
+
+	return ret_rp;
+}
+
+int mt_mapred_free_reader(mt_reader * reader)
+{
+	/*char	send_rg_buf[LINE_BUF_SIZE]; 
+	rg_conn *rg_connection = &(reader->data_connection);		
+			
+	assert(rg_connection->status == ESTABLISHED);
+		
+	int send_buf_size = 0;
+	MEMSET(send_rg_buf, LINE_BUF_SIZE);
+				
+	PUT_TO_BUFFER(send_rg_buf, send_buf_size, RPC_MAPRED_EXIT, RPC_MAGIC_MAX_LEN);
+			
+	// Send the requirment to the range server. 
+	tcp_put_data(rg_connection->connection_fd, send_rg_buf, send_buf_size);
+			
+	RPCRESP 	*rg_resp;
+				
+	rg_resp = conn_recv_resp_abt(rg_connection->connection_fd);
+
+	if (!(rg_resp->status_code & RPC_SUCCESS))
+	{
+		traceprint("\n ERROR in rg_server response \n");
+
+		Assert(0);
+	}*/
+
+	conn_close(reader->connection.connection_fd, NULL, NULL);
+	conn_close(reader->data_connection.connection_fd, NULL, NULL);
+
+	if(reader->table_header)
+		MEMFREEHEAP(reader->table_header);
+
+	if(reader->block_cache)
+		MEMFREEHEAP(reader->block_cache);
+
+	MEMFREEHEAP(reader);
+
+	return TRUE;
+}
+
+

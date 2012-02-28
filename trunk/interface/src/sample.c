@@ -58,7 +58,7 @@ int main(int argc, char *argv[])
 			memset(resp, 0, 256);
 			memset(cmd , 0, 256);
 
-			sprintf(cmd, "create table gu(id1 varchar, id2 varchar,id3 int, id4 varchar,id5 varchar,id6 varchar,id7 varchar,id8 varchar,id9 varchar)");
+			sprintf(cmd, "create table lbs10(id1 varchar, id2 varchar,id3 int)");
 			//sprintf(cmd, "create table lbs(id1 varchar, id2 varchar,id3 int)");
 			mt_cli_open_execute(connection, cmd, &exec_ctx);
 
@@ -70,7 +70,7 @@ int main(int argc, char *argv[])
 			
 				
 			/* Insert 10000 data rows into table */
-			for(i = 1; i < 10000; i++)
+			for(i = 1; i < 50000; i++)
 			{
 #if 0
 				char	*c = "cccccccccccccccccccccccccccccccccccccccccccccccccccccc";
@@ -81,7 +81,6 @@ int main(int argc, char *argv[])
 				char	*g = "gggggggggggggggggggggggggggggggggggggggggggggggggggggg";
 
 				char	*h = "hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh";
-#endif
 
 				char	*c = "cccccc";
 				char	*d = "dddddd";
@@ -89,8 +88,8 @@ int main(int argc, char *argv[])
 				char 	*f = "ffffff";
 				char	*g = "gggggg";
 				char	*h = "hhhhhh";
- 
-				sprintf(cmd, "insert into gu(aaaa%d, bbbb%d, %d, %s%d, %s%d, %s%d, %s%d, %s%d, %s%d)", i,i,i,c,i,d, i,e, i,f,i,g,i,h,i);
+#endif 
+				sprintf(cmd, "insert into lbs10(aaaa%d, bbbb%d, %d)", i,i,i);
 				
 //				sprintf(cmd, "insert into lbs(aaaa%d, bbbb%d, %d)", i,i,i);
 
@@ -104,7 +103,7 @@ int main(int argc, char *argv[])
 	                                continue;
 				}
 				
-				//printf("Client 1: %s\n", cmd);
+				printf("Client 1: %s\n", cmd);
 
 				mt_cli_close_execute(exec_ctx);
 				

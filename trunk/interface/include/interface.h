@@ -27,8 +27,8 @@
 #include "spinlock.h"
 
 
-#define	BLOCKSIZE		(64 * 1024)
-//#define	BLOCKSIZE		512
+//#define	BLOCKSIZE		(64 * 1024)
+#define	BLOCKSIZE		512
 
 
 
@@ -277,6 +277,74 @@ mt_cli_get_colvalue(MT_CLI_EXEC_CONTEX *exec_ctx, char *rowbuf, int col_idx, int
 extern int
 mt_cli_exec_builtin(MT_CLI_EXEC_CONTEX *exec_ctx);
 
+
+typedef struct _mt_split
+{
+	char table_name[128];
+	char tablet_name[128];
+	char range_ip[32];
+	int range_port;
+
+	char meta_ip[32];
+	int meta_port;
+}mt_split;
+
+typedef struct _mt_block_cache
+{
+	char data_cache[BLOCKSIZE];
+	char current_sstable_name[128];
+	int current_block_index;
+	int cache_index;
+	int max_row_count;
+	int row_min_len;
+}mt_block_cache;
+
+
+typedef struct _mt_reader
+{
+	rg_conn connection;
+	rg_conn data_connection;
+	char table_name[128];
+	char tablet_name[128];
+
+	mt_block_cache * block_cache;
+	int status;
+
+	char meta_ip[32];
+	int meta_port;
+
+	char * table_header;
+	char * col_info;
+}mt_reader;
+
+#define	READER_CACHE_NO_DATA		0x0001		/* reader cache has no data */
+#define	READER_IS_OPEN			0x0002		
+#define	READER_BAD_SOCKET		0x0004		
+#define	READER_RG_INVALID	0x0008	
+#define	READER_PORT_INVALID	0x0010
+#define	READER_RG_NO_DATA	0x0020
+#define	READER_READ_ERROR	0x0040
+
+
+
+
+extern int
+mt_mapred_get_splits(conn *connection, mt_split ** splits, int * split_count, char * table_name);
+
+extern int 
+mt_mapred_free_splits(mt_split * splits);
+
+extern int
+mt_mapred_create_reader(mt_reader * * mtreader, mt_split * split);
+
+extern int
+mt_mapred_free_reader(mt_reader * reader);
+
+extern char *
+mt_mapred_get_nextvalue(mt_reader * reader, int * rp_len);
+
+extern char *
+mt_mapred_get_currentvalue(mt_reader * reader, char * row, int col_idx, int * value_len);
 
 
 #endif

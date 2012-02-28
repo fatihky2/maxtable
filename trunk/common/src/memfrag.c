@@ -553,9 +553,11 @@ mp_frag_free(MEMPOOL *mp, void *addr, char *file, int line)
 //	printf("\n print NULL list ---2 \n");
 //	prLINK((LINK *)mfp);
 	
+	P_SPINLOCK(MEM_FRAG_SPIN);
+
 	mfp->mf_flags = 0;
 
-	P_SPINLOCK(MEM_FRAG_SPIN);
+	//P_SPINLOCK(MEM_FRAG_SPIN);
 	
 	
 	MEMCOM_UPDATE_USED(mp, -(sizeof(MEMFRAG) * mfp->mf_size));
@@ -780,7 +782,7 @@ prLINK(LINK *link)
 
 
 
-static void
+void
 mem_prt_fragmp(MEMPOOL *mp)
 {
 	FLINK   *free_link;
@@ -788,7 +790,7 @@ mem_prt_fragmp(MEMPOOL *mp)
 
 	traceprint("\n Pint Frag List : BEGIN \n");
 	traceprint("\n Free  Frag LIST \n");
-
+	P_SPINLOCK(MEM_FRAG_SPIN);
 	FOR_QUEUE(FLINK, &mp->mp_free_frags, free_link)
     	{
 		mfp = MF_GET_MFP(free_link);
@@ -801,6 +803,7 @@ mem_prt_fragmp(MEMPOOL *mp)
     	{
 		prLINK((LINK *)mfp);
 	}
+	V_SPINLOCK(MEM_FRAG_SPIN);
 
 	traceprint("\n Pint Frag List : END \n");
 
