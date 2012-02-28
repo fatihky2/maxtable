@@ -47,7 +47,7 @@
 #include "thread.h"
 #include "log.h"
 #include "m_socket.h"
-
+#include "interface.h"
 extern	TSS	*Tss;
 extern	char	Kfsserver[32];
 extern	int	Kfsport;
@@ -92,6 +92,12 @@ meta_heartbeat_setup(RANGE_PROF * rg_addr);
 
 static int
 meta_failover_rg(char * req_buf);
+
+static char *
+meta_get_splits(char * req_buf);
+
+static char *
+meta_get_reader_meta(char * req_buf);
 
 static int
 meta_get_free_sstab();
@@ -3378,6 +3384,16 @@ meta_handler(char *req_buf, int fd)
 
 		return resp;
 	}
+
+	if(resp = meta_get_splits(req_buf))
+	{
+		return resp;
+	}
+
+	if(resp = meta_get_reader_meta(req_buf))
+	{
+		return resp;
+	}
 	
 parse_again:
 	if (!parser_open(tmp_req_buf))
@@ -4917,6 +4933,274 @@ meta_load_sysmeta()
 
 	return TRUE;
 }
+
+char *
+meta_get_splits(char * req_buf)
+{
+	char * table_name;
+	char table_dir[TABLE_NAME_MAX_LEN];
+	char table_meta_dir[TABLE_NAME_MAX_LEN];
+
+	int table_idx;
+	int rpc_status = 0;
+
+	TABLEHDR *tab_hdr;
+	char *col_buf;
+		
+	if (strncasecmp(RPC_MAPRED_GET_SPLITS, req_buf, STRLEN(RPC_MAPRED_GET_SPLITS)) != 0)
+	{
+		return NULL;
+	}
+		
+	table_name = req_buf + RPC_MAGIC_MAX_LEN;
+
+	MEMSET(table_dir, TABLE_NAME_MAX_LEN);
+	MEMCPY(table_dir, MT_META_TABLE, STRLEN(MT_META_TABLE));
+
+	str1_to_str2(table_dir, '/', table_name);
+	
+	if ((table_idx = meta_table_is_exist(table_dir)) == -1)
+	{
+		traceprint("Table %s is not exist.\n", table_name);
+		rpc_status |= RPC_TABLE_NOT_EXIST;
+		goto exit;
+	}
+		
+	tab_hdr = &(Master_infor->meta_sysobj->sysobject[table_idx]);
+	col_buf = (char *)(&(Master_infor->meta_syscol->colinfor[table_idx]));
+	
+	if (tab_hdr->tab_tablet == 0)
+	{
+		traceprint("Table %s has no data.\n", table_name);
+		goto exit;
+	}
+	
+	if (tab_hdr->tab_stat & TAB_DROPPED)
+	{
+		traceprint("This table has been dropped.\n");
+		goto exit;
+	}
+
+	MEMSET(table_meta_dir, TABLE_NAME_MAX_LEN);
+	MEMCPY(table_meta_dir, table_dir, TABLE_NAME_MAX_LEN);
+	str1_to_str2(table_meta_dir, '/', "tabletscheme");
+	
+	TABINFO 	*tabinfo;
+	int 	minrowlen;
+	BLK_ROWINFO blk_rowinfo;
+	BUF 	*bp;
+	
+	tabinfo = MEMALLOCHEAP(sizeof(TABINFO));
+	MEMSET(tabinfo, sizeof(TABINFO));
+	
+	tabinfo->t_sinfo = (SINFO *)MEMALLOCHEAP(sizeof(SINFO));
+	MEMSET(tabinfo->t_sinfo, sizeof(SINFO));
+	
+	tabinfo->t_rowinfo = &blk_rowinfo;
+	MEMSET(tabinfo->t_rowinfo, sizeof(BLK_ROWINFO));
+	
+	tabinfo->t_dold = tabinfo->t_dnew = (BUF *) tabinfo;
+	
+	tabinfo_push(tabinfo);
+	
+	minrowlen = ROW_MINLEN_IN_TABLETSCHM;
+	
+	TABINFO_INIT(tabinfo, table_meta_dir, tabinfo->t_sinfo,
+			minrowlen, TAB_SCHM_INS, tab_hdr->tab_id, 
+			TABLETSCHM_ID);
+	
+	SRCH_INFO_INIT(tabinfo->t_sinfo, NULL, 0,
+			TABLETSCHM_KEY_COLID_INROW, VARCHAR, -1);
+	
+	bp = blk_getsstable(tabinfo);
+	
+	char *tablet_schm_bp = (char *)(bp->bsstab->bblk);
+			
+	BLOCK *blk;
+	
+	int i, rowno;
+	int *offset;
+	char	*rp;
+	char	*addr_in_blk;
+	int addrlen_in_blk;
+	int port_in_blk;
+	int portlen_in_blk;
+	char * tablet_name_in_blk;
+	int tablet_name_len_in_blk;
+
+	mt_split *splits = NULL;
+	int split_count = 0;
+	int split_number = 0;
+
+	for(i = 0; i < BLK_CNT_IN_SSTABLE; i ++)
+	{
+		blk = (BLOCK *)(tablet_schm_bp + i * BLOCKSIZE);
+		split_count += blk->bnextrno;
+	}
+
+	splits = (mt_split *)MEMALLOCHEAP(sizeof(mt_split) * split_count);
+	MEMSET(splits, sizeof(mt_split) * split_count);
+			
+	for(i = 0; i < BLK_CNT_IN_SSTABLE; i ++)
+	{
+		blk = (BLOCK *)(tablet_schm_bp + i * BLOCKSIZE);	
+				
+		for(rowno = 0, offset = ROW_OFFSET_PTR(blk); 
+			rowno < blk->bnextrno; rowno++, offset--)
+		{
+			rp = (char *)blk + *offset;
+				
+			Assert(*offset < blk->bfreeoff);
+				
+			addr_in_blk = row_locate_col(rp, 
+					TABLETSCHM_RGADDR_COLOFF_INROW,
+					ROW_MINLEN_IN_TABLETSCHM,
+					&addrlen_in_blk);
+				
+			port_in_blk = *(int *)row_locate_col(rp,
+					TABLETSCHM_RGPORT_COLOFF_INROW, 
+					ROW_MINLEN_IN_TABLETSCHM, 
+					&portlen_in_blk);
+
+			tablet_name_in_blk = row_locate_col(rp,
+					TABLETSCHM_TABLETNAME_COLOFF_INROW, 
+					ROW_MINLEN_IN_TABLETSCHM, 
+					&tablet_name_len_in_blk);
+
+			mt_split *current = splits + split_number;
+			MEMCPY(current->range_ip, addr_in_blk, RANGE_ADDR_MAX_LEN);
+			current->range_port = port_in_blk;
+			MEMCPY(current->tablet_name, tablet_name_in_blk, strlen(tablet_name_in_blk));
+			MEMCPY(current->table_name, table_name, strlen(table_name));
+
+			split_number++;
+		}
+			
+	}
+	
+	bufunkeep(bp->bsstab);
+	
+	session_close(tabinfo);
+	
+	MEMFREEHEAP(tabinfo->t_sinfo);
+	MEMFREEHEAP(tabinfo);
+	
+	tabinfo_pop();
+		
+	int rtn_stat = TRUE;
+
+	char *resp;
+	
+exit:
+	if (rtn_stat)
+	{
+		rpc_status |= RPC_SUCCESS;
+		resp = conn_build_resp_byte(rpc_status, split_count * sizeof(mt_split), (char *)splits);
+		traceprint("get %d splits.\n", split_count);
+	}
+	else
+	{
+		rpc_status |= RPC_FAIL;
+		resp = conn_build_resp_byte(rpc_status, 0, NULL);
+	}
+	
+	if (splits)
+	{
+		MEMFREEHEAP(splits);
+	}
+	
+	return resp;
+}
+
+char *
+meta_get_reader_meta(char * req_buf)
+{
+	char * table_name;
+	char table_dir[TABLE_NAME_MAX_LEN];
+
+	int table_idx;
+	int rpc_status = 0;
+
+	TABLEHDR *tab_hdr;
+	char *col_buf;
+
+	int rtn_stat = TRUE;
+		
+	if (strncasecmp(RPC_MAPRED_GET_META, req_buf, STRLEN(RPC_MAPRED_GET_META)) != 0)
+	{
+		return NULL;
+	}
+		
+	table_name = req_buf + RPC_MAGIC_MAX_LEN;
+
+	MEMSET(table_dir, TABLE_NAME_MAX_LEN);
+	MEMCPY(table_dir, MT_META_TABLE, STRLEN(MT_META_TABLE));
+
+	str1_to_str2(table_dir, '/', table_name);
+	
+	if ((table_idx = meta_table_is_exist(table_dir)) == -1)
+	{
+		traceprint("Table %s is not exist.\n", table_name);
+		rpc_status |= RPC_TABLE_NOT_EXIST;
+		rtn_stat = FALSE;
+		goto exit;
+	}
+		
+	tab_hdr = &(Master_infor->meta_sysobj->sysobject[table_idx]);
+	col_buf = (char *)(&(Master_infor->meta_syscol->colinfor[table_idx]));
+	
+	if (tab_hdr->tab_tablet == 0)
+	{
+		traceprint("Table %s has no data.\n", table_name);
+		rtn_stat = FALSE;
+		goto exit;
+	}
+	
+	if (tab_hdr->tab_stat & TAB_DROPPED)
+	{
+		traceprint("This table has been dropped.\n");
+		rtn_stat = FALSE;
+		goto exit;
+	}
+
+	int col_buf_len;
+	char *resp_buf;
+	int col_buf_idx;
+	char * resp;
+	
+exit:
+	col_buf_len = sizeof(TABLEHDR) + tab_hdr->tab_col * (sizeof(COLINFO));
+	
+	resp_buf = MEMALLOCHEAP(col_buf_len);
+	MEMSET(resp_buf, col_buf_len);
+
+	col_buf_idx = 0;		
+
+	MEMCPY((resp_buf + col_buf_idx), tab_hdr, sizeof(TABLEHDR));
+	col_buf_idx += sizeof(TABLEHDR);
+
+	MEMCPY((resp_buf + col_buf_idx), col_buf, tab_hdr->tab_col * sizeof(COLINFO));
+	col_buf_idx += tab_hdr->tab_col * sizeof(COLINFO);
+	
+	if (rtn_stat)
+	{
+		rpc_status |= RPC_SUCCESS;
+		resp = conn_build_resp_byte(rpc_status, col_buf_len, resp_buf);
+	}
+	else
+	{
+		rpc_status |= RPC_FAIL;
+		resp = conn_build_resp_byte(rpc_status, 0, NULL);
+	}
+	
+	if(resp_buf)
+	{
+		MEMFREEHEAP(resp_buf);
+	}
+	
+	return resp;
+}
+
 
 int main(int argc, char *argv[])
 {
