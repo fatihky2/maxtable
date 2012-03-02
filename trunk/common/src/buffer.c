@@ -32,9 +32,10 @@
 extern KERNEL	*Kernel;
 extern TSS	*Tss;
 
-
-
 int	bufwrite_cnt = 0;
+
+
+
 
 
 void
@@ -228,7 +229,7 @@ BUF *
 bufsearch(TABINFO *tabinfo)
 {
 	BUF	*bufptr;			
-	BUF	**hashptr;			
+	BUF	**hashptr;				
 	int	sstabno;
 	int	tabid;
 
@@ -333,7 +334,6 @@ bufhash(BUF *bp)
 }
 
 
-
 void
 bufunhash(BUF *bp)
 {
@@ -350,7 +350,6 @@ bufunhash(BUF *bp)
 	{
 		goto fail;
 	}
-
 
 	
  	hashptr = BUFHASH(bp->bsstabid, bp->btabid);
@@ -530,7 +529,6 @@ buffree(BUF *bp)
 void
 bufkeep(BUF *bp)
 {
-	
 	
 	LRUUNLINK(bp);
 	

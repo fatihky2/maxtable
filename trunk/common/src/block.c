@@ -32,6 +32,7 @@
 #include "timestamp.h"
 #include "log.h"
 #include "hkgc.h"
+#include "type.h"
 
 
 extern TSS	*Tss;
@@ -70,8 +71,8 @@ nextsstab:
 		
 		return bp->bsstab;
 	}
-
 	
+
 	
 
 	
@@ -106,6 +107,7 @@ nextsstab:
 				goto finish;
 			}
 
+			
 			Assert(   (tmpbp->bsstab->bblk->bsstab_split_ts_lo 
 						> tabinfo->t_insmeta->ts_low)
 			       || (tmpbp->bsstab->bblk->bsstab_split_ts_lo 
@@ -126,7 +128,7 @@ nextsstab:
 			   			< tabinfo->t_insmeta->ts_low))
 			{
 				
-				
+								
 				tabinfo->t_stat |= TAB_RETRY_LOOKUP;
 			}
 
@@ -434,9 +436,7 @@ blkins(TABINFO *tabinfo, char *rp)
 	
 	tabinfo->t_sinfo->sistate |= SI_INS_DATA;
 	
-	bp = blkget(tabinfo);
-
-	
+	bp = blkget(tabinfo);	
 
 	if ((tabinfo->t_stat & TAB_RETRY_LOOKUP) 
 	    || !(tabinfo->t_sinfo->sistate & SI_NODATA))
@@ -444,8 +444,6 @@ blkins(TABINFO *tabinfo, char *rp)
 		bufunkeep(bp->bsstab);
 		return FALSE;
 	}
-
-	
 
 //	offset = blksrch(tabinfo, bp);
 
@@ -547,7 +545,7 @@ finish:
 	
 	bufdirty(bp);
 
-	/* Must to flush the first insertion into the disk. */
+	
 	if ((SSTABLE_STATE(bp) & BUF_READ_EMPTY) && (SSTABLE_STATE(bp) & BUF_DIRTY))
 	{		
 		DIRTYUNLINK(bp);
@@ -560,11 +558,7 @@ finish:
 		LOGREC	logrec;
 		int	logid;
 
-		/*
-		**	While one row insertion hit the split issue, the overview of log as follows:
-		**	1. | ChkPoint_begin|Chkpoint_end| LOG_SKIP |LOG_SKIP|  ChkPoint_begin|Chkpoint_end|
-		**	2. | ChkPoint_begin|Chkpoint_end| LOG_SKIP | ChkPoint_begin|Chkpoint_end|
-		*/
+		
 		logid = (tabinfo->t_stat & TAB_LOG_SKIP_LOG)? LOG_SKIP : LOG_INSERT;
 
 		log_build(&logrec, logid, tabinfo->t_insdel_old_ts_lo,
@@ -601,9 +595,11 @@ blkdel(TABINFO *tabinfo)
 	int	i;
 	int	*offtab;
 	char	*rp;
+	int	del_stat;
 
 
 	minlen = tabinfo->t_row_minlen;
+	del_stat = TRUE;
 	
 	tabinfo->t_sinfo->sistate |= SI_DEL_DATA;
 	
@@ -645,6 +641,8 @@ blkdel(TABINFO *tabinfo)
 			
 			ROW_SET_STATUS(rp, ROW_DELETED);
 
+			del_stat = FALSE;
+			
 			
 			
 			goto finish;
@@ -661,7 +659,7 @@ blkdel(TABINFO *tabinfo)
 	
 	for (i = bp->bblk->bnextrno; i > 0; i--)
 	{
-				
+					
 		if (offtab[-(i-1)] < offset)
 		{
 			break;
@@ -674,6 +672,7 @@ blkdel(TABINFO *tabinfo)
 		offtab[-j] = offtab[-(j + 1)] - rlen;
 	
 	}
+finish:
 
 	if (tss->topid & TSS_OP_RANGESERVER)
 	{
@@ -686,16 +685,125 @@ blkdel(TABINFO *tabinfo)
 		tabinfo->t_insdel_new_ts_lo = 
 					bp->bsstab->bblk->bsstab_insdel_ts_lo;
 	}
-	
-	bp->bblk->bfreeoff -= rlen;
-	
-	BLK_GET_NEXT_ROWNO(bp->bblk)--;
 
-finish:
+	
+	if (del_stat)
+	{
+		bp->bblk->bfreeoff -= rlen;
+		BLK_GET_NEXT_ROWNO(bp->bblk)--;
+	}
+
+
 	bufdirty(bp);
 	bufunkeep(bp->bsstab);
 		
 	tabinfo->t_sinfo->sistate &= ~SI_DEL_DATA;
+
+	return TRUE;
+}
+
+
+int
+blkupdate(TABINFO *tabinfo, char *newrp)
+{
+	LOCALTSS(tss);
+	BUF	*bp;
+	int	offset;
+	int	minlen;
+	int	oldrlen;
+	int	newrlen;
+	char	*oldrp;
+
+
+	minlen = tabinfo->t_row_minlen;
+	
+	tabinfo->t_sinfo->sistate |= SI_UPD_DATA;
+	
+	bp = blkget(tabinfo);
+
+	if (tabinfo->t_stat & TAB_RETRY_LOOKUP)
+	{
+		bufunkeep(bp->bsstab);
+		return FALSE;
+	}
+
+//	offset = blksrch(tabinfo, bp);
+
+	Assert(tabinfo->t_rowinfo->rblknum == bp->bblk->bblkno);
+	Assert(tabinfo->t_rowinfo->rsstabid == bp->bblk->bsstabid);
+	offset = tabinfo->t_rowinfo->roffset;
+
+	if (tabinfo->t_sinfo->sistate & SI_NODATA)
+	{
+		traceprint("We can not find the row to be deleted.\n");	
+		return FALSE;
+	}
+
+	oldrp = (char *)(bp->bblk) + offset;
+	oldrlen = ROW_GET_LENGTH(oldrp, minlen);
+
+	newrlen = ROW_GET_LENGTH(newrp, minlen);
+
+	
+	if (newrlen == oldrlen)
+	{
+		bufpredirty(bp);
+		
+		
+		MEMCPY(oldrp, newrp, newrlen);
+
+		if (tss->topid & TSS_OP_RANGESERVER)
+		{
+			tabinfo->t_insdel_old_ts_lo = 
+					bp->bsstab->bblk->bsstab_insdel_ts_lo;
+			
+			bp->bsstab->bblk->bsstab_insdel_ts_lo = mtts_increment(
+					bp->bsstab->bblk->bsstab_insdel_ts_lo);
+
+			tabinfo->t_insdel_new_ts_lo = 
+					bp->bsstab->bblk->bsstab_insdel_ts_lo;
+		}		
+
+		bufdirty(bp);
+	}
+	
+	else
+	{
+		
+		if (tabinfo->t_stat & TAB_SCHM_UPDATE)
+		{
+			tabinfo->t_stat |= TAB_SRCH_DATA;
+		}
+		
+		blkdel(tabinfo);
+
+		if (tabinfo->t_stat & TAB_SCHM_UPDATE)
+		{
+			tabinfo->t_stat &= ~TAB_SRCH_DATA;
+
+			tabinfo->t_stat |= TAB_SCHM_INS;
+		}
+
+		char	*keycol;
+		int	keycolen;
+
+		keycol = row_locate_col(newrp, -1, minlen, &keycolen);
+
+		SRCH_INFO_INIT(tabinfo->t_sinfo, keycol, keycolen,
+				TABLET_KEY_COLID_INROW, VARCHAR, -1);
+		
+		blkins(tabinfo, newrp);
+
+		if (tabinfo->t_stat & TAB_SCHM_UPDATE)
+		{
+			tabinfo->t_stat &= ~TAB_SCHM_INS;
+		}
+	}
+
+	
+	bufunkeep(bp->bsstab);
+		
+	tabinfo->t_sinfo->sistate &= ~SI_UPD_DATA;
 
 	return TRUE;
 }
@@ -716,7 +824,6 @@ blk_file_back_move(BLOCK *blk)
 	offtab = ROW_OFFSET_PTR(blk);
 	rminlen = blk->bminlen;
 
-	
 	
 	i = blk->bnextrno;
 	offset = offtab[-(i-1)];
@@ -748,7 +855,6 @@ blk_file_back_move(BLOCK *blk)
 		offtab[-i] = offset;
 	}	
 }
-
 
 
 int
@@ -787,6 +893,7 @@ blk_check_sstab_space(TABINFO *tabinfo, BUF *bp, char *rp, int rlen,
 		{
 			break;
 		}
+
 		
 		if (blk->bnextblkno == -1)
 		{
@@ -801,7 +908,6 @@ blk_check_sstab_space(TABINFO *tabinfo, BUF *bp, char *rp, int rlen,
 				if(tabinfo->t_stat & TAB_INS_SPLITING_SSTAB)
 				{
 					
-
 					traceprint("Hit the new split on the splitting sstable %s.\n", tabinfo->t_sstab_name);
 
 					
@@ -907,7 +1013,6 @@ blk_check_sstab_space(TABINFO *tabinfo, BUF *bp, char *rp, int rlen,
 
 	
 }
-
 
 
 void
@@ -1054,10 +1159,9 @@ blk_get_location_sstab(TABINFO *tabinfo, BUF *bp)
 		result = row_col_compare(coltype, key, keylen, key_in_blk, 
 							keylen_in_blk);
 
-
 		
 		if (   (result == EQ) && (tabinfo->t_sinfo) 
-		    && (tabinfo->t_sinfo->sistate & SI_DEL_DATA))
+		    && (tabinfo->t_sinfo->sistate & (SI_DEL_DATA | SI_UPD_DATA)))
 		{
 			blkidx = bp->bblk->bblkno;
 
@@ -1105,7 +1209,6 @@ blk_appendrow(BLOCK *blk, char *rp, int rlen)
 	}
 	
 	PUT_TO_BUFFER((char *)blk + blk->bfreeoff, ign, rp, rlen);
-
 	
 	
 	ROW_SET_OFFSET(blk, BLK_GET_NEXT_ROWNO(blk), blk->bfreeoff);

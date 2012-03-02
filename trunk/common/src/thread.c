@@ -31,7 +31,7 @@
 
 
 extern	TSS	*Tss;
-KERNEL *Kernel;
+extern	KERNEL *Kernel;
 
 struct epoll_event events[20];
 
@@ -379,7 +379,8 @@ void msg_process(char * (*handler_request)(char *req_buf, int fd))
 		{	resp = conn_build_resp_byte(RPC_FAIL, 0, NULL);
 		}
 
-		if(fd < 0)
+		/* If it's the select where/range session, skip the success operation. */
+		if((fd < 0) || (((RPCRESP *)resp)->status_code & RPC_SKIP_SEND))
 		{
 			//local msg, such as recovery task msg, so no need to response
 			goto finish;

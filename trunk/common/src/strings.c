@@ -63,7 +63,6 @@ str1nstr (char *buf, char *sub, int len)
 
 
 
-
 int
 str01str (char *buf, char *sub, int len)
 {
@@ -96,7 +95,6 @@ str01str (char *buf, char *sub, int len)
 	
 	return (i - 1);
 }
-
 
 
 int

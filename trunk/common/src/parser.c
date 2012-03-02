@@ -151,7 +151,7 @@ par_destroy_const(TREE *node)
 
 
 TREE*
-par_bld_resdom(char *colname, char *coltype, int col_id)
+par_bld_resdom(char *colname, char *coltype, int col_id, short resdstat)
 {
 	TREE    *node;
 	struct resdom *resd_node;
@@ -189,8 +189,8 @@ par_bld_resdom(char *colname, char *coltype, int col_id)
 		MEMCPY(resd_node->colname, colname, col_len);
 	}
 
+	resd_node->resdstat = resdstat;	
 
-	
 	
 	
 	return node;
@@ -277,7 +277,7 @@ parser_open(char *s_str)
 	    	break;
 		
 	    case MCCRANGER:
-	    	/* Fake table name "ranger" */
+	    	
 	    	rtn_stat = par_dropremovrebalanmcc_tab("ranger\0", MCCRANGER);
 	    	break;
 		
@@ -297,6 +297,10 @@ parser_open(char *s_str)
 	    	rtn_stat = par_selwherecnt_tab(s_str + s_idx, SELECTCOUNT);
 		break;
 
+	    case SELECTSUM:
+	    	rtn_stat = par_selwherecnt_tab(s_str + s_idx, SELECTSUM);
+	    	break;
+		
 	    default:
 	    	rtn_stat = FALSE;
 	        break;
@@ -315,6 +319,7 @@ parser_close(void)
 	TREE    *tree_left;
 	TREE    *tree_left_tmp;
 	TREE    *tree_right;
+
 
 	
 	tree = tss->tcmd_parser;
@@ -411,7 +416,10 @@ par_get_constant_by_colname(TREE *command, char *colname)
 			if (   (PAR_NODE_IS_RESDOM(command->type))
 			    && (!strcmp(command->sym.resdom.colname, colname)))
 			{
-				return &(command->right->sym.constant);
+				if (!(command->sym.resdom.resdstat & RESDOM_SELECTSUM_COL))
+				{
+					return &(command->right->sym.constant);
+				}
 			}
 
 			command = command->left;
@@ -452,6 +460,35 @@ par_get_resdom_by_colname(TREE *command, char *colname)
 
 	return NULL;
 	
+}
+
+
+
+int
+par_chk_fill_resdom(TREE *command, int colnum, COLINFO* col_buf)
+{
+	int	i;
+
+
+	if (!PAR_NODE_IS_RESDOM(command->type))
+	{
+		return FALSE;
+	}
+
+	for (i = 0; i < colnum; i++)
+	{
+		if (!strcmp(command->sym.resdom.colname, col_buf[i].col_name))
+		{
+			command->sym.resdom.colid = col_buf[i].col_id;
+			command->sym.resdom.coloffset = col_buf[i].col_offset;
+			command->sym.resdom.coltype = col_buf[i].col_type;
+				
+			return TRUE;
+		}
+	}
+	
+	
+	return FALSE;
 }
 
 
@@ -666,8 +703,7 @@ par_crtins_tab(char *s_str, int querytype)
 
 	MEMSET(tab_name, 64);
 
-
-			
+					
 	MEMCPY(tab_name, s_str, len - 1);
 
 	
@@ -924,6 +960,8 @@ par_selwherecnt_tab(char *s_str, int querytype)
 	int		colnamelen;
 	int		cmd_strlen;
 	int		parser_result;
+	char		*coldata;
+	int		coldatalen;
 	
 
 	if (s_str == NULL || (STRLEN(s_str) == 0))
@@ -931,11 +969,43 @@ par_selwherecnt_tab(char *s_str, int querytype)
 		return FALSE;
 	}
 
-	len = 0;
+	
 	parser_result = FALSE;
 	
-	cmd_len = STRLEN(s_str);
 
+	
+	if (querytype == SELECTSUM)
+	{
+		len = 0;
+
+		cmd_len = STRLEN(s_str);
+
+		len = str1nstr(s_str, "(\0", cmd_len);		
+		
+		start = len;
+
+		s_str += start;
+		
+		col_info = s_str;
+
+		len =  str1nstr(col_info, ")\0", cmd_len - start);
+
+		s_str += len;
+		
+		if (len < 2)
+		{
+			traceprint("Value is not allowed with NULL.\n");
+			return parser_result;
+		}
+
+		str0n_trunc_0t(col_info, len - 1, &start, &end);
+
+		coldata = col_info + start;
+		coldatalen = end - start;
+	}
+
+	len = 0;
+	cmd_len = STRLEN(s_str);
 	col_info = s_str;
 	cmd_str = "where\0";
 	cmd_strlen = STRLEN(cmd_str);
@@ -967,19 +1037,39 @@ par_selwherecnt_tab(char *s_str, int querytype)
 		return parser_result;
 	}
 
+	
 	tss->tcmd_parser = par_bld_cmd(&(tab_name[start]), 
 					tab_name_len, querytype);
+
+	if (querytype == SELECTSUM)
+	{
+		command = tss->tcmd_parser;
+		
+		while(command->left)
+		{
+			command = command->left;
+		}
+	
+		MEMSET(colname, 64);
+
+		MEMCPY(colname, coldata, coldatalen);
+		
+		
+		command->left = par_bld_resdom(colname, NULL, 1, RESDOM_SELECTSUM_COL);
+	}
 
 	while (cmd_len)
 	{
 		
 		command = tss->tcmd_parser;
 
+		
 		while(command->right)
 		{
 			command = command->right;
 		}
 
+		
 		cmd_strlen = STRLEN(cmd_str);
 		command->right = par_bld_cmd(cmd_str, cmd_strlen, querytype);
 		
@@ -1311,7 +1401,7 @@ par_col_info(char *cmd, int cmd_len, int querytype)
 				command = command->left;
 			}
 
-		        command->left = par_bld_resdom(colname, coltype, ++colid);
+		        command->left = par_bld_resdom(colname, coltype, ++colid, 0);
 		}
 		else if (   (querytype == INSERT) || (querytype == ADDSERVER) 
 			 || (querytype == SELECT) || (querytype == ADDSSTAB) 
@@ -1337,7 +1427,7 @@ par_col_info(char *cmd, int cmd_len, int querytype)
 						      tss->tcol_info);
 			}
 
-			command->left = par_bld_resdom(NULL, NULL, colid);
+			command->left = par_bld_resdom(NULL, NULL, colid, 0);
 
 			command->left->right = par_bld_const(coldata, (end - start),
 							rg_insert ? colinfor->col_type 
@@ -1356,7 +1446,7 @@ par_col_info(char *cmd, int cmd_len, int querytype)
 			
 			colid++;
 			
-			command->left = par_bld_resdom(NULL, NULL, colid);
+			command->left = par_bld_resdom(NULL, NULL, colid, 0);
 
 			command->left->right = par_bld_const(coldata, (end - start),
 							INVALID_TYPE, NULL, 0);
@@ -1387,7 +1477,8 @@ par_col_info4where(char *cmd, int cmd_len, int querytype, char *colname)
 	char	*rightdata;
 
 
-	Assert((querytype == SELECTWHERE) || (querytype == SELECTCOUNT));
+	Assert(   (querytype == SELECTWHERE) || (querytype == SELECTCOUNT)
+	       || (querytype == SELECTSUM));
 	
 	rg_insert = ((tss->topid & TSS_OP_RANGESERVER) && (tss->topid & TSS_OP_INSTAB)) ? TRUE : FALSE;
 
@@ -1407,7 +1498,7 @@ par_col_info4where(char *cmd, int cmd_len, int querytype, char *colname)
 	}
 
 	
-	command->left = par_bld_resdom(colname, NULL, -1);
+	command->left = par_bld_resdom(colname, NULL, -1, 0);
 
 	len = 0;
 	left_context = TRUE;
@@ -1449,52 +1540,53 @@ par_col_info4where(char *cmd, int cmd_len, int querytype, char *colname)
 	return TRUE;
 }
 
+
 int
-par_fill_colinfo(char *tab_dir, int colnum, TREE *command)
+par_fill_colinfo(int colnum, COLINFO* col_buf, TREE *command)
 {
-	char		tab_meta_dir[TABLE_NAME_MAX_LEN];
-	int		fd1;
-	int		col_buf_len;
-	char		*col_buf;
-	RESDOM		*resdom;
-
+	TREE	*tmpcommand;
+	TREE	*rootcommand;
 	
-	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
-	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
-	str1_to_str2(tab_meta_dir, '/', "syscolumns");
 
-	OPEN(fd1, tab_meta_dir, (O_RDONLY));
+	tmpcommand = rootcommand = command;
 
-	if (fd1 < 0)
+	while (tmpcommand)
 	{
-		return FALSE;
-	}
-	
-	col_buf_len = colnum * (sizeof(COLINFO));
-	col_buf = MEMALLOCHEAP(col_buf_len);
-	
-	READ(fd1, col_buf, col_buf_len);
-
-	CLOSE(fd1);
-
-	
-	int i;
-
-	for (i = 0; i < colnum; i++)
-	{
-		resdom = par_get_resdom_by_colname(command, 
-				((COLINFO *)col_buf)[i].col_name);
-
-		if (resdom != NULL)
+		command = tmpcommand;
+		
+		while(command)
 		{
-			resdom->colid = ((COLINFO *)col_buf)[i].col_id;
-			resdom->coloffset = ((COLINFO *)col_buf)[i].col_offset;
-			resdom->coltype = ((COLINFO *)col_buf)[i].col_type;
+			if (PAR_NODE_IS_RESDOM(command->type))
+			{
+				if (!par_chk_fill_resdom(command, colnum,
+							col_buf))
+				{
+					return FALSE;
+				}
+			}			
+
+			
+			command = command->left;
 		}
+
+		
+		tmpcommand = tmpcommand->right;
 	}
 
-	MEMFREEHEAP(col_buf);
+	
+	if (rootcommand->sym.command.querytype == SELECTSUM)
+	{
+		
+		Assert (PAR_NODE_IS_RESDOM(rootcommand->left->type));
 
+		if (!TYPE_IS_FIXED(rootcommand->left->sym.resdom.coltype))
+		{
+			traceprint("SELECTSUM can only be on the FIXED column.\n");
+
+			return FALSE;
+		}
+	}	
+	
 	return TRUE;
 }
 
@@ -1541,6 +1633,7 @@ par_get_orplan(TREE *command)
 	return orplanhdr;
 	
 }
+
 
 
 ORANDPLAN *

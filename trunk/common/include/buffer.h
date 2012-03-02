@@ -36,12 +36,11 @@ typedef struct buf
 	struct buf	*bsstabnew;	
 	struct buf	*bsstabold;	
 	struct buf	*bsstab;	
-	int		bsstab_size;			
+	int		bsstab_size;				
 } BUF;
 
 
-
-#define	BUF_WRITING	0x0001		
+#define	BUF_WRITING	0x0001			
 #define	BUF_KEPT	0x0002		
 #define	BUF_IOERR	0x0004		
 #define	BUF_NOTHASHED	0x0008		
@@ -62,11 +61,7 @@ typedef struct buf
 #define BUFHASHINDEX(sstab,tabid)	(((tabid ^ (tabid << 8))^ (sstab ^ (sstab<<4))) & BUFHASHMASK)
 
 
-
 #define BUFHASH(sstab,tabid)	(Kernel->ke_bufhash + BUFHASHINDEX(sstab,tabid))
-
-
-
 
 
 #define	LRUUNLINK(bp)	        bp->bsstabold->bsstabnew = bp->bsstabnew, \

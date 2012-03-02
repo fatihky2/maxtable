@@ -21,7 +21,7 @@ JNIEXPORT void JNICALL Java_org_maxtable_client_MtAccess_destroyContext
 JNIEXPORT jlong JNICALL Java_org_maxtable_client_MtAccess_openConnection
   (JNIEnv * jenv, jclass jcls, jstring jmeta_server_host, jint jmeta_server_port)
 {
-	conn 	*connection;
+	CONN 	*connection;
 
 	const char *meta_server_host = (*jenv)->GetStringUTFChars(jenv, jmeta_server_host, 0);
 
@@ -38,7 +38,7 @@ JNIEXPORT jlong JNICALL Java_org_maxtable_client_MtAccess_openConnection
 JNIEXPORT void JNICALL Java_org_maxtable_client_MtAccess_closeConnection
   (JNIEnv * jenv, jclass jcls, jlong jconn)
 {
-	conn 	*connection = (conn *) jconn;
+	CONN 	*connection = (conn *) jconn;
 
 	mt_cli_close_connection(connection);
 }
@@ -48,7 +48,7 @@ JNIEXPORT jlong JNICALL Java_org_maxtable_client_MtAccess_openExecute
 	MT_CLI_EXEC_CONTEX *exec_ctx = (MT_CLI_EXEC_CONTEX *)malloc(sizeof(MT_CLI_EXEC_CONTEX));
 	memset(exec_ctx, 0, sizeof(MT_CLI_EXEC_CONTEX));
 	
-	conn	*connection = (conn *) jconn;
+	CONN	*connection = (conn *) jconn;
 
 	const char *cmd = (*jenv)->GetStringUTFChars(jenv, jcmd, 0);
 	

@@ -112,8 +112,8 @@ do									\
 #define ROWSTAT(rp) ((ROWFMT *)(rp))->status
 #define ROWVATTCNT(rp) ((ROWFMT *)(rp))->vattcnt
 	
-#define EQ      0  	     
-#define LE      -1      
+#define EQ      0	    
+#define LE      -1	
 #define GR      1       
 	
 #define MT_COMPARE(val1, val2) ((val1) > (val2)) ? GR : (((val1) < (val2)) ? LE : EQ)

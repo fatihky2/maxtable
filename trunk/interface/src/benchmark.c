@@ -1,7 +1,4 @@
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-#include <sys/time.h>
+#include "global.h"
 #include "interface.h"
 
 struct timeval tpStart;
@@ -12,7 +9,7 @@ float timecost;
 #ifdef MAXTABLE_BENCH_TEST
 int main()
 {
-	conn * connection;
+	CONN * connection;
 
 
 	if(mt_cli_open_connection("127.0.0.1", 1959, &connection))

@@ -1,0 +1,2 @@
+Client 1: create table gu(id1 varchar, id2 varchar,id3 int, id4 varchar,id5 varchar,id6 varchar,id7 varchar,id8 varchar,id9 varchar)
+time cost: 0.011836

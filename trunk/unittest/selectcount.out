@@ -1,0 +1,3 @@
+Client 1: selectcount gu where id1(aaaa38, aaaa47) and id2(bbbb35, bbbb46)
+ The total row # is 890
+time cost: 0.032178

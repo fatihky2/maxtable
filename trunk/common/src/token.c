@@ -41,6 +41,7 @@ TOKENS  MT_Tokens[] =
 	{MCCRANGER,	"mcc checkranger"},
 	{SHARDING,	"sharding"},
 	{SELECTCOUNT,	"selectcount"},
+	{SELECTSUM,	"selectsum"},
 };
 
 int

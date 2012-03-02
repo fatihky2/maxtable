@@ -24,7 +24,7 @@ namespace transoft_network_service
     class switch_service
     {
     private:
-        conn * service_connection;
+        CONN * service_connection;
         string service_id;
     public:
         switch_service();

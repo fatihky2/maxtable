@@ -79,7 +79,11 @@ typedef struct rpcresp
 #define RPC_UNAVAIL		0x0020
 #define RPC_BIGDATA_CONN	0x0040
 #define	RPC_TABLE_NOT_EXIST	0x0080
-#define RPC_NO_VALUE 0x0100
+#define	RPC_SKIP_SEND		0x0100	/* Skip this rpc sending, such as the
+					** select where/range. 
+					*/
+#define	RPC_TAB_HAS_NO_DATA	0x0200	/* Flag this is an empty table. */
+#define RPC_NO_VALUE		0x0400
 
 /*
 ** Copy data from the transmission buffer to the location

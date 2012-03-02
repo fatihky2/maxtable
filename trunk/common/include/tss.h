@@ -43,28 +43,28 @@ struct tab_sstab_map;
 typedef struct tss
 {
 	
-	EXC_PROC	*texcptr;			
+	EXC_PROC	*texcptr;		
 
-	struct tssobj	*tssobjp;		
+	struct tssobj	*tssobjp;	
 
-	struct mempool	*ttmemfrag;		
+	struct mempool	*ttmemfrag;	
 
 	
-	int		tstat;  		
+	int		tstat;  	
 	struct tree     *tcmd_parser;
 
-	RPCREQ		trecvbuf;		
-	char		*tsendbuf;		
+	RPCREQ		trecvbuf;	
+	char		*tsendbuf;	
 
-	short		topid;			
+	short		topid;		
 
 	
-	EXC_PROC	texcproc;		
+	EXC_PROC	texcproc;	
 	
-	struct col_info	*tcol_info;		
+	struct col_info	*tcol_info;	
 
 	struct insert_meta
-			*tmeta_hdr;		
+			*tmeta_hdr;	
 
 	struct tab_info	*ttabinfo;
 	struct tab_info *toldtabinfo;
@@ -73,8 +73,10 @@ typedef struct tss
 			*tmaster_infor;
 	struct tab_sstab_map
 			*ttab_sstabmap;
-	char		*rglogfile;
-	char		*rgbackpfile;
+	char		*rglogfile;	
+	char		*rgbackpfile;	
+	char		*rgstatefile;	
+	char		*metabackup;	
 } TSS;
 
 
@@ -97,7 +99,6 @@ typedef struct tssobj
 #ifndef LOCALTSS
 #define	LOCALTSS(tss)	TSS	*tss = Tss
 #endif 
-
 
 
 #define		TSS_OP_METASERVER	0x0001

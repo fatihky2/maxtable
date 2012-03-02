@@ -37,12 +37,12 @@ public:
 		mt_cli_destroy_context();
 	}
 
-	conn * getConnection()
+	CONN * getConnection()
 	{
 		return clientConn;
 	}
 private:
-	conn * clientConn;
+	CONN * clientConn;
 };
 
 template<typename T>
@@ -156,7 +156,7 @@ public:
 		
 private:
 	string tableName;
-	conn * clientConn;
+	CONN * clientConn;
 };
 }
 

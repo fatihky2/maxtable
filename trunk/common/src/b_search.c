@@ -28,20 +28,22 @@
 extern TSS	*Tss;
 
 
+
 void
 b_srch_block(TABINFO *tabinfo, BUF *bp, B_SRCHINFO *srchinfo)
 {
 	LOCALTSS(tss);
 
-	int	keylen_in_blk;
-	char    *key_in_blk;
-	char    *key;
-	int     keylen;
-	int     result;
-	int	coloffset;
-	int	coltype;
+	int	keylen_in_blk;	
+	char    *key_in_blk;	
+	char    *key;		
+	int     keylen;		
+	int     result;		
+	int	coloffset;	
+	int	coltype;	
 
 
+	
 	coloffset = tabinfo->t_sinfo->sicoloff;
 	key = tabinfo->t_sinfo->sicolval;
 	coltype = tabinfo->t_sinfo->sicoltype;
@@ -49,6 +51,7 @@ b_srch_block(TABINFO *tabinfo, BUF *bp, B_SRCHINFO *srchinfo)
 
 
 nextrow:
+	
 	srchinfo->brow = ROW_GETPTR_FROM_OFFTAB(bp->bblk, srchinfo->brownum);
 	srchinfo->boffset = ROW_OFFSET_PTR(bp->bblk)[-((int)(srchinfo->brownum))];
 
@@ -60,32 +63,47 @@ nextrow:
 	switch (result)
 	{
 	    case EQ:
-		if (   (tabinfo->t_stat & TAB_SRCH_DATA) 
-		    && (tss->topid & TSS_OP_RANGESERVER))
+	    	
+		if (tss->topid & TSS_OP_RANGESERVER)
 		{	
 			
 			if (ROW_IS_DELETED(srchinfo->brow))
 			{
 				Assert(   (bp->bblk->bblkno == 0) 
 				       && (srchinfo->boffset == BLKHEADERSIZE));
+
 				
-				result = LE;
-
-				if (srchinfo->bhigh > srchinfo->blow)
+				if (tabinfo->t_sinfo->sistate & SI_INS_DATA) 
 				{
-					BSRCH_MOVE_LEFT(bp->bblk, srchinfo);
+					result = GR;
+					goto do_gr_case;
+				}
+				
+				else if (tabinfo->t_stat & (TAB_SRCH_DATA | TAB_DEL_DATA))
+				{				
+					result = LE;
 
-					goto nextrow;
-				}				
+					
+					if (srchinfo->bhigh > srchinfo->blow)
+					{
+						BSRCH_MOVE_LEFT(bp->bblk, srchinfo);
+
+						
+						goto nextrow;
+					}
+				}
 			}				
 		}		
-		   
+
 	    	break;
 		
 	    case LE:
 	    	if (   (srchinfo->blow == srchinfo->bhigh)
 		    || (srchinfo->brownum == srchinfo->blow))
 	    	{
+	    		
+
+			
 	    		if (tabinfo->t_sinfo->sistate & SI_INS_DATA) 
 	    		{
 	    			break;
@@ -125,13 +143,16 @@ nextrow:
 	    	break;
 		
 	    case GR:
+do_gr_case:
 	    	if (   (srchinfo->blow == srchinfo->bhigh) 
 		    || (srchinfo->brownum == srchinfo->bhigh))
 	    	{
+	    		
 	    		if (tabinfo->t_sinfo->sistate & SI_INS_DATA) 
 	    		{
 	    			Assert(srchinfo->brownum < srchinfo->btotrows);
 
+				
 				(srchinfo->brownum)++;
 				
 				

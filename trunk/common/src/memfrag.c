@@ -43,7 +43,6 @@ static int
 mp_list_insert(void * pool_hdl, int type);
 
 
-
 void * 
 mem_os_malloc(unsigned long size)
 {
@@ -84,6 +83,7 @@ mem_os_malloc(unsigned long size)
 
 	return(start_addr);
 }
+
 
 
 int
@@ -136,7 +136,7 @@ mem_init_alloc_regions()
 						TSS_MIN_ITEMS, TSS_MAX_ITEMS);
 	mp_list_insert((MEMOBJECT *)Kernel->ke_tss_objpool, MEMPOOL_OBJECT);
 
-         
+        
         Kernel->ke_buf_objpool = (void *)mp_obj_crt(sizeof(BUF), 
 						TSS_MIN_ITEMS, TSS_MAX_ITEMS);
 	mp_list_insert((MEMOBJECT *)Kernel->ke_buf_objpool, MEMPOOL_OBJECT);
@@ -396,6 +396,7 @@ retry:
 	}
 
 	V_SPINLOCK(MEM_FRAG_SPIN);
+
 	
 	if (addr == NULL)
 	{
@@ -453,6 +454,7 @@ mp_frag_realloc(MEMPOOL *mp, void * addr, size_t size)
 			
 			mfp->mf_size = alloc_size;
 			mfp->mf_flags |= MEMPOOL_USED;
+
 			
 			REMQUE(nextmfp, nextmfp, MEMFRAG);
 
@@ -472,6 +474,7 @@ mp_frag_realloc(MEMPOOL *mp, void * addr, size_t size)
 	        {
 			newmfp = nextmfp + (alloc_size - mfp->mf_size); 
 			nextmfp->mf_flags |= MEMPOOL_USED;
+
 			
 			REMQUE(nextmfp, nextmfp, MEMFRAG);
 
@@ -552,22 +555,19 @@ mp_frag_free(MEMPOOL *mp, void *addr, char *file, int line)
 
 //	printf("\n print NULL list ---2 \n");
 //	prLINK((LINK *)mfp);
-	
+
 	P_SPINLOCK(MEM_FRAG_SPIN);
 
+	
 	mfp->mf_flags = 0;
 
-	//P_SPINLOCK(MEM_FRAG_SPIN);
-	
 	
 	MEMCOM_UPDATE_USED(mp, -(sizeof(MEMFRAG) * mfp->mf_size));
 	
-
 	
 	MF_INS_FREEQUE(mp, mfp);
 	
-	
-	
+		
 	temp_mfp = (MEMFRAG *)(QUE_PREV(mfp));
 
 	if (   temp_mfp != (MEMFRAG *)(&(mp->mp_frags))	
@@ -643,7 +643,8 @@ mp_frag_grow(MEMPOOL * mp, size_t grow_size)
 	if (   ((MEMCOM_TOTAL(mp) + grow_size) > MEMCOM_MAXSIZE(mp)
 	    || (grow_size > MAX_FRAG_SIZE)))
 	{
-			goto cleanup;
+		traceprint("Expand the memery limite.\n");
+		goto cleanup;
 	}
 
 	mem_star_addr = mem_os_malloc(grow_size);
@@ -730,6 +731,7 @@ static int
 mp_list_insert(void * pool_hdl, int type) 
 {
 	MEMPLIST	*mpl;		
+	
 	
 	
 	mpl = MEMPOOL_TYPE_TO_LIST(type);

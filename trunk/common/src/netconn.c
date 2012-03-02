@@ -451,7 +451,7 @@ conn_recv_resp_abt(int sockfd)
 		}
 		else
 		{
-			traceprint("Client receive response error for unknown reason!, %d, %d\n", n, errno);
+			traceprint("Client receive response error for unknown reason (ErrNum = %d)!\n", n);
 			perror("Error in rg server response");
 		}
 		resp = conn_build_resp(NULL);

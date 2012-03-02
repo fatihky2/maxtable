@@ -117,5 +117,5 @@ mapred_sample:
 
 clean: 
 	rm -rf startClient startMaster startRanger mapred_sample imql kfsmain memTest benchmark sample libmtService.a libmtcli.a ${LIB_OBJS_C} ${LIB_OBJS_CPP} ${JNI_OBJS} libmtClient.so kfsfacer.o kfsfacer.a libmt_access.so
-	rm -rf ./table ./index ./rg_server ./rg_table ./meta_table ./rgbackup ./rglog
+	rm -rf ./table ./index ./rg_server ./rg_table ./meta_table ./rgbackup ./rglog ./rg_state ./meta_tablet_backup ./rg_state
 	#ant -f build.xml clean

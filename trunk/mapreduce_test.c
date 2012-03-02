@@ -25,7 +25,7 @@ float timecost;
 
 int main(int argc, char *argv[])
 {
-	conn 	*connection;
+	CONN 	*connection;
 	char	resp[256], cmd[256];
 	int	rtn_stat;
 	int	i;
@@ -48,7 +48,7 @@ int main(int argc, char *argv[])
 		
 		if (match(argv[1], "getsplits"))
 		{
-			mt_split * splits = NULL;
+			MT_SPLIT * splits = NULL;
 			char *table_name = "test";
 			int split_count = 0;
 
@@ -59,7 +59,7 @@ int main(int argc, char *argv[])
 			int i;
 			for(i = 0; i < split_count; i++)
 			{
-				mt_split * current = splits + i;
+				MT_SPLIT * current = splits + i;
 				printf("%s, %d, %s, %d\n", current->range_ip, current->range_port, current->tablet_name, current->meta_port);
 			}
 
@@ -69,7 +69,7 @@ int main(int argc, char *argv[])
 
 		if (match(argv[1], "inputtest"))
 		{
-			mt_split * splits = NULL;
+			MT_SPLIT * splits = NULL;
 			char *table_name = "test";
 			int split_count = 0;
 
@@ -80,7 +80,7 @@ int main(int argc, char *argv[])
 			int i;
 			for(i = 0; i < split_count; i++)
 			{
-				mt_split * current = splits + i;
+				MT_SPLIT * current = splits + i;
 				printf("%s, %d, %s\n", current->range_ip, current->range_port, current->tablet_name);
 			}
 
@@ -90,8 +90,8 @@ int main(int argc, char *argv[])
 			sscanf(split_idx, "%d", &split_number);
                         printf("split_number: %d\n", split_number);
 
-			mt_split *split = splits + split_number;
-			mt_reader * mtreader = NULL;
+			MT_SPLIT *split = splits + split_number;
+			MT_READER * mtreader = NULL;
 
 			mt_mapred_create_reader(&mtreader, split);
 			printf("%d, %d, %d\n", mtreader->data_connection.rg_server_port, ((TABLEHDR *)(mtreader->table_header))->tab_row_minlen,

@@ -1,7 +1,7 @@
 /*
 ** tabinfo.c 2011-08-20 xueyingfei
 **
-** Copyright Transoft Corp.
+** Copyright flying/xueyingfei..
 **
 ** This file is part of MaxTable.
 **
@@ -23,7 +23,6 @@
 #include "block.h"
 #include "cache.h"
 #include "memcom.h"
-#include "strings.h"
 #include "utils.h"
 #include "row.h"
 #include "tablet.h"

@@ -35,7 +35,7 @@ typedef struct objinfo
 
 typedef struct memobject 
 {
-	MEMCOM		f_mc;			
+	MEMCOM		f_mc;				
 	LINK		f_block;		
 	LINK		f_free;			
 //	LINK		f_used;			

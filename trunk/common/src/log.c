@@ -33,6 +33,7 @@
 #include "type.h"
 #include "timestamp.h"
 #include "session.h"
+#include "rginfo.h"
 
 
 extern TSS	*Tss;
@@ -55,18 +56,21 @@ log_check_insert(LOGFILE *logfile, int logopid, int logtype)
 
 	status = FALSE;
 
-
+	
 	if ((logopid == LOG_BEGIN) && (logfile->logtotnum == 0))
     	{
     		return TRUE;
     	}
 
+	
 	Assert((logfile->logtotnum > 0) && (logfile->logtotnum < (LOG_TOTALNUM + 1)));
 
+	
 	if (logtype != logfile->logtype)
 	{
 		return TRUE;
 	}
+
 	
 	lastopid = logfile->logrec[logfile->logtotnum - 1].opid;
 
@@ -79,18 +83,22 @@ log_check_insert(LOGFILE *logfile, int logopid, int logtype)
 	    		status = TRUE;
 	    	}
 	    	break;
+		
 	    case LOG_END:
+	    	
 	    	if (logopid == LOG_BEGIN)
 	    	{
 	    		status = log_delete(logfile, logfile->logtype);
 	    	}
 	    	break;
+		
 	    case LOG_DO_SPLIT:
 	    	if (logopid == LOG_END)
 	    	{
 	    		status = TRUE;
 	    	}
 	    	break;
+		
 	    default:
 	    			
 	    	break;
@@ -123,15 +131,18 @@ log_check_delete(LOGFILE *logfile, int logtype, char *backup)
 	    		break;
 	    	}
 
-		if (   (logrec[0].opid == LOG_BEGIN) && (logrec[1].opid == LOG_DO_SPLIT)
+		if (   (logrec[0].opid == LOG_BEGIN) 
+		    && (logrec[1].opid == LOG_DO_SPLIT)
 		    && (logrec[2].opid == LOG_END))
 		{
 			char	tmpsstab[TABLE_NAME_MAX_LEN];
 
 			MEMSET(tmpsstab, TABLE_NAME_MAX_LEN);
-			int i = strmnstr(logrec[1].oldsstabname, "/", STRLEN(logrec[1].oldsstabname));
+			int i = strmnstr(logrec[1].oldsstabname, "/", 
+					STRLEN(logrec[1].oldsstabname));
 	
-			MEMCPY(tmpsstab, logrec[1].oldsstabname + i, STRLEN(logrec[1].oldsstabname + i));
+			MEMCPY(tmpsstab, logrec[1].oldsstabname + i, 
+					STRLEN(logrec[1].oldsstabname + i));
 
 			char	cmd_str[TABLE_NAME_MAX_LEN];
 			
@@ -164,8 +175,8 @@ log_check_delete(LOGFILE *logfile, int logtype, char *backup)
 }
 
 void
-log_build(LOGREC *logrec, int logopid, unsigned int oldts, unsigned int newts, char *oldsstab, 
-		char *newsstab, int minrowlen, int tabid, int sstabid)
+log_build(LOGREC *logrec, int logopid, unsigned int oldts, unsigned int newts, 
+	char *oldsstab, char *newsstab, int minrowlen, int tabid, int sstabid)
 {
 	MEMSET(logrec, sizeof(LOGREC));
 	
@@ -200,13 +211,15 @@ log_build(LOGREC *logrec, int logopid, unsigned int oldts, unsigned int newts, c
 	}
 }
 
+
+
 int
 log_insert_sstab_split(char *logfile_dir, LOGREC *logrec, int logtype)
 {
 	LOCALTSS(tss);
 	int		fd;
 	int		status;
-	LOGFILE		*logfilebuf;
+	LOGFILE		*logfilebuf;	
 
 	
 	logfilebuf = (LOGFILE *)MEMALLOCHEAP(sizeof(LOGFILE));
@@ -229,17 +242,21 @@ log_insert_sstab_split(char *logfile_dir, LOGREC *logrec, int logtype)
 
 	if (logrec->opid == LOG_DO_SPLIT)
 	{
+		
 		char	cmd_str[TABLE_NAME_MAX_LEN];
 		
 		MEMSET(cmd_str, TABLE_NAME_MAX_LEN);
 					
 #ifdef MT_KFS_BACKEND
-		int i = strmnstr(logrec->oldsstabname, "/", STRLEN(logrec->oldsstabname));
-		sprintf(cmd_str, "%s/%s", tss->rgbackpfile, logrec->oldsstabname + i);
+		int i = strmnstr(logrec->oldsstabname, "/", 
+				STRLEN(logrec->oldsstabname));
+		sprintf(cmd_str, "%s/%s", tss->rgbackpfile, 
+				logrec->oldsstabname + i);
 
 		if (COPYFILE(logrec->oldsstabname,cmd_str) != 0)
 #else			
-		sprintf(cmd_str, "cp %s %s", logrec->oldsstabname, tss->rgbackpfile);
+		sprintf(cmd_str, "cp %s %s", logrec->oldsstabname, 
+				tss->rgbackpfile);
 		
 		if (system(cmd_str))
 #endif
@@ -248,8 +265,10 @@ log_insert_sstab_split(char *logfile_dir, LOGREC *logrec, int logtype)
 			goto exit;
 		}
 	}
+
 	
-	MEMCPY(&(logfilebuf->logrec[logfilebuf->logtotnum]), logrec, sizeof(LOGREC));
+	MEMCPY(&(logfilebuf->logrec[logfilebuf->logtotnum]), logrec, 
+				sizeof(LOGREC));
 	
 	(logfilebuf->logtotnum)++;
 	logfilebuf->logtype = logtype;
@@ -327,7 +346,8 @@ log_insert_insdel(LOGREC *logrec, char *rp, int rlen)
 	{
 		CLOSE(Rg_loginfo->logfd);
 		
-		int idxpos = str1nstr(Rg_loginfo->logdir, tss->rglogfile, STRLEN(Rg_loginfo->logdir));
+		int idxpos = str1nstr(Rg_loginfo->logdir, tss->rglogfile, 
+					STRLEN(Rg_loginfo->logdir));
 
 		int logfilenum = m_atoi(Rg_loginfo->logdir+ idxpos, 
 					STRLEN(Rg_loginfo->logdir) - idxpos);
@@ -337,7 +357,8 @@ log_insert_insdel(LOGREC *logrec, char *rp, int rlen)
 		MEMSET(Rg_loginfo->logdir, STRLEN(Rg_loginfo->logdir));
 		sprintf(Rg_loginfo->logdir, "%s%d", tss->rglogfile, logfilenum);
 
-		OPEN(Rg_loginfo->logfd, Rg_loginfo->logdir, (O_CREAT | O_APPEND | O_RDWR |O_TRUNC));
+		OPEN(Rg_loginfo->logfd, Rg_loginfo->logdir, 
+				(O_CREAT | O_APPEND | O_RDWR |O_TRUNC));
 
 		Rg_loginfo->logoffset = 0;
 	}
@@ -389,7 +410,8 @@ exit:
 }
 
 int
-log_undo_sstab_split(char *logfile_dir, char *backup_dir, int logtype)
+log_undo_sstab_split(char *logfile_dir, char *backup_dir, int logtype,
+			char *rgip, int rgport)
 {
 	int		fd;
 	int		status;
@@ -429,7 +451,8 @@ log_undo_sstab_split(char *logfile_dir, char *backup_dir, int logtype)
 			if (logfilebuf->logtotnum == 2)
 			{
 				Assert(logfilebuf->logrec[1].opid == LOG_DO_SPLIT);
-			
+
+				
 				char	cmd_str[64];
 				
 				MEMSET(cmd_str, 64);
@@ -440,11 +463,19 @@ log_undo_sstab_split(char *logfile_dir, char *backup_dir, int logtype)
 				char	tmpsstab[TABLE_NAME_MAX_LEN];
 
 				MEMSET(tmpsstab, TABLE_NAME_MAX_LEN);
-				int i = strmnstr(logrec[1].oldsstabname, "/", STRLEN(logrec[1].oldsstabname));
+				int i = strmnstr(logrec[1].oldsstabname, "/", 
+						STRLEN(logrec[1].oldsstabname));
 		
-				MEMCPY(tmpsstab, logrec[1].oldsstabname + i, STRLEN(logrec[1].oldsstabname + i));
+				MEMCPY(tmpsstab, logrec[1].oldsstabname + i, 
+						STRLEN(logrec[1].oldsstabname + i));
 
-
+				
+				char	new_sstab[TABLE_NAME_MAX_LEN];
+				
+				MEMSET(new_sstab, TABLE_NAME_MAX_LEN);
+				MEMCPY(new_sstab, logrec[1].newsstabname,
+						STRLEN(logrec[1].newsstabname));
+				
 				char	srcfile[TABLE_NAME_MAX_LEN];
 
 				MEMSET(srcfile, TABLE_NAME_MAX_LEN);
@@ -499,8 +530,13 @@ log_undo_sstab_split(char *logfile_dir, char *backup_dir, int logtype)
 					status = FALSE;
 					goto exit;
 				}
-								
 
+				
+				char	rgstate[TABLE_NAME_MAX_LEN];
+
+				ri_get_rgstate(rgstate, rgip, rgport);
+				
+				ri_rgstat_deldata(rgstate, new_sstab);
 			}
 		}
 	}
@@ -637,7 +673,7 @@ log_get_latest_rginsedelfile(char *rginsdellogfile, char *rg_ip, int port)
 			}
 		}	
 
-		/* No insdel log case. */
+		
 		status = (slen2 == 0)? FALSE : TRUE;
 	} 
 	
@@ -668,7 +704,7 @@ log_get_latest_rginsedelfile(char *rginsdellogfile, char *rg_ip, int port)
 			}
 		}	
 
-		/* No insdel log case. */
+		
                 status = (slen2 == 0)? FALSE : TRUE;
 	}
 #endif
@@ -728,7 +764,7 @@ log_redo_insdel(char *insdellogfile, int scan_first)
 	
 	while(tmp > 0)
 	{
-		/* It must be a LOGREC structure. */
+		
 		logrec = (LOGREC *)(logfilebuf + tmp - sizeof(LOGREC));
 
 		if (logrec->opid == CHECKPOINT_COMMIT)
@@ -762,14 +798,10 @@ log_redo_insdel(char *insdellogfile, int scan_first)
 
 	while (row_cnt > 0)
 	{	
-		/* 
-		** Insert and delete log has row value, so the start address of log will be 
-		** error code, but the commit log will hit the right magic code because it
-		** has not row value.
-		*/
+		
 		if (strncasecmp(logrec->logmagic, MT_LOG, STRLEN(MT_LOG)) != 0)
 		{
-			/* INSERT LOG */
+			
 			rlen = *(int *)logrec;
 			rp = (char *)logrec + sizeof(int);
 			logrec = (LOGREC *)(rp + rlen);
@@ -779,10 +811,7 @@ log_redo_insdel(char *insdellogfile, int scan_first)
 		    || (logrec->opid == CHECKPOINT_COMMIT)
 		   )
 		{
-			/* 
-			** Continue to scan the next log that may be commit or 
-			** insert/delete log. 
-			*/
+			
 			Assert(logrec->loglen == sizeof(LOGREC));
 			logrec = (LOGREC *)((char *)logrec + sizeof(LOGREC));
 			continue;
@@ -804,7 +833,7 @@ log_redo_insdel(char *insdellogfile, int scan_first)
 			Assert(0);
 		}
 
-		/* It must be a whole LOGREC and inser or delete log here. */
+		
 		Assert(strncasecmp(logrec->logmagic, MT_LOG, STRLEN(MT_LOG)) == 0);
 
 		log__redo_insdel(logrec, rp);
@@ -860,8 +889,8 @@ log__redo_insdel(LOGREC *logrec, char *rp)
 
 	keycol = row_locate_col(rp, -1, logrec->minrowlen, &keycollen);
 
-	TABINFO_INIT(tabinfo, logrec->oldsstabname, tabinfo->t_sinfo, logrec->minrowlen, 
-			0, logrec->tabid, logrec->sstabid);
+	TABINFO_INIT(tabinfo, logrec->oldsstabname, NULL, 0, tabinfo->t_sinfo,
+			logrec->minrowlen, 0, logrec->tabid, logrec->sstabid);
 	SRCH_INFO_INIT(tabinfo->t_sinfo, keycol, keycollen, 1, VARCHAR, -1); 		
 	
 	if (logrec->opid & LOG_INSERT)
@@ -1105,7 +1134,7 @@ log_recov_rg(char *rgip, int rgport)
 	log_get_sstab_split_logfile(logfile, rgip, rgport);
 	log_get_rgbackup(backup, rgip, rgport);
 
-	log_undo_sstab_split(logfile, backup, SPLIT_LOG);
+	log_undo_sstab_split(logfile, backup, SPLIT_LOG, rgip, rgport);
 
 	if (!log_get_latest_rginsedelfile(logfile, rgip, rgport))
 	{
@@ -1129,11 +1158,7 @@ log_recov_rg(char *rgip, int rgport)
 			MEMCPY(prelogfile, logfile, idxpos);
 			sprintf(prelogfile + idxpos, "%d", logfilenum);
 
-			/* 
-			** TODO: Just handle two log files to get the scoping of one Disk IO round.
-			**	We need to make sure it can not write two sstable in the interval 
-			**	of HK.
-			*/
+			
 			log_redo_insdel(prelogfile, FALSE);
 		}
 	}
@@ -1157,10 +1182,10 @@ log_get_last_logoffset(LOGREC *logrec)
 	
 	while (logoffset < SSTABLE_SIZE)
 	{	
-		/* Check if it hit the LOGREC structure. */
+		
 		if (strncasecmp(logrec->logmagic, MT_LOG, STRLEN(MT_LOG)) != 0)
 		{
-			/* If not a LOGREC, it must be the row, or it should have hit the end. */
+			
 			rlen = *(int *)logrec;
 			
 			rp = (char *)logrec + sizeof(int);
@@ -1168,7 +1193,7 @@ log_get_last_logoffset(LOGREC *logrec)
 
 			if ((char *)logrec > tmp)
 			{
-				/* Hit the end */
+				
 				break;
 			}
 		}
@@ -1197,7 +1222,7 @@ log_get_last_logoffset(LOGREC *logrec)
 			continue;
 		}
 
-		/* It must be a whole LOGREC and inser or delete log here. */
+		
 		if(strncasecmp(logrec->logmagic, MT_LOG, STRLEN(MT_LOG)) == 0)
 		{
 			logoffset += logrec->loglen;
