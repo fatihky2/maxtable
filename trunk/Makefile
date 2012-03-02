@@ -3,7 +3,7 @@ CPP		= g++ -g -Wall
 #CC		= gcc -Wall
 #CPP		= g++ -Wall
 AR		= ar cr
-CFLAGS		= -I./common/include/ -I./client/include -I./master/include -I./ranger/include -I./interface/include -I./service/include -lpthread -I/usr/lib/jvm/java-6-openjdk/include/
+CFLAGS		= -I./common/include/ -I./client/include -I./master/include -I./ranger/include -I./interface/include -I./service/include -lpthread -I/usr/lib/jvm/java-6-openjdk/include/ -D_GNU_SOURCE -D_XOPEN_SOURCE=500
 KFSFLAG		= -I${MT_DFS_INCLUDE_PATH} -L${MT_DFS_CLI_LIB_PATH} -lkfsClient -lboost_regex
 COMMON_SRC	= common/src/*.c
 REGION_SRC	= ranger/src/*.c
