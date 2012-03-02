@@ -1,7 +1,7 @@
 /*
 ** tabinfo.h 2011-08-20 xueyingfei
 **
-** Copyright Transoft Corp.
+** Copyright flying/xueyingfei..
 **
 ** This file is part of MaxTable.
 **

@@ -24,11 +24,11 @@
 
 #ifdef MAXTABLE_BENCH_TEST
 
-#define MT_RANGE_TABLE   "./rg_table"
+#define MT_RANGE_TABLE	"./rg_table"
 
 #else
 
-#define MT_RANGE_TABLE   "/mnt/ranger/rg_table"
+#define MT_RANGE_TABLE	"/mnt/ranger/rg_table"
 
 #endif
 

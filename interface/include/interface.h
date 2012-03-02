@@ -27,10 +27,10 @@
 #include "spinlock.h"
 
 
-//#define	BLOCKSIZE		(64 * 1024)
-#define	BLOCKSIZE		512
-
-
+#ifndef	BLOCKSIZE
+#define	BLOCKSIZE		(64 * 1024)
+//#define	BLOCKSIZE		512
+#endif
 
 #define MAX_RG_NUM 256
 
@@ -40,28 +40,28 @@
 #define SUC_RET "client operation finished successfully"
 
 /* The connection context of ranger server. */
-typedef struct _rg_conn
+typedef struct rg_conn
 {
 	char	rg_server_ip[32];	/* Ranger server address. */
 	int	rg_server_port;		/* Port. */
 	int	status;			/* Status for the ranger server. */
 	int	connection_fd;		/* Socket id. */
 	int	pad;
-}rg_conn;
+}RG_CONN;
 
 /* The connection context of master server. */
-typedef struct _conn
+typedef struct conn
 {
 	char	meta_server_ip[32];	/* Meta server address. */
 	int	meta_server_port;	/* Port. */
 	int	connection_fd;		/* Socket id. */
 	int	status;			/* Status for the meta server. */
-	rg_conn rg_list[MAX_RG_NUM];	/* Rangers connected by the client. */
+	RG_CONN rg_list[MAX_RG_NUM];	/* Rangers connected by the client. */
 	int	rg_list_len;		/* The # of rangers connected by the 
 					** client.
 					*/
 	
-}conn;
+}CONN;
 
 /* The context of range query. */
 typedef struct range_query_contex
@@ -97,16 +97,17 @@ typedef struct mt_cli_context
 					** context. 
 					*/
 
-
 /* Following definition is for the return value of mt_cli_exec_crtseldel(). */
-#define	CLI_FAIL		0x0001	/* The operation is failed. */
-#define	CLI_SUCCESS		0x0002	/* Success. */
-#define	CLI_RPC_FAIL		0x0004	/* Hit the RPC issue, such as error or 
+#define	CLI_FAIL		-1	/* The operation is failed. */
+#define	CLI_RPC_FAIL		-2	/* Hit the RPC issue, such as error or 
 					** no response.
 					*/
-#define	CLI_TABLE_NOT_EXIST	0x0008	/* Table is not exist, this flag can 
+#define	CLI_SUCCESS		0	/* Success. */
+#define	CLI_TABLE_NOT_EXIST	1	/* Table is not exist, this flag can 
 					** warnning user to create the table.
 					*/
+#define	CLI_HAS_NO_DATA		2	/* Table has no data. */
+
 /* The contex of user query execution. */
 typedef struct mt_cli_exec_contex
 {
@@ -117,12 +118,12 @@ typedef struct mt_cli_exec_contex
 	int	end_rowpos;	/* For the SELECT query. */
 	int	cur_rowpos;	/* For the SELECT query. */
 	int	rowcnt;		/* For the SELECTCOUNT. */
-	int	pad;
+	int	sum_colval;	/* For the SELECTSUM. */
 	int	rowminlen;	/* The min-length of row. */
 	int	socketid;	/* connection for the bigport. */
 	char	*rg_resp;	/* The response of ranger that contains the data. */
 	char	*meta_resp;	/* The response of meta that contains the meta data. */
-	rg_conn	*rg_conn;	/* For the SELECTCOUNT. */
+	RG_CONN	*rg_conn;	/* For the SELECTCOUNT. */
 }MT_CLI_EXEC_CONTEX;
 
 #define	CLICTX_DATA_BUF_HAS_DATA	0x0001		/* has data */
@@ -182,7 +183,7 @@ mt_cli_destroy_context();
 ** 
 */
 extern int
-mt_cli_open_connection(char * meta_ip, int meta_port, conn ** connection);
+mt_cli_open_connection(char * meta_ip, int meta_port, CONN ** connection);
 
 /*
 ** Close the connection between client and server.
@@ -198,7 +199,7 @@ mt_cli_open_connection(char * meta_ip, int meta_port, conn ** connection);
 **
 */
 extern void
-mt_cli_close_connection(conn * connection);
+mt_cli_close_connection(CONN * connection);
 
 
 /*
@@ -217,7 +218,7 @@ mt_cli_close_connection(conn * connection);
 ** 
 */
 extern int 
-mt_cli_open_execute(conn *connection, char *cmd, MT_CLI_EXEC_CONTEX **exec_ctx);
+mt_cli_open_execute(CONN *connection, char *cmd, MT_CLI_EXEC_CONTEX **exec_ctx);
 
 
 /*
@@ -280,42 +281,42 @@ mt_cli_exec_builtin(MT_CLI_EXEC_CONTEX *exec_ctx);
 
 typedef struct _mt_split
 {
-	char table_name[128];
-	char tablet_name[128];
-	char range_ip[32];
-	int range_port;
+	char	table_name[128];
+	char	tablet_name[128];
+	char	range_ip[32];
+	int	range_port;
 
-	char meta_ip[32];
-	int meta_port;
-}mt_split;
+	char	meta_ip[32];
+	int	meta_port;
+}MT_SPLIT;
 
 typedef struct _mt_block_cache
 {
-	char data_cache[BLOCKSIZE];
-	char current_sstable_name[128];
-	int current_block_index;
-	int cache_index;
-	int max_row_count;
-	int row_min_len;
-}mt_block_cache;
+	char	data_cache[BLOCKSIZE];
+	char	current_sstable_name[128];
+	int	current_block_index;
+	int	cache_index;
+	int	max_row_count;
+	int	row_min_len;
+}MT_BLOCK_CACHE;
 
 
 typedef struct _mt_reader
 {
-	rg_conn connection;
-	rg_conn data_connection;
-	char table_name[128];
-	char tablet_name[128];
+	RG_CONN	connection;
+	RG_CONN data_connection;
+	char	table_name[128];
+	char	tablet_name[128];
 
-	mt_block_cache * block_cache;
-	int status;
+	MT_BLOCK_CACHE * block_cache;
+	int	status;
 
-	char meta_ip[32];
-	int meta_port;
+	char	meta_ip[32];
+	int	meta_port;
 
-	char * table_header;
-	char * col_info;
-}mt_reader;
+	char 	*table_header;
+	char 	*col_info;
+}MT_READER;
 
 #define	READER_CACHE_NO_DATA		0x0001		/* reader cache has no data */
 #define	READER_IS_OPEN			0x0002		
@@ -329,22 +330,22 @@ typedef struct _mt_reader
 
 
 extern int
-mt_mapred_get_splits(conn *connection, mt_split ** splits, int * split_count, char * table_name);
+mt_mapred_get_splits(CONN *connection, MT_SPLIT ** splits, int * split_count, char * table_name);
 
 extern int 
-mt_mapred_free_splits(mt_split * splits);
+mt_mapred_free_splits(MT_SPLIT * splits);
 
 extern int
-mt_mapred_create_reader(mt_reader * * mtreader, mt_split * split);
+mt_mapred_create_reader(MT_READER * * mtreader, MT_SPLIT * split);
 
 extern int
-mt_mapred_free_reader(mt_reader * reader);
+mt_mapred_free_reader(MT_READER * reader);
 
 extern char *
-mt_mapred_get_nextvalue(mt_reader * reader, int * rp_len);
+mt_mapred_get_nextvalue(MT_READER * reader, int * rp_len);
 
 extern char *
-mt_mapred_get_currentvalue(mt_reader * reader, char * row, int col_idx, int * value_len);
+mt_mapred_get_currentvalue(MT_READER * reader, char * row, int col_idx, int * value_len);
 
 
 #endif

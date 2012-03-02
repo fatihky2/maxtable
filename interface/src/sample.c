@@ -1,6 +1,4 @@
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
+#include "global.h"
 #include "interface.h"
 
 
@@ -24,7 +22,7 @@ float timecost;
 
 int main(int argc, char *argv[])
 {
-	conn 	*connection;
+	CONN 	*connection;
 	char	resp[256], cmd[256];
 	int	rtn_stat;
 	int	i;
@@ -58,11 +56,23 @@ int main(int argc, char *argv[])
 			memset(resp, 0, 256);
 			memset(cmd , 0, 256);
 
-			sprintf(cmd, "create table lbs10(id1 varchar, id2 varchar,id3 int)");
+			sprintf(cmd, "create table gu(id1 varchar, id2 varchar,id3 int, id4 varchar,id5 varchar,id6 varchar,id7 varchar,id8 varchar,id9 varchar)");
 			//sprintf(cmd, "create table lbs(id1 varchar, id2 varchar,id3 int)");
-			mt_cli_open_execute(connection, cmd, &exec_ctx);
+			rtn_stat = mt_cli_open_execute(connection, cmd, &exec_ctx);
 
-			mt_cli_close_execute(exec_ctx);			
+			if (rtn_stat != CLI_SUCCESS)
+			{
+				printf ("Error! \n");
+				goto exitcrt;
+			}
+
+			printf("Client 1: %s\n", cmd);
+				
+exitcrt:
+			if (exec_ctx)
+			{
+				mt_cli_close_execute(exec_ctx);			
+			}
 		}
 
 		if (match(argv[1], "insert"))
@@ -70,7 +80,7 @@ int main(int argc, char *argv[])
 			
 				
 			/* Insert 10000 data rows into table */
-			for(i = 1; i < 50000; i++)
+			for(i = 1; i < 10000; i++)
 			{
 #if 0
 				char	*c = "cccccccccccccccccccccccccccccccccccccccccccccccccccccc";
@@ -81,6 +91,7 @@ int main(int argc, char *argv[])
 				char	*g = "gggggggggggggggggggggggggggggggggggggggggggggggggggggg";
 
 				char	*h = "hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh";
+#endif
 
 				char	*c = "cccccc";
 				char	*d = "dddddd";
@@ -88,25 +99,27 @@ int main(int argc, char *argv[])
 				char 	*f = "ffffff";
 				char	*g = "gggggg";
 				char	*h = "hhhhhh";
-#endif 
-				sprintf(cmd, "insert into lbs10(aaaa%d, bbbb%d, %d)", i,i,i);
+ 
+				sprintf(cmd, "insert into gu(aaaa%d, bbbb%d, %d, %s%d, %s%d, %s%d, %s%d, %s%d, %s%d)", i,i,i,c,i,d, i,e, i,f,i,g,i,h,i);
 				
 //				sprintf(cmd, "insert into lbs(aaaa%d, bbbb%d, %d)", i,i,i);
 
 				//sprintf(cmd, "insert into gu(aaaa%d, bbbb%d)", i,i);
 				rtn_stat = mt_cli_open_execute(connection, cmd, &exec_ctx);
 
-				if (!(rtn_stat & CLI_SUCCESS))
+				if (rtn_stat != CLI_SUCCESS)
 				{
 					printf ("Error! \n");
 
-	                                continue;
+	                                goto exitins;
 				}
 				
 				printf("Client 1: %s\n", cmd);
-
-				mt_cli_close_execute(exec_ctx);
-				
+exitins:
+				if (exec_ctx)
+				{
+					mt_cli_close_execute(exec_ctx);
+				}
 			}
 
 			
@@ -117,11 +130,18 @@ int main(int argc, char *argv[])
 		{	
 			memset(resp, 0, 256);
 			memset(cmd, 0, 256);
-			sprintf(cmd, "selectwhere gu where id1(aaaa38, aaaa47) and id2(bbbb35, bbbb46)");
-//			sprintf(cmd, "selectwhere gu where id2(bbbb3, bbbb8)");
+			sprintf(cmd, "selectwhere gu where id1(aaaa1, *) and id2(bbbb35, bbbb46)");
+			//sprintf(cmd, "selectwhere gu where id2(bbbb39, bbbb39) and id4(cccccc39, cccccc39)");
+			//sprintf(cmd, "selectwhere gu where id2(bbbb3, *)");
 
 			
 			rtn_stat = mt_cli_open_execute(connection, cmd, &exec_ctx);
+
+			if (rtn_stat != CLI_SUCCESS)
+			{
+				printf ("Error! \n");
+				goto exitselwh;
+			}
 
 			printf("Client 1: %s\n", cmd);
 
@@ -152,8 +172,11 @@ int main(int argc, char *argv[])
 				} while(rp);
 
 			}
-			
-			mt_cli_close_execute(exec_ctx);
+exitselwh:			
+			if (exec_ctx)
+			{
+				mt_cli_close_execute(exec_ctx);
+			}
 		}
 
 		if (match(argv[1], "selectcount"))
@@ -165,6 +188,12 @@ int main(int argc, char *argv[])
 
 			
 			rtn_stat = mt_cli_open_execute(connection, cmd, &exec_ctx);
+
+			if (rtn_stat != CLI_SUCCESS)
+			{
+				printf ("Error! \n");
+				goto exitselcnt;
+			}
 
 			printf("Client 1: %s\n", cmd);
 
@@ -182,14 +211,57 @@ int main(int argc, char *argv[])
 			}
 
 			printf(" The total row # is %d\n", total_rowcnt);
+
+exitselcnt:
+			if (exec_ctx)
+			{
+				mt_cli_close_execute(exec_ctx);
+			}
+		}
+
+		if (match(argv[1], "selectsum"))
+		{	
+			memset(resp, 0, 256);
+			memset(cmd, 0, 256);
+			sprintf(cmd, "selectsum (id3) gu where id1(aaaa38, aaaa47) and id2(bbbb39, bbbb40)");
+//			sprintf(cmd, "selectwhere gu where id2(bbbb3, bbbb8)");
+
 			
-			mt_cli_close_execute(exec_ctx);
+			rtn_stat = mt_cli_open_execute(connection, cmd, &exec_ctx);
+
+			if (rtn_stat != CLI_SUCCESS)
+			{
+				printf ("Error! \n");
+				goto exitselsum;
+			}
+
+			printf("Client 1: %s\n", cmd);
+
+			MT_CLI_EXEC_CONTEX	*t_exec_ctx;
+
+			t_exec_ctx = exec_ctx;
+
+			int	sum_colval = 0;
+			
+			for (i = 0; i < exec_ctx->rg_cnt; i++, t_exec_ctx++)
+			{
+				mt_cli_exec_builtin(t_exec_ctx);
+
+				sum_colval += t_exec_ctx->sum_colval;
+			}
+
+			printf(" The total value is %d\n", sum_colval);
+exitselsum:
+			if (exec_ctx)
+			{
+				mt_cli_close_execute(exec_ctx);
+			}
 		}
 				
 		if (match(argv[1], "select"))
 		{
 			/* Select datas from table */
-			for(i = 1; i < 100; i++)
+			for(i = 1; i < 10000; i++)
 			{
 				memset(resp, 0, 256);
 				memset(cmd, 0, 256);
@@ -197,11 +269,11 @@ int main(int argc, char *argv[])
 
 				rtn_stat = mt_cli_open_execute(connection, cmd, &exec_ctx);
 
-				if (!(rtn_stat & CLI_SUCCESS))
+				if (rtn_stat != CLI_SUCCESS)
 				{
 					printf ("Error! \n");
 
-	                                continue;
+	                                goto exitsel;
 				}
 				
 				//printf("Client 1: %s\n", cmd);
@@ -224,7 +296,12 @@ int main(int argc, char *argv[])
                                         printf("%d, col 3: %s, %d\n", collen, col, *((int*)col));
 				}
 #endif				
-				mt_cli_close_execute(exec_ctx);
+
+exitsel:
+				if (exec_ctx)
+				{
+					mt_cli_close_execute(exec_ctx);
+				}
 			
 			}
 		}
@@ -233,9 +310,19 @@ int main(int argc, char *argv[])
 		{
 			memset(resp, 0, 256);
 			memset(cmd, 0, 256);
-			sprintf(cmd, "selectrange gu(aaaa45, aaaa46)");
+			//sprintf(cmd, "selectrange gu(aaaa45, aaaa46)");
+			//sprintf(cmd, "selectrange gu(*, aaaa46)");
+			//sprintf(cmd, "selectrange gu(aaaa45, *)");
+			sprintf(cmd, "selectrange gu(*, *)");
+			rtn_stat = mt_cli_open_execute(connection, cmd, &exec_ctx);
 
-			mt_cli_open_execute(connection, cmd, &exec_ctx);
+			if (rtn_stat != CLI_SUCCESS)
+			{
+				printf ("Error! \n");
+				goto exitselrg;
+			}
+
+			printf("Client 1: %s\n", cmd);
 
 			int	rlen;
 			char	*rp = NULL;
@@ -264,8 +351,11 @@ int main(int argc, char *argv[])
 				} while(rp);
 
 			}
-			
-			mt_cli_close_execute(exec_ctx);
+exitselrg:
+			if (exec_ctx)
+			{
+				mt_cli_close_execute(exec_ctx);
+			}
 		}
 
 	
@@ -273,14 +363,23 @@ int main(int argc, char *argv[])
 		{
 
 			/* Delete data in the table */
-			for(i = 1; i < 100; i++)
+			for(i = 10; i < 50; i++)
 			{
 				memset(resp, 0, 256);
 				memset(cmd, 0, 256);
 				sprintf(cmd, "delete gu(aaaa%d)", i);
-				mt_cli_open_execute(connection, cmd, &exec_ctx);
+				rtn_stat = mt_cli_open_execute(connection, cmd, &exec_ctx);
 
-				mt_cli_close_execute(exec_ctx);
+				if (rtn_stat != CLI_SUCCESS)
+				{
+					printf ("Error! \n");
+					goto exitdel;
+				}
+exitdel:
+				if (exec_ctx)
+				{
+					mt_cli_close_execute(exec_ctx);
+				}
 			
 			}
 
@@ -292,9 +391,19 @@ int main(int argc, char *argv[])
 			memset(cmd, 0, 256);
 			sprintf(cmd, "drop gu");
 			
-			mt_cli_open_execute(connection, cmd, &exec_ctx);
+			rtn_stat = mt_cli_open_execute(connection, cmd, &exec_ctx);
 
-			mt_cli_close_execute(exec_ctx);
+			if (rtn_stat != CLI_SUCCESS)
+			{
+				printf ("Error! \n");
+				goto exitdrop;
+			}
+
+exitdrop:
+			if (exec_ctx)
+			{
+				mt_cli_close_execute(exec_ctx);
+			}
 			
 		}
 

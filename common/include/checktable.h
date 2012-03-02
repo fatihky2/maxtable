@@ -22,11 +22,14 @@
 #define CHECKTABLE_H_
 
 
+/*
+** The context of check table.
+*/
 typedef struct checktable_data
 {
-	char	chktab_magic[RPC_MAGIC_MAX_LEN];
-	char	chktab_magic_back[RPC_MAGIC_MAX_LEN];
-	int	chktab_opid;
+	char	chktab_magic[RPC_MAGIC_MAX_LEN];	/* the magic number. */
+	char	chktab_magic_back[RPC_MAGIC_MAX_LEN];	/* place holder. */
+	int	chktab_opid;				/* place holder. */
 	int	chktab_tabid;
 	char	chktab_tabname[TABLE_NAME_MAX_LEN];
 	char	chktab_sstabname[TABLE_NAME_MAX_LEN];

@@ -1,7 +1,7 @@
 /*
 ** tablet.h 2011-08-08 xueyingfei
 **
-** Copyright Transoft Corp.
+** Copyright flying/xueyingfei.
 **
 ** This file is part of MaxTable.
 **
@@ -118,6 +118,10 @@ tablet_schm_upd_col(char *newrp, char *oldrp, int colid, char *newcolval, int ne
 
 int
 tablet_sharding(TABLEHDR *tablehdr, char *rg_addr, int rg_port, char *tabdir, int tabid, char *tabletname, int tabletid);
+
+int
+tablet_upd_row(TABLEHDR *tablehdr, int tabid, int sstabid, char *tablet_name,
+			char *oldrp, char *newrp, int minlen);
 
 
 #endif

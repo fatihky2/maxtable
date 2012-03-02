@@ -36,6 +36,7 @@
 
 #endif
 
+
 #define	LOG_TOTALNUM	8
 
 
@@ -54,6 +55,7 @@
 #define	MT_LOG			"MT_LOG"
 #define	INSDEL_LOG_MAGIC	"INSDEL"
 #define	CHKPOINT_LOG_MAGIC	"CHKPNT"
+
 
 typedef struct logrec
 {
@@ -101,7 +103,7 @@ int
 log_delete(LOGFILE *logfilebuf, int logtype);
 
 int
-log_undo_sstab_split(char *logfile_dir, char *backup_dir, int logtype);
+log_undo_sstab_split(char *logfile_dir, char *backup_dir, int logtype, char *rgip, int rgport);
 
 int
 log_get_sstab_split_logfile(char *rglogfile, char *rgip, int rgport);

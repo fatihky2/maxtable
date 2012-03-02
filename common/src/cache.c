@@ -122,8 +122,7 @@ ca_setup_pool()
 	struct_size += sizeof (BUF);
 
 	
-	
-	
+		
 	bp = (BUF *) ca_memptr;
 	ca_memptr += (sizeof(BUF) * BLOCK_MAX_COUNT);
 	struct_size += (sizeof(BUF) * BLOCK_MAX_COUNT);

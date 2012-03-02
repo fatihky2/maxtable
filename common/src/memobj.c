@@ -36,6 +36,7 @@ mp_obj_crt(size_t itemsize, size_t minitems, size_t maxitems)
 	MEMOBJECT	*fp;		
 	size_t		total_itemsize;	
 
+
 	
 	size = sizeof(MEMOBJECT) + sizeof(MEMBLK);
 
@@ -94,8 +95,7 @@ mp_obj_crt(size_t itemsize, size_t minitems, size_t maxitems)
 		
 		INSQTAIL(&(fp->f_block), mbp);
 
-		
-		
+				
 		while (itemp <= (top - itemsize))
 		{	
 			
@@ -191,7 +191,7 @@ mp_obj_grow(MEMOBJECT * fp)
 
 	
 
-	
+		
 	itemp = space + sizeof(MEMBLK);
 
 	last_one = top - itemsize;
@@ -253,7 +253,6 @@ mp_obj_free(MEMOBJECT * fp, void * item)
 
 	growsize = MEMCOM_GROWSIZE(fp);
 
-
 	
 	INSQTAIL(&(fp->f_free), item);
 	fp->f_count++;
@@ -264,7 +263,6 @@ mp_obj_free(MEMOBJECT * fp, void * item)
 
 	
 	MEMCOM_UPDATE_USED(fp, -1);
-
 
 	return MEMPOOL_SUCCESS;
 }

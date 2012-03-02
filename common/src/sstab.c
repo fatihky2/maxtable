@@ -1,7 +1,7 @@
 /*
 ** sstab.c 2011-07-25 xueyingfei
 **
-** Copyright Transoft Corp.
+** Copyright flying/xueyingfei..
 **
 ** This file is part of MaxTable.
 **
@@ -33,6 +33,7 @@
 #include "timestamp.h"
 #include "log.h"
 #include "hkgc.h"
+#include "rginfo.h"
 
 
 extern	TSS	*Tss;
@@ -107,6 +108,7 @@ sstab_namebyid(char *old_sstab, char *new_sstab, int new_sstab_id)
 }
 
 
+
 void
 sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 {
@@ -124,15 +126,18 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 	BLK_ROWINFO	blk_rowinfo;
 
 
+	
 	ins_nxtsstab = (srcbp->bblk->bblkno > ((BLK_CNT_IN_SSTABLE / 2) - 1)) ? TRUE : FALSE;
 
 	nextblk = srcbp->bsstab->bblk;
+
 	
 	while (nextblk->bnextblkno < ((BLK_CNT_IN_SSTABLE / 2) + 1))
 	{		
 		nextblk = (BLOCK *) ((char *)nextblk + BLOCKSIZE);
 	}
 
+	
 	srctabinfo->t_stat |= TAB_GET_RES_SSTAB;
 
 	if ((destbuf = bufsearch(srctabinfo)) == NULL)
@@ -148,6 +153,7 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 		
 	blk_init(blk);
 
+	
 	while(nextblk->bblkno != -1)
 	{
 		Assert(nextblk->bfreeoff > BLKHEADERSIZE);
@@ -188,9 +194,12 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 
 	log_insert_sstab_split(tss->rglogfile, &logrec, SPLIT_LOG);
 
-	TABINFO_INIT(tabinfo, destbuf->bsstab_name, tabinfo->t_sinfo, 
-		     srcbp->bsstab->bblk->bminlen, TAB_KEPT_BUF_VALID | TAB_DO_SPLIT,
-		     srctabinfo->t_tabid, srctabinfo->t_insmeta->res_sstab_id);
+	TABINFO_INIT(tabinfo, destbuf->bsstab_name, srctabinfo->t_tab_name,
+			srctabinfo->t_tab_namelen, tabinfo->t_sinfo, 
+			srcbp->bsstab->bblk->bminlen, 
+			TAB_KEPT_BUF_VALID | TAB_DO_SPLIT,
+			srctabinfo->t_tabid, 
+			srctabinfo->t_insmeta->res_sstab_id);
 
 	
 	destbuf->bsstab->bblk->bnextsstabnum = srcbp->bsstab->bblk->bnextsstabnum;
@@ -204,6 +213,7 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 	
 	if (ins_nxtsstab)
 	{
+		
 		tabinfo->t_keptbuf = destbuf;
 		
 		key = row_locate_col(rp, srctabinfo->t_key_coloff, 
@@ -213,11 +223,13 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 		SRCH_INFO_INIT(tabinfo->t_sinfo, key, keylen, srctabinfo->t_key_colid, 
 				srctabinfo->t_key_coltype, srctabinfo->t_key_coloff);
 
+		
 		tabinfo->t_stat |= TAB_LOG_SKIP_LOG;
 		blkins(tabinfo, rp);
 	}
 	else
 	{
+		
 		bufpredirty(destbuf);
 		bufdirty(destbuf);
 	}
@@ -228,6 +240,7 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 	srctabinfo->t_insrg = (INSRG *)MEMALLOCHEAP(sizeof(INSRG));
 	MEMSET(srctabinfo->t_insrg, sizeof(INSRG));
 
+	
 	sstab_key = row_locate_col(destbuf->bblk->bdata, -1, destbuf->bblk->bminlen,
 				   &sstab_keylen);
 
@@ -236,7 +249,8 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 	MEMSET(srctabinfo->t_insrg->new_sstab_key, sstab_keylen);
 
 
-	i = strmnstr(destbuf->bsstab_name, "/", STRLEN(destbuf->bsstab_name));
+	int	sstab_len = STRLEN(destbuf->bsstab_name);
+	i = strmnstr(destbuf->bsstab_name, "/", sstab_len);
 	
 	MEMCPY(srctabinfo->t_insrg->new_sstab_name, destbuf->bsstab_name + i, 
 		STRLEN(destbuf->bsstab_name + i));
@@ -247,6 +261,17 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 			srctabinfo->t_sstab_name, destbuf->bsstab_name, 0, 0, 0);
 	
 	log_insert_sstab_split(tss->rglogfile, &logrec, SPLIT_LOG);
+
+	SSTAB_SPLIT_INFO	split_info;
+
+	SSTAB_SPLIT_INFO_INIT(&split_info, 0, srctabinfo->t_tab_name,
+				srctabinfo->t_tab_namelen, destbuf->bsstab_name,
+				srctabinfo->t_sstab_id,
+				srcbp->bsstab->bblk->bsstab_split_ts_lo,
+				srctabinfo->t_insmeta->res_sstab_id,
+				sstab_keylen, sstab_key);
+
+	ri_rgstat_putdata(tss->rgstatefile, destbuf->bsstab_name, 0, &split_info);
 
 	session_close(tabinfo);
 	

@@ -22,6 +22,7 @@
 #define COMPACT_H_
 
 
+/* The context of data compaction. */
 typedef struct compact_data
 {
 	char	compact_magic[RPC_MAGIC_MAX_LEN];

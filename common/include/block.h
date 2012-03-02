@@ -25,9 +25,10 @@
 #define	BLKHEADERSIZE	60
 
 
-//#define	BLOCKSIZE		(64 * 1024)		
-#define BLOCKSIZE		(512)
+#define	BLOCKSIZE		(64 * 1024)		
+//#define BLOCKSIZE		(512)
 //#define BLOCKSIZE		(128 * 1024)
+
 
 
 //#define	BLK_CNT_IN_SSTABLE	16
@@ -40,8 +41,8 @@
 #define	SSTABLE_MAX_COUNT	64
 
 
-//#define	BLOCK_MAX_COUNT		(BLK_CNT_IN_SSTABLE * SSTABLE_MAX_COUNT + 24)	
-#define	BLOCK_MAX_COUNT		(16 * SSTABLE_MAX_COUNT + 40 + 256 + 51)
+#define	BLOCK_MAX_COUNT		(BLK_CNT_IN_SSTABLE * SSTABLE_MAX_COUNT + 24)	
+//#define	BLOCK_MAX_COUNT		(16 * SSTABLE_MAX_COUNT + 40 + 256 + 53)
 //#define	BLOCK_MAX_COUNT		(16 * SSTABLE_MAX_COUNT)	
 
 
@@ -65,18 +66,12 @@ typedef	struct block
 	
 	unsigned int	bsstab_split_ts_lo;
 	
-	int		bnextrno;	
-
-	
+	int		bnextrno;		
 	unsigned int    bsstab_split_ts_hi;
-	
-	
-	unsigned int	bsstab_insdel_ts_lo;
-
-	
+	unsigned int	bsstab_insdel_ts_lo;	
 	unsigned int    bsstab_insdel_ts_hi;
 	
-	int		bfreeoff; 	
+	int		bfreeoff; 		
 	short		bstat; 		
 	short		bminlen; 	
 
@@ -93,7 +88,7 @@ typedef	struct block
 
 
 #define	ROW_OFFSET_ENTRYSIZE	sizeof(int)
-#define	BLK_TAILSIZE		sizeof(int)	
+#define	BLK_TAILSIZE		sizeof(int)		
 #define	BLK_GET_NEXT_ROWNO(blk)	(blk->bnextrno)
 
 
@@ -105,7 +100,6 @@ typedef	struct block
 
 		   
 #define BLOCK_IS_EMPTY(bp)	(bp->bblk->bfreeoff == BLKHEADERSIZE)
-
 
 
 typedef struct block_row_info
@@ -127,11 +121,12 @@ typedef struct srch_info
 }SINFO;
 
 
-#define	SI_INDEX_BLK	0x00000001	
+#define	SI_INDEX_BLK	0x00000001		
 #define	SI_DATA_BLK	0x00000002
 #define	SI_INS_DATA	0x00000004	
 #define	SI_NODATA	0x00000008	
 #define SI_DEL_DATA	0x00000010	
+#define	SI_UPD_DATA	0x00000020	
 
 
 #define SRCH_INFO_INIT(srch_info, key, keylen, colid, coltype, coloff)	\
@@ -157,7 +152,6 @@ do {											\
 		(nextblk)->bfreeoff = BLKHEADERSIZE;					\
 		(nextblk)->bminlen = 0;							\
 }while(0)
-
 
 
 #define	BLK_BUF_NEED_CHANGE	0x0001
@@ -200,5 +194,7 @@ blk_get_location_sstab(struct tab_info *tabinfo, BUF *bp);
 int
 blk_appendrow(BLOCK *blk, char *rp, int rlen);
 
+int
+blkupdate(TABINFO *tabinfo, char *newrp);
 
 #endif

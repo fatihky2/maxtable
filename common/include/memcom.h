@@ -33,7 +33,6 @@ extern "C" {
 
 
 
-
 #define MEMPOOL_BLOCK	1		
 #define MEMPOOL_FRAG	2		
 #define MEMPOOL_OBJECT	3		
@@ -55,7 +54,7 @@ typedef struct free_frag_link
 
 typedef struct memplist
 {
-	LINK 	mpl_link;		
+	LINK 	mpl_link;			
 	size_t	mpl_count;		
 } MEMPLIST;
 
@@ -140,7 +139,6 @@ typedef struct memfrag
 
 
 
-
 #define ROUNDSIZE(size, round)	(((size) + ((round) - 1)) & ~((round) - 1))
 
 
@@ -169,7 +167,6 @@ typedef struct memfrag
 	do {					\
 		MEMCOM_USED(_mc) += (_chg);	\
 	} while (0)
-
 
 
 #define MEMPOOL_TYPE_TO_LIST(_type) \
@@ -206,7 +203,6 @@ typedef struct kernel
 
 
 
-
 #define TSS_MIN_ITEMS   32
 #define TSS_MAX_ITEMS   256
 
@@ -215,7 +211,6 @@ typedef struct kernel
 
 #define MSGDATA_MIN_ITEMS   256
 #define MSGDATA_MAX_ITEMS   1024
-
 
 
 

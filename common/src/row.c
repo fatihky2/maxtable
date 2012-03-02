@@ -28,7 +28,6 @@
 
 
 
-
 char *
 row_locate_col(char * rowptr, int coloffset, int minrowlen, int * length)
 {

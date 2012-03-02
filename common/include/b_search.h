@@ -20,19 +20,22 @@
 #ifndef B_SEARCH_H_
 #define B_SEARCH_H_
 
+
+
 typedef struct b_srchinfo
 {
-	char	        *brow;		
+	char	        *brow;				
 	int	        brownum;	
 	int 	        blow;		
 	int	        bhigh;		
 	int   	        bcomp;		
-	int		btotrows;	
+	int		btotrows;	 
 	int		boffset;	
-	int		bcoltype;
-	int		bcoloffset;
+	int		bcoltype;	
+	int		bcoloffset;	
 
 } B_SRCHINFO;
+
 
 #define	SRCHINFO_INIT(srchinfo, low, high, total, result)	\
 do								\

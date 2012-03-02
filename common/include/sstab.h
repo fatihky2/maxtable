@@ -1,7 +1,7 @@
 /*
 ** sstab.h 2011-07-25 xueyingfei
 **
-** Copyright Transoft Corp.
+** Copyright flying/xueyingfei..
 **
 ** This file is part of MaxTable.
 **

@@ -32,7 +32,7 @@ extern	TSS	*Tss;
 int
 dopen(char * name, long flags)
 {
-	int	mode;	
+	int	mode;		
 	int	fd;
 	char	*tempname;
 	
@@ -87,6 +87,7 @@ dstartio(BLKIO * blkiop)
 	}
 
 	dclose(fd);
+
 	
 	if ((blkiop->bioflags & DBREAD) && (blkiop->biobp->bstat & BUF_READ_EMPTY) && (status == 0))
 	{

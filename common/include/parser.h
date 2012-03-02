@@ -40,16 +40,16 @@ typedef struct resdom
 	short		colstat; 	
 	int		coltype; 	
 	int		coloffset;		
-	char		pad[2];
+	short		resdstat;
 	int		colen;   	
 }RESDOM;
+
+#define	RESDOM_SELECTSUM_COL	0x0001	
 
 typedef struct constant
 {
 	int            	len;
 	char            *value;  	
-
-	
 	int		rightlen;	
 	char		*rightval;
 
@@ -58,7 +58,7 @@ typedef struct constant
 } CONSTANT;
 
 
-#define	CONSTANT_SELECTWHERE		0x0001	
+#define	CONSTANT_SELECTWHERE	0x0001	
 
 
 typedef union symbol
@@ -88,7 +88,6 @@ typedef struct tree
 #define PAR_NODE_IS_CONSTANT(type)      (type == PAR_CONSTANT_NODE)
 
 
-
 #define	OR	1
 #define	AND	2
 #define WHERE	3
@@ -97,7 +96,6 @@ typedef struct tree
 typedef struct srchclause
 {	struct tree	*scterms;	
 } SRCHCLAUSE;
-
 
 
 typedef struct orandplan
@@ -120,7 +118,7 @@ void
 par_destroy_const(TREE *node);
 
 TREE*
-par_bld_resdom(char *colname, char *coltype, int col_id);
+par_bld_resdom(char *colname, char *coltype, int col_id, short resdstat);
 
 void
 par_destroy_resdom(TREE * node);
@@ -183,7 +181,7 @@ RESDOM *
 par_get_resdom_by_colname(TREE *command, char *colname);
 
 int
-par_fill_colinfo(char *tab_dir, int colnum, TREE *command);
+par_fill_colinfo(int colnum, COLINFO* col_buf, TREE *command);
 
 ORANDPLAN *
 par_get_orplan(TREE *command);
@@ -193,6 +191,10 @@ par_get_andplan(TREE *command);
 
 void
 par_release_orandplan(ORANDPLAN *orandplan);
+
+int
+par_chk_fill_resdom(TREE *command, int colnum, COLINFO* col_buf);
+
 
 
 #endif

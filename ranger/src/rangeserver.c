@@ -51,6 +51,7 @@
 #include "b_search.h"
 #include "log.h"
 #include "m_socket.h"
+#include "rginfo.h"
 #include "interface.h"
 #include <pthread.h>
 
@@ -85,6 +86,7 @@ typedef struct rg_info
 	int		flush_check_interval;
 	char		rglogfiledir[256];
 	char		rgbackup[256];
+	char		rgstatefile[256];
 	int		rginsdellognum;
 	RG_SYSTABLE	rg_systab;
 }RANGEINFO;
@@ -93,15 +95,20 @@ typedef struct rg_info
 typedef struct sstab_scancontext
 {
 	int		rminlen;
-	int		curblk;
-	int		currow;
+	int		curblk;		/* Current working block, the start 
+					** number is the 0 even if its true
+					** number is the bp->bblk->blkno.
+					*/
+	int		currow;		/* Current row numbet, start from 0. */
 	int		stat;
 	ORANDPLAN	*orplan;
 	ORANDPLAN	*andplan;
-	char		*sstab;
+	char		*sstab;		/* Ptr to the data in block. */
 	RANGE_QUERYCTX	*rgsel;
 	int		rowcnt;		/* For the selectcount. */
-	int		pad;
+	int		sum_colval;	/* For the selectsum. */
+	int		querytype;
+	int		sum_coloff;	/* For the selectsum. */
 }SSTAB_SCANCTX;
 
 /* 
@@ -122,15 +129,23 @@ typedef struct sstab_scancontext
 typedef struct tablet_scancontext
 {
 	int		stat;
-	ORANDPLAN	*orplan;
-	ORANDPLAN	*andplan;
-	char		*tablet;
-	char		*tabdir;
-	int		rminlen;
-	int		keycolid;
-	int		tabid;
-	int		connfd;
+	int		querytype;	/* Query type. */
+	ORANDPLAN	*orplan;	/* Ptr to the parser tree of OR plan. */
+	ORANDPLAN	*andplan;	/* Ptr to the parser tree of AND plan. */
+	char		*tablet;	/* Ptr to the first block of tablet. */
+	char		*tabdir;	/* Table name full path. */
+	int		rminlen;	/* The minimal length of row. */
+	int		keycolid;	/* The id of key column in the table, 
+					** its value is '1' generally. 
+					*/
+	int		tabid;		/* Table id. */
+	int		connfd;		/* Socket id of connection to the 
+					** bigdata port.
+					*/
 	int		rowcnt;		/* For the selectcount. */
+	int		sum_colval;	/* For the selectsum (col). */
+	int		sum_coloff;	/* For the selectsum (col). */
+	int		pad;
 }TABLET_SCANCTX;
 
 #define	SCANCTX_HIT_END		0x0001
@@ -253,6 +268,8 @@ rg_droptab(TREE *command)
 	{
 		rtn_stat = TRUE;
 	}
+
+	rg_table_unregist(tab_dir);
 
 exit:
 	if (rtn_stat)
@@ -645,9 +662,9 @@ rg_seldeltab(TREE *command, TABINFO *tabinfo)
 	
 	keycol = par_get_colval_by_colid(command, tabinfo->t_key_colid, &keycolen);
 
-	TABINFO_INIT(tabinfo, ins_meta->sstab_name, tabinfo->t_sinfo, 
-			tabinfo->t_row_minlen, 0, tabinfo->t_tabid, 
-			tabinfo->t_sstab_id);
+	TABINFO_INIT(tabinfo, ins_meta->sstab_name, tab_name, tab_name_len,
+			tabinfo->t_sinfo, tabinfo->t_row_minlen, 0,
+			tabinfo->t_tabid, tabinfo->t_sstab_id);
 	SRCH_INFO_INIT(tabinfo->t_sinfo, keycol, keycolen, 1, VARCHAR, -1);
 
 	/* Case delete data.*/
@@ -693,6 +710,8 @@ rg_seldeltab(TREE *command, TABINFO *tabinfo)
 	/* The selecting value is not exist. */
 	if (tabinfo->t_sinfo->sistate & SI_NODATA)
 	{
+		/* Just return a NULL sucess. */
+		rtn_stat = TRUE;
 		goto exit;
 	}
 
@@ -721,7 +740,11 @@ rg_seldeltab(TREE *command, TABINFO *tabinfo)
 exit:
 	if (rtn_stat)
 	{		
-		if (tabinfo->t_stat & TAB_DEL_DATA)
+		if (tabinfo->t_sinfo->sistate & SI_NODATA)
+		{
+			resp = conn_build_resp_byte(RPC_SUCCESS, 0, NULL);
+		}
+		else if (tabinfo->t_stat & TAB_DEL_DATA)
 		{
 			/* Just return a SUCCESS. */
 			resp = conn_build_resp_byte(RPC_SUCCESS, 0, NULL);
@@ -739,6 +762,7 @@ exit:
 						tabinfo->t_cur_rowlen);
 
 			MEMFREEHEAP(tabinfo->t_cur_rowp);
+			tabinfo->t_cur_rowp= 0;
 		}
 		else
 		{
@@ -882,9 +906,9 @@ rg_selrangetab(TREE *command, TABINFO *tabinfo, int fd)
 		right_expand = TRUE;
 	}
 	
-	TABINFO_INIT(tabinfo, ins_meta->sstab_name, tabinfo->t_sinfo, 
-			tabinfo->t_row_minlen, 0, tabinfo->t_tabid, 
-			tabinfo->t_sstab_id);
+	TABINFO_INIT(tabinfo, ins_meta->sstab_name, tab_name, tab_name_len,
+			tabinfo->t_sinfo, tabinfo->t_row_minlen, 0, 
+			tabinfo->t_tabid, tabinfo->t_sstab_id);
 	SRCH_INFO_INIT(tabinfo->t_sinfo, keycol, keycolen, 1, VARCHAR, -1);
 
 	if (left_expand)
@@ -983,8 +1007,9 @@ rg_selrangetab(TREE *command, TABINFO *tabinfo, int fd)
 		else
 		{	
 			TABINFO_INIT(tabinfo, tabinfo->t_sstab_name,
-					tabinfo->t_sinfo, tabinfo->t_row_minlen, 
-					0, tabinfo->t_tabid, tabinfo->t_sstab_id);
+					tab_name, tab_name_len,	tabinfo->t_sinfo,
+					tabinfo->t_row_minlen, 0,
+					tabinfo->t_tabid, tabinfo->t_sstab_id);
 			
 			SRCH_INFO_INIT(tabinfo->t_sinfo, right_rangekey, 
 					right_keylen, 1, VARCHAR, -1);			
@@ -1019,6 +1044,11 @@ rg_selrangetab(TREE *command, TABINFO *tabinfo, int fd)
 				}
 				else
 				{
+					/*
+					** If there's only one row with DELETE 
+					** flag in one sstable. the deleted row 
+					** will not return to client. 
+					*/
 					if (srchinfo.bcomp == LE)
 					{
 						rgsel_cont.end_rowpos = 
@@ -1055,6 +1085,7 @@ rg_selrangetab(TREE *command, TABINFO *tabinfo, int fd)
 
 		if (n != 8)
 		{
+			traceprint("Socket read error 6.\n");
 			goto exit;
 		}
 
@@ -1105,6 +1136,7 @@ nextblk:
 
 			if (n != 8)
 			{
+				traceprint("Socket read error 5.\n");
 				goto exit;
 			}
 
@@ -1148,7 +1180,34 @@ exit:
 
 
 
-/* Single node operation for the whole range query. */
+/*
+** This routine will execeute the range query from the sstab_left to the 
+** sstab_right.
+**
+** Parameters:
+**	tabinfo		- (IN) table information.
+**	sstab_left		- (IN) the sstable that's the left bound of 
+**			         range query.
+**	sstab_right	- (IN) the sstable that's the right bound of range
+**			         query.
+**	connfd		- (IN) socket id of the connection to transfer the 
+**			-        big data.
+**	key_left		- (IN) the left key of this range user specified.
+**	keylen_left	- (IN) the length of the left key.
+**	key_right		- (IN) the right key of this range user specified.
+**	keylen_right	- (IN) the length of right key.
+**	left_expand	- (IN) flag if the left bound is *.
+**	right_expand	- (IN) flag if the right bound is *. 
+**	tabdir		- (IN) full path of table in the ranger server.
+**	data_cont	- (OUT) flag if it hit the last sstable.
+** 
+** Returns:
+**	True if success, or false.
+** 
+** Side Effects
+**	None
+** 
+*/
 static int
 rg__selrangetab(TABINFO *tabinfo, char *sstab_left, char *sstab_right, int connfd,
 		char *key_left, int keylen_left, char *key_right, int keylen_right,
@@ -1162,9 +1221,11 @@ rg__selrangetab(TABINFO *tabinfo, char *sstab_left, char *sstab_right, int connf
 	B_SRCHINFO	srchinfo;
 	char		tab_left_sstab_dir[TABLE_NAME_MAX_LEN];
 	char		tab_right_sstab_dir[TABLE_NAME_MAX_LEN];
+	int		rtn_stat;
 
 
 	bp = NULL;
+	rtn_stat = TRUE;
 
 	
 	/* Get the full path for the left bound. */
@@ -1177,7 +1238,8 @@ rg__selrangetab(TABINFO *tabinfo, char *sstab_left, char *sstab_right, int connf
 	MEMCPY(tab_right_sstab_dir, tabdir, STRLEN(tabdir));
 	str1_to_str2(tab_right_sstab_dir, '/', sstab_right);	
 
-	TABINFO_INIT(tabinfo, tab_left_sstab_dir, tabinfo->t_sinfo, 
+	TABINFO_INIT(tabinfo, tab_left_sstab_dir, tabinfo->t_tab_name,
+			tabinfo->t_tab_namelen, tabinfo->t_sinfo, 
 			tabinfo->t_row_minlen, 0, tabinfo->t_tabid, 
 			tabinfo->t_sstab_id);
 	SRCH_INFO_INIT(tabinfo->t_sinfo, key_left, keylen_left, 1, VARCHAR, -1);
@@ -1256,6 +1318,8 @@ rg__selrangetab(TABINFO *tabinfo, char *sstab_left, char *sstab_right, int connf
 		else
 		{	
 			TABINFO_INIT(tabinfo, tabinfo->t_sstab_name,
+					tabinfo->t_tab_name, 
+					tabinfo->t_tab_namelen, 
 					tabinfo->t_sinfo, tabinfo->t_row_minlen, 
 					0, tabinfo->t_tabid, tabinfo->t_sstab_id);
 			
@@ -1329,13 +1393,15 @@ rg__selrangetab(TABINFO *tabinfo, char *sstab_left, char *sstab_right, int connf
 
 		if (n != 8)
 		{
-			return FALSE;
+			traceprint("Socket read error 4.\n");
+			rtn_stat = FALSE;
+			goto done;
 		}
 
 		if (!(*data_cont))
 		{
 			/* Data is DATA_DONE and we already hit all the data. */
-			break;
+			goto done;
 		}
 		
 nextblk:			
@@ -1351,7 +1417,7 @@ nextblk:
 						tab_right_sstab_dir,
 						STRLEN(tab_right_sstab_dir)))
 			{
-				return TRUE;
+				goto done;
 			}
 
 			
@@ -1373,7 +1439,7 @@ nextblk:
 		}
 		else
 		{
-			return TRUE;
+			goto done;
 		}
 
 		if (bp->bblk->bfreeoff > BLKHEADERSIZE)
@@ -1387,60 +1453,89 @@ nextblk:
 			
 	}
 
-	return TRUE;
+done:
+	bufunkeep(bp->bsstab);
+	
+	return rtn_stat;
 }
 
+
+/* 
+** This routine will execute the query with some conditions, such as the where
+** clause, range query (key range). 
+**
+** Parameters:
+** 	command	- (IN) the command user specified.
+**	selwhere		- (IN) the meta information from metaserver
+**	tab_hdr		- (IN) table header information read from 
+**			         the sysobjects.
+**	colinfo		- (IN) column information.
+**	fd		- (IN) the socket id of the connection between 
+**			         the ranger and client.
+** 
+** Returns:
+**	the ptr to the response information.
+** 
+** Side Effects:
+**	None.
+** 
+*/
 char *
-rg_selwheretab(TREE *command, SELWHERE *selwhere, int fd)
+rg_selwheretab(TREE *command, SELWHERE *selwhere, TABLEHDR *tab_hdr, COLINFO *colinfo,int fd)
 {
-	char		*tab_name;
-	int		tab_name_len;
+	char		*tab_name;	/* Ptr to the table name. */
+	int		tab_name_len;	/* Name length. */
 	char		tab_dir[TABLE_NAME_MAX_LEN];
+					/* The full path of table in the meta
+					** server.
+					*/
 	char		tab_meta_dir[TABLE_NAME_MAX_LEN];
-	int		fd1;
-	int		rtn_stat;
-	TABLEHDR	tab_hdr;
-	int		sstab_rlen;
-	int		sstab_idx;
-	char		*resp;
-	int		resp_size;
-	char		*rp;
-	int		namelen;
-	char		*rg_addr;
-	int		rg_port;
-	TABLET_SCANCTX	*tablet_scanctx;
-	RANGE_QUERYCTX	rgsel_cont;
+					/* Save the full path of table meta. */
+	int		fd1;		/* The id of openning file. */
+	int		rtn_stat;	/* Return state. */
+		
+	char		*resp;		/* Response information. */
+	int		resp_size;	/* The size of response information*/
+	char		*rp;		/* Ptr to the row. */
+	int		namelen;	/* Name length. */
+	char		*rg_addr;	/* The address of ranger server. */
+	int		rg_port;	/* Ranger port. */
+	TABLET_SCANCTX	*tablet_scanctx;/* The context of tablet scanning. */
+	RANGE_QUERYCTX	rgsel_cont;	/* The context of range query. */
 	char		rg_tab_dir[TABLE_NAME_MAX_LEN];
-	int		tabidx;
+					/* The full path of table in the ranger 
+					** server.
+					*/
+	int		tabidx;		/* The index of the table information 
+					** in the Ranger_infor.
+					*/
 	int		querytype;
 
 
 	Assert(command);
 
+	/* Initialization. */
 	rtn_stat	= FALSE;
-	sstab_rlen 	= 0;
-	sstab_idx 	= 0;
 	tablet_scanctx 	= NULL;
 	tab_name	= command->sym.command.tabname;
 	tab_name_len 	= command->sym.command.tabname_len;
 	querytype	= command->sym.command.querytype;
 
+	/* The full path of meta table. */
 	MEMSET(tab_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_dir, MT_META_TABLE, STRLEN(MT_META_TABLE));
-
-	
 	str1_to_str2(tab_dir, '/', tab_name);
 
+	/* The full path of ranger table. */
 	MEMSET(rg_tab_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(rg_tab_dir, MT_RANGE_TABLE, STRLEN(MT_RANGE_TABLE));
-
-	
 	str1_to_str2(rg_tab_dir, '/', tab_name);
 
 	
 	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
 
+	/* Check if table is exist. */
 	if ((tabidx = rg_table_is_exist(tab_dir)) == -1)
 	{
 		if (STAT(tab_dir, &st) != 0)
@@ -1449,38 +1544,24 @@ rg_selwheretab(TREE *command, SELWHERE *selwhere, int fd)
 			goto exit;
 		}
 
+		/* If hit the error, it has printed the information in caller. */
 		tabidx = rg_table_regist(tab_dir);
 	}
 
-	
-	str1_to_str2(tab_meta_dir, '/', "sysobjects");
 
-	OPEN(fd1, tab_meta_dir, (O_RDONLY));
-	
-	if (fd1 < 0)
-	{
-		traceprint("Table is not exist! \n");
-		goto exit;
-	}
-
-	
-	READ(fd1, &tab_hdr, sizeof(TABLEHDR));	
-
-	CLOSE(fd1);
-
-	if (tab_hdr.tab_tablet == 0)
+	if (tab_hdr->tab_tablet == 0)
 	{
 		traceprint("Table %s has no data.\n", tab_name);
 		goto exit;
 	}
 
-	if (tab_hdr.tab_stat & TAB_DROPPED)
+	if (tab_hdr->tab_stat & TAB_DROPPED)
 	{
 		traceprint("This table has been dropped.\n");
 		goto exit;
 	}
 
-	if (tab_hdr.tab_tablet == 0)
+	if (tab_hdr->tab_tablet == 0)
 	{
 		traceprint("Table should have one tablet at least! \n");
 		goto exit;
@@ -1492,7 +1573,7 @@ rg_selwheretab(TREE *command, SELWHERE *selwhere, int fd)
 	str1_to_str2(tab_meta_dir, '/', "tabletscheme");
 		
 
-
+	/* Read the file tabletscheme. */
 	char	*tablet_schm_bp = NULL;
 	
 	OPEN(fd1, tab_meta_dir, (O_RDONLY));
@@ -1522,6 +1603,8 @@ rg_selwheretab(TREE *command, SELWHERE *selwhere, int fd)
 
 	/* The tablet to be interested. */
 	char		*wanted_tablet;
+
+	int		wanted_tablet_len;
 
 	/* Check if we got the first tablet. */
 	int		leftbegin = FALSE;
@@ -1560,14 +1643,18 @@ rg_selwheretab(TREE *command, SELWHERE *selwhere, int fd)
 
 	if (connfd < 0)
 	{
-		traceprint("hit accept issue\n");
+		traceprint("hit socket accept issue\n");
 		goto exit;
 	}
 		
 	if (querytype == SELECTWHERE)
 	{
-		par_fill_colinfo(tab_dir, tab_hdr.tab_col, command);
+		if (!par_fill_colinfo(tab_hdr->tab_col, colinfo, command))
+		{
+			goto exit;
+		}
 
+		/* Initialize the context of tablet scanning. */
 		tablet_scanctx = (TABLET_SCANCTX *)MEMALLOCHEAP(sizeof(TABLET_SCANCTX));
 		MEMSET(tablet_scanctx, sizeof(TABLET_SCANCTX));
 
@@ -1579,7 +1666,10 @@ rg_selwheretab(TREE *command, SELWHERE *selwhere, int fd)
 	{
 		left_expand = right_expand = FALSE;
 
-		/* Left key ID is the '1' that's not the true column ID. */
+		/*
+		** Left range: left key ID is the '1' that's not the true 
+		** column ID, it's just a index of column in the query clause.
+		*/
 		key_left = par_get_colval_by_colid(command, 1, &keycolen_left);
 
 		if ((keycolen_left == 1) && (!strncasecmp("*", key_left, keycolen_left)))
@@ -1588,7 +1678,7 @@ rg_selwheretab(TREE *command, SELWHERE *selwhere, int fd)
 		}
 		
 		
-		/* Right key ID is the '2'. */
+		/* Right range: right key ID is the '2'. */
 		key_right = par_get_colval_by_colid(command, 2, &keycolen_right);
 
 		if ((keycolen_right == 1) && (!strncasecmp("*", key_right, 
@@ -1622,16 +1712,28 @@ rg_selwheretab(TREE *command, SELWHERE *selwhere, int fd)
 					TABLETSCHM_TABLETNAME_COLOFF_INROW,
 					ROW_MINLEN_IN_TABLETSCHM, &namelen);
 
-			wanted_tablet = (!leftbegin)?  selwhere->lefttabletname 
-						   : selwhere->righttabletname;			
+			/* Get the left or right range of key. */
+			if (!leftbegin)
+			{
+				wanted_tablet = selwhere->lefttabletname;
+				wanted_tablet_len = selwhere->leftnamelen;
+			}
+			else
+			{
+				wanted_tablet = selwhere->righttabletname;
+				wanted_tablet_len = selwhere->rightnamelen;
+			}
 
 			/* Check if it got the left or right tablet. */
 			result = row_col_compare(VARCHAR, tabletname, 
 						STRLEN(tabletname), 
 						wanted_tablet,
-						STRLEN(wanted_tablet));
+						wanted_tablet_len);
 			
-
+			/* 
+			** Continue to the scan if it still not hit the first 
+			** tablet that locates at the range of key. 
+			*/
 			if ((result != EQ) && (leftbegin == FALSE))
 			{
 				continue;
@@ -1657,7 +1759,7 @@ rg_selwheretab(TREE *command, SELWHERE *selwhere, int fd)
 				}
 			}
 
-			/* Check if this tablet locates at this range. */
+			/* Check if this tablet locates at this ranger server. */
 			rg_addr = row_locate_col(rp, 
 					TABLETSCHM_RGADDR_COLOFF_INROW,
 					ROW_MINLEN_IN_TABLETSCHM, &ign);
@@ -1686,6 +1788,10 @@ rg_selwheretab(TREE *command, SELWHERE *selwhere, int fd)
 				MEMCPY(tab_tablet_dir, tab_dir, STRLEN(tab_dir));
 				str1_to_str2(tab_tablet_dir, '/', tabletname);  
 
+				/* 
+				** Read the file tablet and get the information
+				** of each row.
+				*/
 				OPEN(fd1, tab_tablet_dir, (O_RDONLY));
 
 				if (fd1 < 0)
@@ -1702,11 +1808,11 @@ rg_selwheretab(TREE *command, SELWHERE *selwhere, int fd)
 				{
 					tablet_scanctx->tablet = tablet_bp;
 					tablet_scanctx->keycolid = 
-							tab_hdr.tab_key_colid;
+							tab_hdr->tab_key_colid;
 					tablet_scanctx->rminlen = 
-							tab_hdr.tab_row_minlen;
+							tab_hdr->tab_row_minlen;
 					tablet_scanctx->tabdir = rg_tab_dir;
-					tablet_scanctx->tabid = tab_hdr.tab_id;
+					tablet_scanctx->tabid = tab_hdr->tab_id;
 
 					/* 
 					** Scan the tablet and get the sstabname
@@ -1753,8 +1859,8 @@ rg_selwheretab(TREE *command, SELWHERE *selwhere, int fd)
 					/* TODO: it needs to re-get the length of fixed column. */
 					MEMCPY(sstab_left, sstab, STRLEN(sstab));
 					
-					tabinfo.t_tabid = tab_hdr.tab_id;
-					tabinfo.t_row_minlen = tab_hdr.tab_row_minlen;
+					tabinfo.t_tabid = tab_hdr->tab_id;
+					tabinfo.t_row_minlen = tab_hdr->tab_row_minlen;
 					tabinfo.t_sstab_id = sstabid;
 					tabinfo.t_sinfo = &psinfo;
 					tabinfo.t_rowinfo = &blk_rowinfo;
@@ -1824,16 +1930,23 @@ finish:
 
 	conn_destroy_resp_byte(resp);	
 
-	
+#if 1	
 	char	resp_cli[8];
 	MEMSET(resp_cli, 8);
 	int n = conn_socket_read(connfd, resp_cli, 8);
 
 	if (n != 8)
 	{
+		/* 
+		** Here got the end of this session, so it should be a normal
+		** case.
+		*/
+		rtn_stat = TRUE;
+		
+		traceprint("Socket read error 3.\n");
 		goto exit;
 	}
-	
+#endif	
 	rtn_stat = TRUE;
 
 exit:
@@ -1843,11 +1956,19 @@ exit:
 	
 	if (rtn_stat)
 	{
-		
-		resp = conn_build_resp_byte(RPC_SUCCESS, 0, NULL);
+		/* 
+		** This case stands for the success for this session. The client
+		** has been close the accept. 
+		*/
+		resp = conn_build_resp_byte(RPC_SKIP_SEND, 0, NULL);
 	}
 	else
 	{
+		/* 
+		** Exption case need to be send to the client and the client
+		** can accept this RPC and use it to make sure this session
+		** is failed.
+		*/
 		resp = conn_build_resp_byte(RPC_FAIL, 0, NULL);
 	}
 
@@ -1872,17 +1993,14 @@ exit:
 
 /* Clone from rg_selwheretab(). */
 char *
-rg_selcounttab(TREE *command, SELWHERE *selwhere, int fd)
+rg_selcounttab(TREE *command, SELWHERE *selwhere, TABLEHDR *tab_hdr, COLINFO *colinfo, int fd)
 {
 	char		*tab_name;
 	int		tab_name_len;
 	char		tab_dir[TABLE_NAME_MAX_LEN];
 	char		tab_meta_dir[TABLE_NAME_MAX_LEN];
 	int		fd1;
-	int		rtn_stat;
-	TABLEHDR	tab_hdr;
-	int		sstab_rlen;
-	int		sstab_idx;
+	int		rtn_stat;	
 	char		*resp;
 	char		*rp;
 	int		namelen;
@@ -1893,18 +2011,20 @@ rg_selcounttab(TREE *command, SELWHERE *selwhere, int fd)
 	int		tabidx;
 	int		querytype;
 	int		rowcnt;		/* The # of row to be wanted. */
+	int		sum_value;	/* For the SELECTSUM. */
 
 
 	Assert(command);
 
 	rtn_stat	= FALSE;
-	sstab_rlen 	= 0;
-	sstab_idx 	= 0;
 	tablet_scanctx 	= NULL;
 	tab_name	= command->sym.command.tabname;
 	tab_name_len 	= command->sym.command.tabname_len;
 	querytype	= command->sym.command.querytype;
 	rowcnt		= 0;
+	sum_value	= 0;
+
+	Assert((querytype == SELECTSUM) || (querytype == SELECTCOUNT));
 
 	MEMSET(tab_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_dir, MT_META_TABLE, STRLEN(MT_META_TABLE));
@@ -1934,34 +2054,19 @@ rg_selcounttab(TREE *command, SELWHERE *selwhere, int fd)
 	}
 
 	
-	str1_to_str2(tab_meta_dir, '/', "sysobjects");
-
-	OPEN(fd1, tab_meta_dir, (O_RDONLY));
-	
-	if (fd1 < 0)
-	{
-		traceprint("Table is not exist! \n");
-		goto exit;
-	}
-
-	
-	READ(fd1, &tab_hdr, sizeof(TABLEHDR));	
-
-	CLOSE(fd1);
-
-	if (tab_hdr.tab_tablet == 0)
+	if (tab_hdr->tab_tablet == 0)
 	{
 		traceprint("Table %s has no data.\n", tab_name);
 		goto exit;
 	}
 
-	if (tab_hdr.tab_stat & TAB_DROPPED)
+	if (tab_hdr->tab_stat & TAB_DROPPED)
 	{
 		traceprint("This table has been dropped.\n");
 		goto exit;
 	}
 
-	if (tab_hdr.tab_tablet == 0)
+	if (tab_hdr->tab_tablet == 0)
 	{
 		traceprint("Table should have one tablet at least! \n");
 		goto exit;
@@ -2002,6 +2107,7 @@ rg_selcounttab(TREE *command, SELWHERE *selwhere, int fd)
 
 	/* The tablet to be interested. */
 	char		*wanted_tablet;
+	int		wanted_tablet_len;
 
 	/* Check if we got the first tablet. */
 	int		leftbegin = FALSE;
@@ -2011,7 +2117,7 @@ rg_selcounttab(TREE *command, SELWHERE *selwhere, int fd)
 	/* For selectrange. */
 		
 	/* Initialization. */
-	par_fill_colinfo(tab_dir, tab_hdr.tab_col, command);
+	par_fill_colinfo(tab_hdr->tab_col, colinfo, command);
 
 	tablet_scanctx = (TABLET_SCANCTX *)MEMALLOCHEAP(sizeof(TABLET_SCANCTX));
 	MEMSET(tablet_scanctx, sizeof(TABLET_SCANCTX));
@@ -2019,7 +2125,10 @@ rg_selcounttab(TREE *command, SELWHERE *selwhere, int fd)
 	tablet_scanctx->andplan = par_get_andplan(command);
 	tablet_scanctx->orplan = par_get_orplan(command);
 	tablet_scanctx->connfd = -1;
-	
+	tablet_scanctx->querytype = querytype;
+
+	tablet_scanctx->sum_coloff = (querytype == SELECTSUM) ?
+					command->left->sym.resdom.coloffset: 0;
 
 	/* Working for the query. */
 	while (TRUE)
@@ -2038,14 +2147,28 @@ rg_selcounttab(TREE *command, SELWHERE *selwhere, int fd)
 					TABLETSCHM_TABLETNAME_COLOFF_INROW,
 					ROW_MINLEN_IN_TABLETSCHM, &namelen);
 
-			wanted_tablet = (!leftbegin)?  selwhere->lefttabletname 
-						   : selwhere->righttabletname;			
-
+			/* 
+			** Note: use the original data (don't use the strlen()) 
+			** from meta server because the tabletname string 
+			** may be dirty by the net  connection, such as the
+			** tail zero lost.
+			*/
+			if (!leftbegin)
+			{
+				wanted_tablet = selwhere->lefttabletname;
+				wanted_tablet_len = selwhere->leftnamelen;
+			}
+			else
+			{
+				wanted_tablet = selwhere->righttabletname;
+				wanted_tablet_len = selwhere->rightnamelen;
+			}
+			
 			/* Check if it got the left or right tablet. */
 			result = row_col_compare(VARCHAR, tabletname, 
 						STRLEN(tabletname), 
 						wanted_tablet,
-						STRLEN(wanted_tablet));
+						wanted_tablet_len);
 			
 
 			if ((result != EQ) && (leftbegin == FALSE))
@@ -2117,12 +2240,13 @@ rg_selcounttab(TREE *command, SELWHERE *selwhere, int fd)
 				
 				tablet_scanctx->tablet = tablet_bp;
 				tablet_scanctx->keycolid = 
-						tab_hdr.tab_key_colid;
+						tab_hdr->tab_key_colid;
 				tablet_scanctx->rminlen = 
-						tab_hdr.tab_row_minlen;
+						tab_hdr->tab_row_minlen;
 				tablet_scanctx->tabdir = rg_tab_dir;
-				tablet_scanctx->tabid = tab_hdr.tab_id;
+				tablet_scanctx->tabid = tab_hdr->tab_id;
 				tablet_scanctx->rowcnt = 0;
+				tablet_scanctx->sum_colval = 0;
 
 				/* 
 				** Scan the tablet and get the sstabname
@@ -2133,7 +2257,14 @@ rg_selcounttab(TREE *command, SELWHERE *selwhere, int fd)
 					goto exit;
 				}
 
-				rowcnt += tablet_scanctx->rowcnt;
+				if (querytype == SELECTCOUNT)
+				{
+					rowcnt += tablet_scanctx->rowcnt;
+				}
+				else
+				{
+					sum_value += tablet_scanctx->sum_colval;
+				}
 								
 			}
 
@@ -2162,7 +2293,9 @@ exit:
 	if (rtn_stat)
 	{
 		
-		resp = conn_build_resp_byte(RPC_SUCCESS, sizeof(int), (char *)&rowcnt);
+		resp = conn_build_resp_byte(RPC_SUCCESS, sizeof(int), 
+				(querytype == SELECTCOUNT)? (char *)&rowcnt 
+							: (char *)&sum_value);
 	}
 	else
 	{
@@ -2274,7 +2407,7 @@ rg_process_andplan(ORANDPLAN *cmd, char *rp, int minrowlen)
 	}
 
 	rtn_stat = FALSE;
-	
+		
 	while(cmd)
 	{
 		srchclause = &(cmd->orandsclause);
@@ -2289,22 +2422,28 @@ rg_process_andplan(ORANDPLAN *cmd, char *rp, int minrowlen)
 		rightval = srchclause->scterms->left->right->sym.constant.rightval;
 		rightvallen = srchclause->scterms->left->right->sym.constant.rightlen;
 
-		result = row_col_compare(coltype, colp, length, leftval, 
-					leftvallen);
-
-		if (result == LE)
+		if (strncasecmp("*", leftval, leftvallen) != 0)
 		{
-			break;
+			result = row_col_compare(coltype, colp, length, leftval, 
+						leftvallen);
+
+			if (result == LE)
+			{
+				break;
+			}
 		}
 
-		result = row_col_compare(coltype, colp, length, rightval, 
-					rightvallen);
-
-		if (result == GR)
+		if (strncasecmp("*", rightval, rightvallen) != 0)
 		{
-			break;
-		}
+			result = row_col_compare(coltype, colp, length, rightval, 
+						rightvallen);
 
+			if (result == GR)
+			{
+				break;
+			}
+		}
+		
 		cmd = cmd->orandplnext;
 		
 	}
@@ -2383,7 +2522,7 @@ finish:
 }
 
 
-/* Get the sstable from the tablet file. */
+/* Get the sstable name from the tablet file. */
 static int
 rg_get_sstab_tablet(char *tabletbp, char *key, int keylen, char **sstabname, 
 				int *namelen, int *sstabid, int flag)
@@ -2405,7 +2544,7 @@ rg_get_sstab_tablet(char *tabletbp, char *key, int keylen, char **sstabname,
 	last_blk = NULL;
 	i = 0;
 
-	blk = (BLOCK *)(tabletbp + BLOCKSIZE);
+	blk = (BLOCK *)tabletbp;
 	
 	if (blk->bfreeoff == BLKHEADERSIZE)
 	{
@@ -2429,14 +2568,15 @@ rg_get_sstab_tablet(char *tabletbp, char *key, int keylen, char **sstabname,
 				continue;
 			}
 
-			assert(*offset < blk->bfreeoff);
+			Assert(*offset < blk->bfreeoff);
 
 
-			
+			/* Get the first row of this tablet. */
 			if (flag & RG_TABLET_1ST_SSTAB)
 			{
 				goto finish;
 			}
+			/* Get the last row of this tablet. */
 			else if (flag & RG_TABLET_LAST_SSTAB)
 			{
 				break;;
@@ -2485,17 +2625,20 @@ rg_get_sstab_tablet(char *tabletbp, char *key, int keylen, char **sstabname,
 
 		if (flag & RG_TABLET_LAST_SSTAB)
 		{
+			/* Hit the last block that has data. */
 			if (blk->bfreeoff == BLKHEADERSIZE)
 			{
 				blk = last_blk;
 				goto finish;
 			}
-			
+
+			/* Save the previous block. */
 			last_blk = blk;
 		}
 	
 		if (blk->bnextblkno != -1)
 		{
+			/* Continue. */
 			i = blk->bnextblkno;
 		}
 		else
@@ -2509,6 +2652,10 @@ finish:
 
 	if (flag & RG_TABLET_LAST_SSTAB)
 	{
+		/* 
+		** Get the last row.
+		** TODO: it should check if this row is deleted.
+		*/
 		Assert(blk != NULL);
 		int *offtab = ROW_OFFSET_PTR(blk);
 		rp = (char *)blk + offtab[-(blk->bnextrno - 1)];
@@ -2554,6 +2701,10 @@ rg_tabletscan(TABLET_SCANCTX *scanctx)
 				
 
 	scan_result = FALSE;
+	MEMSET(&sstab_scanctx, sizeof(SSTAB_SCANCTX));
+	MEMSET(&rgsel_cont,sizeof(RANGE_QUERYCTX));
+	MEMSET(&blk_rowinfo,sizeof(BLK_ROWINFO));
+	
 	sstab_scanctx.andplan	= scanctx->andplan;
 	sstab_scanctx.orplan	= scanctx->orplan;
 	sstab_scanctx.rminlen	= scanctx->rminlen;
@@ -2619,8 +2770,9 @@ rg_tabletscan(TABLET_SCANCTX *scanctx)
 			MEMSET(tabinfo->t_sinfo, sizeof(SINFO));
 			MEMSET(tabinfo->t_rowinfo, sizeof(BLK_ROWINFO));
 			
-			TABINFO_INIT(tabinfo, tab_sstab_dir, tabinfo->t_sinfo, 
-					minrowlen, 0, scanctx->tabid, sstabid);
+			TABINFO_INIT(tabinfo, tab_sstab_dir, NULL, 0,
+					tabinfo->t_sinfo, minrowlen, 
+					0, scanctx->tabid, sstabid);
 			
 			SRCH_INFO_INIT(tabinfo->t_sinfo, NULL, 0,
 					scanctx->keycolid, VARCHAR, -1);
@@ -2628,6 +2780,8 @@ rg_tabletscan(TABLET_SCANCTX *scanctx)
 			bp = blk_getsstable(tabinfo);	
 
 			sstab_scanctx.sstab = (char *)(bp->bblk);
+			sstab_scanctx.curblk = 0;
+			sstab_scanctx.currow = 0;
 
 scan_cont:			
 			rg_sstabscan(&sstab_scanctx);
@@ -2668,6 +2822,7 @@ scan_cont:
 
 			if (n != 8)
 			{
+				traceprint("Socket read error 1.\n");
 				goto exit;
 			}
 
@@ -2720,6 +2875,7 @@ scan_cont:
 
 				if (n != 8)
 				{
+					traceprint("Socket read error 2.\n");
 					goto exit;
 				}
 			}
@@ -2769,6 +2925,11 @@ rg_count_data_tablet(TABLET_SCANCTX *scanctx)
 				
 
 	scan_result = FALSE;
+	MEMSET(&sstab_scanctx, sizeof(SSTAB_SCANCTX));
+	MEMSET(&rgsel_cont,sizeof(RANGE_QUERYCTX));
+	MEMSET(&blk_rowinfo,sizeof(BLK_ROWINFO));
+	
+	sstab_scanctx.querytype	= scanctx->querytype;
 	sstab_scanctx.andplan	= scanctx->andplan;
 	sstab_scanctx.orplan	= scanctx->orplan;
 	sstab_scanctx.rminlen	= scanctx->rminlen;
@@ -2776,8 +2937,11 @@ rg_count_data_tablet(TABLET_SCANCTX *scanctx)
 	sstab_scanctx.rgsel	= &rgsel_cont;
 	sstab_scanctx.stat	= 0;
 	sstab_scanctx.rowcnt	= 0;
+	sstab_scanctx.sum_colval= 0;
+	sstab_scanctx.sum_coloff= scanctx->sum_coloff;
 	bp = NULL;
 
+	/* Initialize the context of tabinfor. */
 	tabinfo = MEMALLOCHEAP(sizeof(TABINFO));
 	MEMSET(tabinfo, sizeof(TABINFO));
 	tabinfo->t_sinfo = (SINFO *)MEMALLOCHEAP(sizeof(SINFO));
@@ -2790,9 +2954,10 @@ rg_count_data_tablet(TABLET_SCANCTX *scanctx)
 	
 	while (TRUE)
 	{
+		/* Skill to the next block of tablet. */
 		blk = (BLOCK *)(scanctx->tablet + i * BLOCKSIZE);
 
-			       
+		/* Do the processing row by row*/
 		for(rowno = 0, offset = ROW_OFFSET_PTR(blk); 
 			       rowno < blk->bnextrno; rowno++, offset--)
 		{
@@ -2804,8 +2969,9 @@ rg_count_data_tablet(TABLET_SCANCTX *scanctx)
 				continue;
 			}
 
-			assert(*offset < blk->bfreeoff);
+			Assert(*offset < blk->bfreeoff);
 
+			/* Locate the information of sstab. */
 			sstabname = row_locate_col(rp,
 					TABLET_SSTABNAME_COLOFF_INROW, 
 					ROW_MINLEN_IN_TABLET, &namelen);
@@ -2823,11 +2989,13 @@ rg_count_data_tablet(TABLET_SCANCTX *scanctx)
 
 			minrowlen = scanctx->rminlen;
 
+			/* Initialize the searching context. */
 			MEMSET(tabinfo->t_sinfo, sizeof(SINFO));
 			MEMSET(tabinfo->t_rowinfo, sizeof(BLK_ROWINFO));
 			
-			TABINFO_INIT(tabinfo, tab_sstab_dir, tabinfo->t_sinfo, 
-					minrowlen, 0, scanctx->tabid, sstabid);
+			TABINFO_INIT(tabinfo, tab_sstab_dir, NULL, 0,
+					tabinfo->t_sinfo, minrowlen, 
+					0, scanctx->tabid, sstabid);
 			
 			SRCH_INFO_INIT(tabinfo->t_sinfo, NULL, 0,
 					scanctx->keycolid, VARCHAR, -1);
@@ -2835,8 +3003,10 @@ rg_count_data_tablet(TABLET_SCANCTX *scanctx)
 			bp = blk_getsstable(tabinfo);	
 
 			sstab_scanctx.sstab = (char *)(bp->bblk);
+			sstab_scanctx.curblk = 0;
+			sstab_scanctx.currow = 0;
 
-		
+			/* Count the row in one sstable. */
 			rg_count_data_sstable(&sstab_scanctx);
 
 			/* Buffer unkept. */
@@ -2857,8 +3027,22 @@ rg_count_data_tablet(TABLET_SCANCTX *scanctx)
 	}
 
 	scan_result = TRUE;
-	scanctx->rowcnt += sstab_scanctx.rowcnt;
+	
+	switch (scanctx->querytype)
+	{
+	    case SELECTCOUNT:
+		scanctx->rowcnt += sstab_scanctx.rowcnt;
+		break;
 
+	    case SELECTSUM:
+	    	scanctx->sum_colval += sstab_scanctx.sum_colval;
+	    	break;
+
+	    default:
+	    	traceprint("No any counting.\n");
+	    	break;
+	}
+	
 	if (bp)
 	{
 		bufunkeep(bp->bsstab);
@@ -2884,12 +3068,15 @@ rg_count_data_sstable(SSTAB_SCANCTX *scanctx)
 	int     *offset;
 	char    *rp;
 	int	minrowlen;
+	char	*colval;
+	int	ign;
 
 
 	minrowlen= scanctx->rminlen;
 
 	while (TRUE)
 	{
+		/* Skill to the next block. */
 		blk = (BLOCK *)(scanctx->sstab + scanctx->curblk * BLOCKSIZE);
 
 		offset = ROW_OFFSET_PTR(blk);
@@ -2907,8 +3094,27 @@ rg_count_data_sstable(SSTAB_SCANCTX *scanctx)
 			    && rg_process_andplan(scanctx->andplan, rp, 
 			    				minrowlen))
 			{
-				/* Count the row. */
-				(scanctx->rowcnt)++;				
+				switch (scanctx->querytype)
+				{
+				    case SELECTCOUNT:
+				
+					/* Count the row. */
+					(scanctx->rowcnt)++;
+					break;
+					
+				    case SELECTSUM:
+				    	
+				    	colval = row_locate_col(rp, scanctx->sum_coloff,
+							minrowlen, &ign);
+					
+					scanctx->sum_colval += *(int *)colval;
+				    	break;
+					
+				    default:
+				    	traceprint("No any counting.\n");
+				    	break;
+				}
+				
 			}
 		}
 
@@ -2929,8 +3135,8 @@ rg_count_data_sstable(SSTAB_SCANCTX *scanctx)
 
 
 int
-rg_get_meta(char *req_buf, INSMETA **ins_meta, SELRANGE **sel_rg,
-			TABLEHDR **tab_hdr, COLINFO **col_info)
+rg_get_meta(char *req_buf, INSMETA **ins_meta, SELRANGE **sel_rg, 
+		SELWHERE **sel_where, TABLEHDR **tab_hdr, COLINFO **col_info)
 {
 	int	rtn_stat;
 
@@ -2962,6 +3168,17 @@ rg_get_meta(char *req_buf, INSMETA **ins_meta, SELRANGE **sel_rg,
 		*col_info = (COLINFO *)req_buf;
 	}
 
+	if (rtn_stat & RPC_REQ_SELECWHERE_OP)
+	{
+		*sel_where = (SELWHERE *)req_buf;
+		req_buf += sizeof(SELWHERE);
+
+		*tab_hdr = (TABLEHDR *)req_buf;
+		req_buf += sizeof(TABLEHDR);
+
+		*col_info = (COLINFO *)req_buf;
+	}
+	
 	return rtn_stat;	
 }
 
@@ -3041,6 +3258,7 @@ rg_handler(char *req_buf, int fd)
 	int		req_op;
 	BLK_ROWINFO	blk_rowinfo;
 	SELRANGE	*sel_rg;
+	SELWHERE	*sel_where;
 	
 
 
@@ -3051,9 +3269,10 @@ rg_handler(char *req_buf, int fd)
 	resp 		= NULL;
 	tss->rglogfile 	= Range_infor->rglogfiledir;
 	tss->rgbackpfile= Range_infor->rgbackup;
+	tss->rgstatefile	= Range_infor->rgstatefile;
 	
-	if ((req_op = rg_get_meta(req_buf, &ins_meta, &sel_rg, &tab_hdr, 
-					&col_info)) == 0)
+	if ((req_op = rg_get_meta(req_buf, &ins_meta, &sel_rg, &sel_where,
+				&tab_hdr, &col_info)) == 0)
 	{
 		return NULL;
 	}
@@ -3082,7 +3301,15 @@ rg_handler(char *req_buf, int fd)
 	}
 	else if (req_op & RPC_REQ_SELECWHERE_OP)
 	{
-		if (!parser_open(req_buf + sizeof(SELWHERE)))
+		if (DEBUG_TEST(tss))
+		{
+			traceprint("I got here - SELECT WHERE/RANGE TABLE\n");
+		}
+		
+		req_buf += sizeof(SELWHERE) + sizeof(TABLEHDR) + 
+				tab_hdr->tab_col * sizeof(COLINFO);
+		
+		if (!parser_open(req_buf))
 		{
 			parser_close();
 			tss->tstat |= TSS_PARSER_ERR;
@@ -3092,16 +3319,17 @@ rg_handler(char *req_buf, int fd)
 
 		command = tss->tcmd_parser;
 
-		if (command->sym.command.querytype == SELECTCOUNT)
+		if (   (command->sym.command.querytype == SELECTCOUNT)
+		    || (command->sym.command.querytype == SELECTSUM))
 		{
-			resp = rg_selcounttab(command, (SELWHERE *)(req_buf), fd);
+			resp = rg_selcounttab(command, sel_where, tab_hdr, col_info, fd);
 		}
 		else
 		{
 			Assert(   (command->sym.command.querytype == SELECTWHERE)
 				||(command->sym.command.querytype == SELECTRANGE));
 
-			resp = rg_selwheretab(command, (SELWHERE *)(req_buf), fd);
+			resp = rg_selwheretab(command, sel_where, tab_hdr, col_info, fd);
 		}
 
 		
@@ -3212,6 +3440,9 @@ rg_handler(char *req_buf, int fd)
 
 	tabinfo->t_sstab_id = ins_meta->sstab_id;
 	tabinfo->t_sstab_name = ins_meta->sstab_name;
+
+	tabinfo->t_tab_name = command->sym.command.tabname;
+	tabinfo->t_tab_namelen = command->sym.command.tabname_len;
 //	MEMCPY(tabinfo->t_sstab_name, ins_meta->sstab_name, STRLEN(ins_meta->sstab_name));
 
 	tabinfo_push(tabinfo);
@@ -3442,10 +3673,17 @@ rg_setup(char *conf_path)
 		MKDIR(status, MT_RANGE_TABLE, 0755);
 	}
 
+	/* Make the directory to save the state of ranger servers. */
+	if (STAT(MT_RANGE_STATE, &st) != 0)
+	{
+		MKDIR(status, MT_RANGE_STATE, 0755);
+	}
+
 	rg_regist();
 
 	char	rgname[64];
-	
+
+	/* Build the array for the range logging directory. */
 	MEMSET(Range_infor->rglogfiledir, 256);
 	MEMCPY(Range_infor->rglogfiledir, LOG_FILE_DIR, STRLEN(LOG_FILE_DIR));
 
@@ -3483,11 +3721,13 @@ rg_setup(char *conf_path)
 		Rg_loginfo->logoffset = LSEEK(fd, 0, SEEK_END);		
 	}
 
-	int idxpos = str1nstr(Rg_loginfo->logdir, Range_infor->rglogfiledir, STRLEN(Range_infor->rglogfiledir));
+	int idxpos = str1nstr(Rg_loginfo->logdir, Range_infor->rglogfiledir, 
+					STRLEN(Range_infor->rglogfiledir));
 
 	Range_infor->rginsdellognum = m_atoi(Rg_loginfo->logdir + idxpos, 
 					STRLEN(Rg_loginfo->logdir) - idxpos);
 
+	/* Build the array for the ranger backup directory. */
 	MEMSET(Range_infor->rgbackup, 256);
 	MEMCPY(Range_infor->rgbackup, BACKUP_DIR, STRLEN(BACKUP_DIR));
 
@@ -3499,10 +3739,14 @@ rg_setup(char *conf_path)
 		return;
 	}
 
-	
-	ca_setup_pool();
+	/* Build the array for the range state directory. */
+	if (!ri_get_rgstate(Range_infor->rgstatefile,Range_infor->rg_ip, 
+				Range_infor->port))
+	{
+		return;
+	}
 
-	
+	ca_setup_pool();	
 
 	return;
 }
@@ -3874,8 +4118,9 @@ rg_check_sstab_by_tablet(CHECKTABLE_DATA *chkdata)
 			minrowlen = chkdata->chktab_row_minlen;
 
 			
-			TABINFO_INIT(tabinfo, tab_sstab_dir, tabinfo->t_sinfo,
-				minrowlen, 0, chkdata->chktab_tabid, sstabid);
+			TABINFO_INIT(tabinfo, tab_sstab_dir, NULL, 0, 
+					tabinfo->t_sinfo, minrowlen, 0,
+					chkdata->chktab_tabid, sstabid);
 			SRCH_INFO_INIT(tabinfo->t_sinfo, NULL, 0,
 					chkdata->chktab_key_colid, VARCHAR, -1);
 					
@@ -4063,8 +4308,9 @@ rg_compact_sstab_by_tablet(COMPACT_DATA *cpctdata)
 			minrowlen = cpctdata->compact_row_minlen;
 
 			
-			TABINFO_INIT(tabinfo, tab_sstab_dir, tabinfo->t_sinfo,
-					minrowlen, 0, cpctdata->compact_tabid, 
+			TABINFO_INIT(tabinfo, tab_sstab_dir, NULL, 0,
+					tabinfo->t_sinfo, minrowlen, 
+					0, cpctdata->compact_tabid, 
 					sstabid);
 			SRCH_INFO_INIT(tabinfo->t_sinfo, NULL, 0, 
 					cpctdata->compact_key_colid, VARCHAR, 
@@ -4266,6 +4512,7 @@ rg_table_regist(char *tabname)
 	
 	if ((Range_infor->rg_systab.tabnum + 1) > TAB_MAX_NUM)
 	{
+		traceprint("The number of table current system owning expand the limits.\n");
 		return -1;
 	}
 
@@ -4286,6 +4533,14 @@ rg_table_unregist(char *tabname)
 	int	j;
 
 
+	/* Table register is not start yet. */
+	if (Range_infor->rg_systab.tabnum == 0)
+	{
+		return TRUE;
+	}
+	
+	j = -1;
+	
 	for (i = 0; i < Range_infor->rg_systab.tabnum; i++)
 	{
 		if(strcmp(tabname, Range_infor->rg_systab.rg_tabdir[i])==0)
@@ -4295,6 +4550,15 @@ rg_table_unregist(char *tabname)
 		}
 	}
 
+	/* This table does not start to register. */
+	if (j == -1)
+	{
+		return TRUE;
+	}
+
+	/* Here we have got this table in the register slot. */
+	
+	/* Foward the information of unregisted table. */
 	for(i = j; (i + 1) < Range_infor->rg_systab.tabnum; i++)
 	{
 		MEMCPY(Range_infor->rg_systab.rg_tabdir[i], 
@@ -4306,10 +4570,16 @@ rg_table_unregist(char *tabname)
 			STRLEN(Range_infor->rg_systab.rg_sstab[i+1]));
 	}
 
-	if (Range_infor->rg_systab.tabnum > 0)
+	/* Clearing the last place of rg_systab. */
+	if (i == Range_infor->rg_systab.tabnum)
 	{
-		(Range_infor->rg_systab.tabnum)--;
+		MEMSET(Range_infor->rg_systab.rg_tabdir[i - 1],
+				TABLE_NAME_MAX_LEN);
+		MEMSET(Range_infor->rg_systab.rg_sstab[i - 1],
+				TABLE_NAME_MAX_LEN);
 	}
+
+	(Range_infor->rg_systab.tabnum)--;
 
 	return TRUE;
 }
@@ -4413,7 +4683,7 @@ void * rg_mapred_process(void *args)
 	char *rp;
 	char tab_sstab_dir[TABLE_NAME_MAX_LEN];
 
-	mt_block_cache block_cache;
+	MT_BLOCK_CACHE block_cache;
 	char data_req[RPC_MAGIC_MAX_LEN];
 	
 	for(i = 0; i < BLK_CNT_IN_SSTABLE; i ++)
@@ -4429,8 +4699,8 @@ void * rg_mapred_process(void *args)
 			
 			int sstabname_length;
 			char * sstabname = row_locate_col(rp, TABLET_SSTABNAME_COLOFF_INROW, ROW_MINLEN_IN_TABLET, &sstabname_length);
-			int sstabid_length;
-			int sstabid = *(int *)row_locate_col(rp,TABLET_SSTABID_COLOFF_INROW,ROW_MINLEN_IN_TABLET,&sstabid_length);
+			//int sstabid_length;
+			//int sstabid = *(int *)row_locate_col(rp,TABLET_SSTABID_COLOFF_INROW,ROW_MINLEN_IN_TABLET,&sstabid_length);
 
 			
 			MEMSET(tab_sstab_dir, TABLE_NAME_MAX_LEN);
@@ -4446,7 +4716,8 @@ void * rg_mapred_process(void *args)
 			READ(fd1, sstable_buf, SSTABLE_SIZE); 
 			CLOSE(fd1);
 
-			/*TABINFO tabinfo;
+#if 0
+			TABINFO tabinfo;
 			SINFO	psinfo;
 			BLK_ROWINFO blk_rowinfo;			
 						
@@ -4470,7 +4741,8 @@ void * rg_mapred_process(void *args)
 			SRCH_INFO_INIT(tabinfo.t_sinfo, NULL, 0, 1, VARCHAR, -1);
 
 			BUF *sstable = blk_getsstable(&tabinfo);
-			//int sstable_offset = BLKHEADERSIZE;*/
+			//int sstable_offset = BLKHEADERSIZE;
+#endif
 			char *sstable_bp = sstable_buf;//(char *)(sstable->bsstab->bblk);
 			BLOCK * sstable_blk;
 			int j;
@@ -4497,7 +4769,7 @@ void * rg_mapred_process(void *args)
 				//process one req
 				if (!strncasecmp(RPC_MAPRED_GET_NEXT_VALUE, data_req, STRLEN(RPC_MAPRED_GET_NEXT_VALUE)))
 				{
-					MEMSET(&block_cache, sizeof(mt_block_cache));
+					MEMSET(&block_cache, sizeof(MT_BLOCK_CACHE));
 					MEMCPY(block_cache.data_cache, (char *)sstable_blk, BLOCKSIZE);
 					MEMCPY(block_cache.current_sstable_name, sstabname, sstabname_length);
 					block_cache.current_block_index = j;
@@ -4505,7 +4777,7 @@ void * rg_mapred_process(void *args)
 					block_cache.max_row_count = sstable_blk->bnextrno;
 					block_cache.row_min_len = sstable_blk->bminlen;
 					
-					char * resp = conn_build_resp_byte(RPC_SUCCESS, sizeof(mt_block_cache), 
+					char * resp = conn_build_resp_byte(RPC_SUCCESS, sizeof(MT_BLOCK_CACHE), 
 						(char *)&block_cache);
 					int resp_size = conn_get_resp_size((RPCRESP *)resp);
 					/* Send the result to the client. */

@@ -47,14 +47,14 @@ sel_resp_rejoin(char * src_buf, char * dest_buf, int src_len, int * dest_len, ch
 static int 
 mt_cli_prt_help(char *cmd);
 
-static rg_conn *
-mt_cli_rgsel_ranger(conn * connection, char * cmd, MT_CLI_EXEC_CONTEX *exec_ctx, char *ip, int port);
+static RG_CONN *
+mt_cli_rgsel_ranger(CONN * connection, char * cmd, MT_CLI_EXEC_CONTEX *exec_ctx, char *ip, int port);
 
 static int
-mt_cli_rgsel_meta(conn * connection, char * cmd, char **meta_resp);
+mt_cli_rgsel_meta(CONN * connection, char * cmd, char **meta_resp);
 
 static int
-mt_cli_rgsel_is_bigdata(rg_conn * rg_connection, int *bigdataport);
+mt_cli_rgsel_is_bigdata(RG_CONN * rg_connection, int *bigdataport);
 
 static void
 mt_cli_write_range(int sockfd);
@@ -66,7 +66,7 @@ static char *
 mt_cli_get__nextrow(RANGE_QUERYCTX *rgsel_cont, int *rlen);
 
 static int
-mt_cli_send_bigdata_req_rg(conn * connection, char * cmd, MT_CLI_EXEC_CONTEX *exec_ctx, 
+mt_cli_send_bigdata_req_rg(CONN * connection, char * cmd, MT_CLI_EXEC_CONTEX *exec_ctx, 
 				char *ip, int port);
 
 
@@ -147,14 +147,14 @@ mt_cli_destroy_context()
 ** 
 */
 int 
-mt_cli_open_connection(char * meta_ip, int meta_port, conn ** connection)
+mt_cli_open_connection(char * meta_ip, int meta_port, CONN ** connection)
 {
 	P_SPINLOCK(Cli_context->mutex);
 
 	/* Allocate the context for the meta connection. */
-	conn * new_conn = (conn *)malloc(sizeof(conn));
+	CONN * new_conn = (CONN *)malloc(sizeof(CONN));
 
-	MEMSET(new_conn, sizeof(conn));
+	MEMSET(new_conn, sizeof(CONN));
 	
 	new_conn->meta_server_port = meta_port;
 	strcpy(new_conn->meta_server_ip, meta_ip);
@@ -191,7 +191,7 @@ mt_cli_open_connection(char * meta_ip, int meta_port, conn ** connection)
 **
 */
 void 
-mt_cli_close_connection(conn * connection)
+mt_cli_close_connection(CONN * connection)
 {
 	int i;
 
@@ -232,7 +232,7 @@ mt_cli_close_connection(conn * connection)
 **
 */
 int 
-mt_cli_exec_crtseldel(conn * connection, char * cmd, MT_CLI_EXEC_CONTEX **exec_ctx)
+mt_cli_exec_crtseldel(CONN * connection, char * cmd, MT_CLI_EXEC_CONTEX **exec_ctx)
 {
 	LOCALTSS(tss);
 	char		send_buf[LINE_BUF_SIZE];/* The RPC buffer for sending
@@ -252,13 +252,9 @@ mt_cli_exec_crtseldel(conn * connection, char * cmd, MT_CLI_EXEC_CONTEX **exec_c
 	RPCRESP		*sstab_split_resp;	/* Ptr to the response from the
 						** meta server by the ADDSSTAB.
 						*/
-	RPCRESP		*remove_tab_resp;	/* Ptr to the response from the
-						** meta server by the REMOVETAB.
-						*/
 	int		querytype;		/* Query type. */
 	int		rtn_stat;		/* The return stat for the client. */	
 	int		sstab_split;		/* Flag if sstab hit split issue. */
-	int		remove_tab_hit;		/* Flag if this query is REMOVETAB. */
 	int		retry_cnt;		/* The # of retry to connect meta if 
 						** ranger server fail to response.
 						*/
@@ -271,9 +267,7 @@ mt_cli_exec_crtseldel(conn * connection, char * cmd, MT_CLI_EXEC_CONTEX **exec_c
 	/* Initialization. */
 	rtn_stat = CLI_SUCCESS;
 	sstab_split_resp = NULL;
-	remove_tab_resp = NULL;
 	sstab_split = FALSE;
-	remove_tab_hit = FALSE;
 	retry_cnt = 0;
 	meta_retry = 0;
 	resp = NULL;
@@ -357,20 +351,26 @@ retry:
 		traceprint("\n ERROR in response \n");
 		rtn_stat = CLI_FAIL;
 
-		if (resp->status_code & RPC_TABLE_NOT_EXIST)
+		if (resp->status_code & RPC_TAB_HAS_NO_DATA)
 		{
-			rtn_stat |= CLI_TABLE_NOT_EXIST;
+			rtn_stat = CLI_HAS_NO_DATA;
+				
 		}
+		else if (resp->status_code & RPC_TABLE_NOT_EXIST)
+		{
+			rtn_stat = CLI_TABLE_NOT_EXIST;
+		}
+		
 		goto finish;
 
 	}
-
+	
 	/* 
 	** Here we have got the right response and the meta data from the meta 
 	** server and then fire the query in the ranger server.
 	*/
 	if(   (querytype == INSERT) || (querytype == SELECT) 
-	   || (querytype == DELETE) || (querytype == DROP) )
+	   || (querytype == DELETE) )
 	{
 		/* Ptr to the meta data information from the meta server. */
 		INSMETA		*resp_ins;
@@ -378,7 +378,7 @@ retry:
 		resp_ins = (INSMETA *)resp->result;
 		
 		/* Ptr to the context of ranger connection. */
-		rg_conn * rg_connection;
+		RG_CONN * rg_connection;
 		int i;
 		int k = -1;
 		//printf("rg server: %s/%d\n", resp_ins->i_hdr.rg_info.rg_addr, resp_ins->i_hdr.rg_info.rg_port);
@@ -417,7 +417,7 @@ retry:
 
 				rg_connection = &(connection->rg_list[k]);
 
-				MEMSET(rg_connection, sizeof(rg_conn));
+				MEMSET(rg_connection, sizeof(RG_CONN));
 			}
 			else
 			{
@@ -458,44 +458,20 @@ retry:
 		** Serilize the require data into the require buffer and send it
 		** to ranger server.
 		*/
-		if (querytype == DROP)
-		{
-			/* Put the DROP's magic into the buffer. */
-			MEMCPY(resp->result, RPC_DROP_TABLE_MAGIC, RPC_MAGIC_MAX_LEN);
-		}
-		else
-		{
-			MEMCPY(resp->result, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
-		}
-		
+		MEMCPY(resp->result, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
+				
 		MEMSET(send_rg_buf, LINE_BUF_SIZE);
 		MEMCPY(send_rg_buf, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
+				
+		MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN, resp->result,
+						resp->result_length);
+		MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN + resp->result_length,
+						cmd, send_buf_size);
 
-		if (querytype == DROP)
-		{
-			MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN, resp->result, 
-							RPC_MAGIC_MAX_LEN);
-			MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN + RPC_MAGIC_MAX_LEN,
-							cmd, send_buf_size);
-
-			/* Send the query requirment to the ranger server. */
-			tcp_put_data(rg_connection->connection_fd, send_rg_buf, 
-		        	(RPC_MAGIC_MAX_LEN + send_buf_size + RPC_MAGIC_MAX_LEN));
-		}
-		else
-		{
+		/* Send the query requirment to the ranger server. */
+		tcp_put_data(rg_connection->connection_fd, send_rg_buf, 
+			(resp->result_length + send_buf_size + RPC_MAGIC_MAX_LEN));
 		
-			MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN, resp->result,
-							resp->result_length);
-			MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN + resp->result_length,
-							cmd, send_buf_size);
-
-			/* Send the query requirment to the ranger server. */
-			tcp_put_data(rg_connection->connection_fd, send_rg_buf, 
-				(resp->result_length + send_buf_size + RPC_MAGIC_MAX_LEN));
-		}
-		
-
 		rg_resp = conn_recv_resp_abt(rg_connection->connection_fd);
 
 		if (rg_resp->status_code == RPC_UNAVAIL)
@@ -530,7 +506,7 @@ retry:
 			if (retry_cnt > 5)
 			{
 				traceprint("\n Retry Fail\n");
-				rtn_stat = CLI_FAIL | CLI_RPC_FAIL;
+				rtn_stat = CLI_RPC_FAIL;
 				goto finish;
 			}
 
@@ -545,12 +521,27 @@ retry:
 			traceprint("\n ERROR in rg_server response \n");
 			rtn_stat = CLI_FAIL;
 
-			if (rg_resp->status_code & RPC_TABLE_NOT_EXIST)
+			if (resp->status_code & RPC_TAB_HAS_NO_DATA)
 			{
-				rtn_stat |= CLI_TABLE_NOT_EXIST;
+				rtn_stat = CLI_HAS_NO_DATA;
+					
 			}
+			else if (resp->status_code & RPC_TABLE_NOT_EXIST)
+			{
+				rtn_stat = CLI_TABLE_NOT_EXIST;
+			}
+			
 			goto finish;
 
+		}		
+		else if((querytype == SELECT) || (querytype == DELETE) )
+		{
+			if (rg_resp->result == NULL)
+			{
+				traceprint("The data user specified is not exist!\n");
+				rtn_stat = CLI_HAS_NO_DATA;
+				goto finish;
+			}
 		}
 
 
@@ -633,10 +624,16 @@ retry:
 				traceprint("\n ERROR on sstab_split in meta_server response \n");
 				rtn_stat = CLI_FAIL;
 
-				if (sstab_split_resp->status_code & RPC_TABLE_NOT_EXIST)
+				if (resp->status_code & RPC_TAB_HAS_NO_DATA)
 				{
-					rtn_stat |= CLI_TABLE_NOT_EXIST;
+					rtn_stat = CLI_HAS_NO_DATA;
+						
 				}
+				else if (resp->status_code & RPC_TABLE_NOT_EXIST)
+				{
+					rtn_stat = CLI_TABLE_NOT_EXIST;
+				}
+		
 				MEMFREEHEAP(new_buf);
 				goto finish;
 
@@ -645,67 +642,6 @@ retry:
 			MEMFREEHEAP(new_buf);
 
 		}
-
-
-		/* 
-		** Continue to do the operation if the query type is DROP, send 
-		** the requirement to meta server and remove the meta  infor. 
-		*/
-		if (querytype == DROP)
-		{	
-			Assert(rg_resp->result_length);
-			
-			char *cli_remove_tab = "remove ";				    
-
-			/* The command likes "remove tab_name". */
-			int new_size = TABLE_NAME_MAX_LEN + STRLEN(cli_remove_tab);
-			char *new_buf = MEMALLOCHEAP(new_size);				    
-
-			MEMSET(new_buf, new_size);
-
-			sprintf(new_buf, "remove %s", tab_name);
-
-			MEMSET(send_buf, LINE_BUF_SIZE);
-			MEMCPY(send_buf, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
-			MEMCPY(send_buf + RPC_MAGIC_MAX_LEN, new_buf, new_size);
-
-			/* 
-			** Send the requirment to the meta server and continue
-			** to do the 'remove' operation.
-			*/
-			tcp_put_data(connection->connection_fd, send_buf, 
-						(new_size + RPC_MAGIC_MAX_LEN));
-
-
-			remove_tab_resp = conn_recv_resp(connection->connection_fd);
-			remove_tab_hit = TRUE;
-
-			if (remove_tab_resp == NULL)
-			{
-				traceprint("\n ERROR on drop in meta_server response \n");
-				rtn_stat = CLI_FAIL;
-
-				MEMFREEHEAP(new_buf);
-				goto finish;
-			}
-			
-			if (!(remove_tab_resp->status_code & RPC_SUCCESS))
-			{
-				traceprint("\n ERROR on drop in meta_server response \n");
-				rtn_stat = CLI_FAIL;
-
-				if (remove_tab_resp->status_code & RPC_TABLE_NOT_EXIST)
-				{
-					rtn_stat |= CLI_TABLE_NOT_EXIST;
-				}
-				MEMFREEHEAP(new_buf);
-				goto finish;
-
-			}
-
-			MEMFREEHEAP(new_buf);
-		}
-			
 	}
 
 finish:
@@ -715,7 +651,15 @@ finish:
 		t_exec_ctx->meta_resp = (char *)resp;
 		t_exec_ctx->rg_resp = (char *)rg_resp;
 		t_exec_ctx->querytype = querytype;
-		t_exec_ctx->end_rowpos = 1;
+
+		if (rtn_stat == CLI_HAS_NO_DATA)
+		{
+			t_exec_ctx->end_rowpos = 0;
+		}
+		else
+		{
+			t_exec_ctx->end_rowpos = 1;
+		}
 	}
 	else
 	{
@@ -730,6 +674,360 @@ finish:
 		conn_destroy_resp(sstab_split_resp);
 	}
 
+	parser_close();    
+
+	return rtn_stat;
+}
+
+
+/* Extract from mt_cli_exec_crtseldel(). */
+int 
+mt_cli_exec_drop_tab(CONN * connection, char * cmd, MT_CLI_EXEC_CONTEX **exec_ctx)
+{
+	LOCALTSS(tss);
+	char		send_buf[LINE_BUF_SIZE];/* The RPC buffer for sending
+						** to meta server. 
+						*/
+	char		send_rg_buf[LINE_BUF_SIZE];/* The RPC buffer for sending
+						** to ranger server. 
+						*/
+	char		tab_name[64];		/* Table name. */
+	int		send_buf_size;		/* Buffer size. */
+	RPCRESP		*resp;			/* Ptr to the response from the
+						** meta server.
+						*/			
+	RPCRESP		*rg_resp;		/* Ptr to the response from the
+						** ranger server. 
+						*/
+	RPCRESP		*remove_tab_resp;	/* Ptr to the response from the
+						** meta server by the REMOVETAB.
+						*/
+	int		querytype;		/* Query type. */
+	int		rtn_stat;		/* The return stat for the client. */	
+	int		remove_tab_hit;		/* Flag if this query is REMOVETAB. */
+	int		retry_cnt;		/* The # of retry to connect meta if 
+						** ranger server fail to response.
+						*/
+	int		meta_retry;		/* The # of retry to connect meta if 
+						** meta server fail to response.
+						*/
+	MT_CLI_EXEC_CONTEX	*t_exec_ctx;
+
+
+	/* Initialization. */
+	rtn_stat = CLI_SUCCESS;
+	remove_tab_resp = NULL;
+	remove_tab_hit = FALSE;
+	retry_cnt = 0;
+	meta_retry = 0;
+	resp = NULL;
+	rg_resp = NULL;
+
+	/* Aquire the query type. */
+	querytype = ((TREE *)(tss->tcmd_parser))->sym.command.querytype;
+	MEMSET(tab_name, 64);
+	MEMCPY(tab_name, ((TREE *)(tss->tcmd_parser))->sym.command.tabname,
+	((TREE *)(tss->tcmd_parser))->sym.command.tabname_len);
+
+	*exec_ctx = (MT_CLI_EXEC_CONTEX *)MEMALLOCHEAP(sizeof(MT_CLI_EXEC_CONTEX));
+	MEMSET(*exec_ctx, sizeof(MT_CLI_EXEC_CONTEX));
+
+	t_exec_ctx = *exec_ctx;
+retry:
+	send_buf_size = strlen(cmd);
+
+	MEMSET(send_buf, LINE_BUF_SIZE);
+	MEMCPY(send_buf, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
+	MEMCPY(send_buf + RPC_MAGIC_MAX_LEN, cmd, send_buf_size);
+
+	/* Send the requirment to the meta server. */
+	tcp_put_data(connection->connection_fd, send_buf, (send_buf_size + RPC_MAGIC_MAX_LEN));
+
+	/* Accept the response from the meta server. */
+	resp = conn_recv_resp(connection->connection_fd);
+	
+	if (resp == NULL)
+	{
+		traceprint("\n ERROR in response \n");
+		rtn_stat = CLI_FAIL;
+
+		goto finish;
+	}
+
+	
+	if (resp->status_code & RPC_RETRY)
+	{
+		traceprint("\n Waiting for the retry the meta server\n");
+		
+		if(meta_retry)
+		{
+			rtn_stat = CLI_RPC_FAIL;
+			goto finish;
+		}
+
+		sleep(5);
+		
+		meta_retry++;
+
+		conn_destroy_resp(resp);
+		resp = NULL;
+
+		goto retry;
+	}
+	
+	if (!(resp->status_code & RPC_SUCCESS))
+	{
+		traceprint("\n ERROR in response \n");
+		rtn_stat = CLI_FAIL;
+
+		if (resp->status_code & RPC_TAB_HAS_NO_DATA)
+		{
+			rtn_stat = CLI_HAS_NO_DATA;
+				
+		}
+		else if (resp->status_code & RPC_TABLE_NOT_EXIST)
+		{
+			rtn_stat = CLI_TABLE_NOT_EXIST;
+		}
+
+		
+		goto finish;
+
+	}
+
+	/* 
+	** Here we have got the right response and the meta data from the meta 
+	** server and then fire the query in the ranger server.
+	*/
+
+	/* Ptr to the meta data information from the meta server. */
+	INSMETA		*resp_ins;
+	
+	resp_ins = (INSMETA *)resp->result;
+	
+	/* Ptr to the context of ranger connection. */
+	RG_CONN * rg_connection;
+	int i;
+	int k = -1;
+	//printf("rg server: %s/%d\n", resp_ins->i_hdr.rg_info.rg_addr, resp_ins->i_hdr.rg_info.rg_port);
+
+	/* Find the right ranger from the ranger list. */
+	for(i = 0; i < connection->rg_list_len; i++)
+	{
+		if(   (resp_ins->i_hdr.rg_info.rg_port == 
+			connection->rg_list[i].rg_server_port)
+		   && (!strcmp(resp_ins->i_hdr.rg_info.rg_addr, 
+			connection->rg_list[i].rg_server_ip))
+		   && (connection->rg_list[i].status == ESTABLISHED))
+		{
+			rg_connection = &(connection->rg_list[i]);
+			break;
+		}
+
+		
+		if (connection->rg_list[i].status == CLOSED)
+		{
+			k = i;
+		}
+	}
+	
+	if(i == connection->rg_list_len)
+	{
+		/* 
+		** The ranger to be connected is not exist in the ranger 
+		** list, we need to create the new connection to the 
+		** ranger server.
+		*/
+		if (k != -1)
+		{
+			/* Re-use the context of zomb connection. */
+			Assert(connection->rg_list[k].status == CLOSED);
+
+			rg_connection = &(connection->rg_list[k]);
+
+			MEMSET(rg_connection, sizeof(RG_CONN));
+		}
+		else
+		{
+			rg_connection = &(connection->rg_list[i]);
+		}
+		
+		//rg_connection = (rg_conn *)MEMALLOCHEAP(sizeof(rg_conn));
+		rg_connection->rg_server_port = 
+					resp_ins->i_hdr.rg_info.rg_port;
+		strcpy(rg_connection->rg_server_ip, 
+					resp_ins->i_hdr.rg_info.rg_addr);
+
+		/* Connect to the ranger server. */
+		if((rg_connection->connection_fd = conn_open(
+					rg_connection->rg_server_ip, 
+					rg_connection->rg_server_port)) < 0)
+		{
+			perror("error in create connection with rg server: ");
+
+			MEMFREEHEAP(rg_connection);
+			rtn_stat = CLI_FAIL;
+			goto finish;
+
+		}
+		
+		rg_connection->status = ESTABLISHED;
+
+		/* Add the new connection into the connection context. */
+		//connection->rg_list[connection->rg_list_len] = rg_connection;
+
+		if (k == -1)
+		{
+			connection->rg_list_len++;
+		}
+	}
+
+	/* 
+	** Serilize the require data into the require buffer and send it
+	** to ranger server.
+	*/
+	
+	/* Put the DROP's magic into the buffer. */
+	MEMCPY(resp->result, RPC_DROP_TABLE_MAGIC, RPC_MAGIC_MAX_LEN);
+	
+	
+	MEMSET(send_rg_buf, LINE_BUF_SIZE);
+	MEMCPY(send_rg_buf, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
+
+	
+	MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN, resp->result, 
+					RPC_MAGIC_MAX_LEN);
+	MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN + RPC_MAGIC_MAX_LEN,
+					cmd, send_buf_size);
+
+	/* Send the query requirment to the ranger server. */
+	tcp_put_data(rg_connection->connection_fd, send_rg_buf, 
+        	(RPC_MAGIC_MAX_LEN + send_buf_size + RPC_MAGIC_MAX_LEN));
+	
+	
+
+	rg_resp = conn_recv_resp_abt(rg_connection->connection_fd);
+
+	if (rg_resp->status_code == RPC_UNAVAIL)
+	{
+		traceprint("\n need to re-get rg meta \n");
+		conn_destroy_resp(resp);
+		resp = NULL;
+
+		rg_connection->status = CLOSED;
+		conn_close(rg_connection->connection_fd, NULL, rg_resp);
+
+		rg_resp = NULL;
+		
+		sleep(HEARTBEAT_INTERVAL + 1);
+		goto retry;
+
+	}
+
+	if (rg_resp->status_code == RPC_RETRY)
+        {
+                traceprint("\n need to try \n");
+
+		conn_destroy_resp(resp);
+		resp = NULL;
+
+		conn_destroy_resp(rg_resp);
+		rg_resp = NULL;
+		
+		retry_cnt++;
+
+		/* It's a brifly solution and '5' is just temp value. */
+		if (retry_cnt > 5)
+		{
+			traceprint("\n Retry Fail\n");
+			rtn_stat = CLI_RPC_FAIL;
+			goto finish;
+		}
+
+		sleep(5);
+				
+                goto retry;
+
+        }
+	
+	if (!(rg_resp->status_code & RPC_SUCCESS))
+	{
+		traceprint("\n ERROR in rg_server response \n");
+		rtn_stat = CLI_FAIL;
+
+		if (rg_resp->status_code & RPC_TABLE_NOT_EXIST)
+		{
+			rtn_stat = CLI_TABLE_NOT_EXIST;
+		}
+		goto finish;
+
+	}
+
+	/* 
+	** Continue to do the operation and send the requirement to meta 
+	** server and remove the meta  infor. 
+	*/
+	Assert(rg_resp->result_length);
+	
+	char *cli_remove_tab = "remove ";				    
+
+	/* The command likes "remove tab_name". */
+	int new_size = TABLE_NAME_MAX_LEN + STRLEN(cli_remove_tab);
+	char *new_buf = MEMALLOCHEAP(new_size);				    
+
+	MEMSET(new_buf, new_size);
+
+	sprintf(new_buf, "remove %s", tab_name);
+
+	MEMSET(send_buf, LINE_BUF_SIZE);
+	MEMCPY(send_buf, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
+	MEMCPY(send_buf + RPC_MAGIC_MAX_LEN, new_buf, new_size);
+
+	/* 
+	** Send the requirment to the meta server and continue
+	** to do the 'remove' operation.
+	*/
+	tcp_put_data(connection->connection_fd, send_buf, 
+				(new_size + RPC_MAGIC_MAX_LEN));
+
+
+	remove_tab_resp = conn_recv_resp(connection->connection_fd);
+	remove_tab_hit = TRUE;
+
+	if (remove_tab_resp == NULL)
+	{
+		traceprint("\n ERROR on drop in meta_server response \n");
+		rtn_stat = CLI_FAIL;
+
+		MEMFREEHEAP(new_buf);
+		goto finish;
+	}
+	
+	if (!(remove_tab_resp->status_code & RPC_SUCCESS))
+	{
+		traceprint("\n ERROR on drop in meta_server response \n");
+		rtn_stat = CLI_FAIL;
+
+		if (remove_tab_resp->status_code & RPC_TABLE_NOT_EXIST)
+		{
+			rtn_stat = CLI_TABLE_NOT_EXIST;
+		}
+		MEMFREEHEAP(new_buf);
+		goto finish;
+
+	}
+
+	MEMFREEHEAP(new_buf);
+
+			
+	
+
+finish:
+	
+	/* Destroy the response infor in the other cases. */
+	conn_destroy_resp(resp);
+	conn_destroy_resp(rg_resp);	
+
 	
 	if (remove_tab_hit)
 	{
@@ -741,7 +1039,6 @@ finish:
 
 	return rtn_stat;
 }
-
 
 /*
 ** This routine processes the command of SELECTRANGE and SELECTWHERE.
@@ -759,7 +1056,7 @@ finish:
 **
 */
 int 
-mt_cli_exec_selrang(conn * connection, char * cmd, MT_CLI_EXEC_CONTEX **exec_ctx, int querytype)
+mt_cli_exec_selrang(CONN * connection, char * cmd, MT_CLI_EXEC_CONTEX **exec_ctx, int querytype)
 {
 	char		*ip;		/* Ranger address. */
 	int		port;		/* Ranger port. */
@@ -779,7 +1076,7 @@ mt_cli_exec_selrang(conn * connection, char * cmd, MT_CLI_EXEC_CONTEX **exec_ctx
 
 	rg_cnt = 0;
 
-	if (rtn_state == FALSE)
+	if (rtn_state == CLI_FAIL)
 	{
 		goto exit;
 	}
@@ -823,8 +1120,17 @@ mt_cli_exec_selrang(conn * connection, char * cmd, MT_CLI_EXEC_CONTEX **exec_ctx
 			t_exec_ctx->querytype = querytype;
 			t_exec_ctx->rg_cnt = rg_cnt;
 			t_exec_ctx->status = CLICTX_IS_OPEN;
-			
-			mt_cli_send_bigdata_req_rg(connection, cmd, t_exec_ctx, ip, port);
+
+			/*
+			** Once one ranger server hit the connection issue,
+			** it will abort this session.
+			*/
+			if (!mt_cli_send_bigdata_req_rg(connection, cmd,
+					t_exec_ctx, ip, port))
+			{
+				rtn_state = CLI_FAIL;
+				goto exit;
+			}
 
 			j++;
 			t_exec_ctx++;
@@ -842,10 +1148,10 @@ exit:
 
 
 static int
-mt_cli_send_bigdata_req_rg(conn * connection, char * cmd, MT_CLI_EXEC_CONTEX *exec_ctx, 
+mt_cli_send_bigdata_req_rg(CONN * connection, char * cmd, MT_CLI_EXEC_CONTEX *exec_ctx, 
 				char *ip, int port)
 {
-	rg_conn		*rg_connection;	/* The context of connection to the ranger. */
+	RG_CONN		*rg_connection;	/* The context of connection to the ranger. */
 	int		bigdataport;	/* Big data port. */
 	int		rtn_state;	/* Return state. */
 	int 		sockfd = -1;	/* Socket id. */
@@ -859,6 +1165,7 @@ mt_cli_send_bigdata_req_rg(conn * connection, char * cmd, MT_CLI_EXEC_CONTEX *ex
 
 	if (   (rg_connection == NULL) 
 	    || (   (exec_ctx->querytype != SELECTCOUNT) 
+	        && (exec_ctx->querytype != SELECTSUM) 
 		&& (!mt_cli_rgsel_is_bigdata(rg_connection, &bigdataport))))
 	{
 		rtn_state = FALSE;
@@ -866,7 +1173,8 @@ mt_cli_send_bigdata_req_rg(conn * connection, char * cmd, MT_CLI_EXEC_CONTEX *ex
 	}
 
 	/* The result from SELECTCOUNT doesn't need to be sent by the bigdata port. */
-	if (exec_ctx->querytype == SELECTCOUNT)
+	if (   (exec_ctx->querytype == SELECTCOUNT)
+	    || (exec_ctx->querytype == SELECTSUM))
 	{
 		rtn_state = TRUE;
 		exec_ctx->rg_conn = rg_connection;
@@ -1017,7 +1325,7 @@ sel_resp_rejoin(char * src_buf, char * dest_buf, int src_len, int * dest_len,
 **
 */
 int
-mt_cli_rgsel_meta(conn * connection, char * cmd, char **meta_resp)
+mt_cli_rgsel_meta(CONN * connection, char * cmd, char **meta_resp)
 {
 	LOCALTSS(tss);
 	char		send_buf[LINE_BUF_SIZE];/* Buffer for the data sending. */
@@ -1030,7 +1338,7 @@ mt_cli_rgsel_meta(conn * connection, char * cmd, char **meta_resp)
 
 
 	/* initialization. */
-	rtn_stat = TRUE;
+	rtn_stat = CLI_SUCCESS;
 	meta_retry = 0;
 
 	querytype = ((TREE *)(tss->tcmd_parser))->sym.command.querytype;
@@ -1053,30 +1361,48 @@ retry:
 	resp = conn_recv_resp(connection->connection_fd);
 
 	
-	if ((resp != NULL) && (resp->status_code & RPC_RETRY))
+	if (resp != NULL)
 	{
-		traceprint("\n Waiting for the retry the meta server\n");
-		
-		if(meta_retry)
+		if (resp->status_code & RPC_RETRY)
 		{
-			rtn_stat = FALSE;
+			traceprint("\n Waiting for the retry the meta server\n");
+			
+			if(meta_retry)
+			{
+				rtn_stat = CLI_RPC_FAIL;
+				goto finish;
+			}
+
+			sleep(5);
+			
+			meta_retry++;
+
+			conn_destroy_resp(resp);
+			resp = NULL;
+
+			goto retry;
+		}
+		else if(!(resp->status_code & RPC_SUCCESS))
+		{
+			if (resp->status_code & ( RPC_TAB_HAS_NO_DATA 
+						| RPC_TABLE_NOT_EXIST))
+			{
+				traceprint("Table has no data OR this table is not exist.\n");
+			}
+			else
+			{
+				traceprint("\n ERROR in response \n");
+			}
+
+			rtn_stat = CLI_FAIL;
 			goto finish;
 		}
-
-		sleep(5);
-		
-		meta_retry++;
-
-		conn_destroy_resp(resp);
-		resp = NULL;
-
-		goto retry;
 	}
 	
-	if ((resp == NULL) || (!(resp->status_code & RPC_SUCCESS)))
+	if (resp == NULL)
 	{
 		traceprint("\n ERROR in response \n");
-		rtn_stat = FALSE;
+		rtn_stat = CLI_FAIL;
 		goto finish;
 
 	}
@@ -1109,15 +1435,16 @@ finish:
 **	None
 **
 */
-rg_conn *
-mt_cli_rgsel_ranger(conn * connection, char * cmd, MT_CLI_EXEC_CONTEX *exec_ctx, 
+RG_CONN *
+mt_cli_rgsel_ranger(CONN * connection, char * cmd, MT_CLI_EXEC_CONTEX *exec_ctx, 
 			char *ip, int port)
 {
-	char	send_rg_buf[LINE_BUF_SIZE];	/* Buffer for the data sending
+	char	*send_rg_buf;			/* Buffer for the data sending
 						** to the range server.
 						*/
+	int	send_rg_buflen;
 	int	rtn_stat;			/* return state. */
-	rg_conn	*rg_connection;			/* Ptr to the context of 
+	RG_CONN	*rg_connection;			/* Ptr to the context of 
 						** connection to the range 
 						** server.
 						*/
@@ -1159,7 +1486,7 @@ mt_cli_rgsel_ranger(conn * connection, char * cmd, MT_CLI_EXEC_CONTEX *exec_ctx,
 
 			rg_connection = &(connection->rg_list[k]);
 
-			MEMSET(rg_connection, sizeof(rg_conn));
+			MEMSET(rg_connection, sizeof(RG_CONN));
 		}
 		else
 		{
@@ -1217,23 +1544,38 @@ mt_cli_rgsel_ranger(conn * connection, char * cmd, MT_CLI_EXEC_CONTEX *exec_ctx,
 #endif
 	MEMCPY(((RPCRESP *)(exec_ctx->meta_resp))->result, 
 			RPC_SELECTWHERE_MAGIC, RPC_MAGIC_MAX_LEN);
-			
-	MEMSET(send_rg_buf, LINE_BUF_SIZE);
+
+
+	TABLEHDR *tab_hdr = (TABLEHDR *)(((RPCRESP *)(exec_ctx->meta_resp))->result +
+				sizeof(SELWHERE) + sizeof(SVR_IDX_FILE));
+
+	
+	send_rg_buflen = RPC_MAGIC_MAX_LEN + sizeof(SELWHERE) + sizeof(TABLEHDR)
+			+ (tab_hdr->tab_col) * sizeof(COLINFO) + send_buf_size;
+	
+	send_rg_buf = malloc(send_rg_buflen);
+	MEMSET(send_rg_buf, send_rg_buflen);
 	MEMCPY(send_rg_buf, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
 
 
 	MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN, 
 			((RPCRESP *)(exec_ctx->meta_resp))->result, 
 			sizeof(SELWHERE));
-	MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN + sizeof(SELWHERE), cmd, 
-			send_buf_size);
+
+	MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN + sizeof(SELWHERE), (char *)tab_hdr,
+			sizeof(TABLEHDR)+ (tab_hdr->tab_col) * sizeof(COLINFO));
+	
+	MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN + sizeof(SELWHERE) +
+			sizeof(TABLEHDR) + (tab_hdr->tab_col) * sizeof(COLINFO), 
+			cmd, send_buf_size);
 
 	/* Send the requirment to the range server. */
-	tcp_put_data(rg_connection->connection_fd, send_rg_buf, 
-		(sizeof(SELWHERE) + send_buf_size + RPC_MAGIC_MAX_LEN));
+	tcp_put_data(rg_connection->connection_fd, send_rg_buf, send_rg_buflen);
 #if 0
 	}
 #endif
+
+	free(send_rg_buf);
 
 	return rg_connection;
 	
@@ -1256,7 +1598,7 @@ mt_cli_rgsel_ranger(conn * connection, char * cmd, MT_CLI_EXEC_CONTEX *exec_ctx,
 **
 */
 int
-mt_cli_rgsel_is_bigdata(rg_conn * rg_connection, int *bigdataport)
+mt_cli_rgsel_is_bigdata(RG_CONN * rg_connection, int *bigdataport)
 {
 	RPCRESP		*rg_resp;
 	int		rtn_stat;
@@ -1343,7 +1685,8 @@ mt_cli_read_range(MT_CLI_EXEC_CONTEX *exec_ctx)
 	int		sockfd;
 	
 
-	if (exec_ctx->querytype == SELECTCOUNT)
+	if (   (exec_ctx->querytype == SELECTCOUNT)
+	    || (exec_ctx->querytype == SELECTSUM))
 	{
 		sockfd = exec_ctx->rg_conn->connection_fd;
 	}
@@ -1361,7 +1704,8 @@ retry:
 	
 		traceprint("\n need to re-get rg meta \n");
 		
-		if (exec_ctx->querytype == SELECTCOUNT)
+		if (   (exec_ctx->querytype == SELECTCOUNT)
+		    || (exec_ctx->querytype == SELECTSUM))
 		{
 			exec_ctx->rg_conn->status = CLOSED;
 		}
@@ -1651,6 +1995,19 @@ mt_cli_exec_builtin(MT_CLI_EXEC_CONTEX *exec_ctx)
 		exec_ctx->rowcnt = *(int *)(((RPCRESP *)(exec_ctx->rg_resp))->result);
 		
 		break;
+		
+	    case SELECTSUM:
+
+		/* Fetch data from the range server. */
+		if (!mt_cli_read_range(exec_ctx))
+		{
+			exec_ctx->status |= CLICTX_RANGER_IS_UNCONNECT;
+			rtn_stat = FALSE;
+		}
+
+		exec_ctx->sum_colval = *(int *)(((RPCRESP *)(exec_ctx->rg_resp))->result);
+		
+		break;
 
 	    default:
 	    	break;
@@ -1796,7 +2153,7 @@ mt_cli_get_firstrow(RANGE_QUERYCTX *rgsel_cont)
 **
 */
 int 
-mt_cli_open_execute(conn *connection, char *cmd, MT_CLI_EXEC_CONTEX **exec_ctx)
+mt_cli_open_execute(CONN *connection, char *cmd, MT_CLI_EXEC_CONTEX **exec_ctx)
 {
 	int 	querytype;	/* Query type. */
 	int	s_idx;		/* The char index of command string. */
@@ -1861,6 +2218,10 @@ mt_cli_open_execute(conn *connection, char *cmd, MT_CLI_EXEC_CONTEX **exec_ctx)
 	    	rtn_stat = par_selwherecnt_tab(cmd + s_idx, SELECTCOUNT);
 		break;
 
+	    case SELECTSUM:
+	    	rtn_stat = par_selwherecnt_tab(cmd + s_idx, SELECTSUM);
+	    	break;
+
 	    default:
 	    	rtn_stat = FALSE;
 	        break;
@@ -1872,7 +2233,7 @@ mt_cli_open_execute(conn *connection, char *cmd, MT_CLI_EXEC_CONTEX **exec_ctx)
 		tss->tstat |= TSS_PARSER_ERR;
 		traceprint("PARSER ERR: Please input the command again by the 'help' signed.\n");
 		V_SPINLOCK(Cli_context->mutex);
-		return FALSE;
+		return CLI_FAIL;
 	}
 
 	switch (querytype)
@@ -1880,20 +2241,24 @@ mt_cli_open_execute(conn *connection, char *cmd, MT_CLI_EXEC_CONTEX **exec_ctx)
 	    case TABCREAT:
 	    case INSERT:
 	    case DELETE:
-	    case DROP:
 	    case SELECT:
 		rtn_stat = mt_cli_exec_crtseldel(connection, cmd, exec_ctx);
 		break;
-    		
+
+	    case DROP:
+	    	rtn_stat = mt_cli_exec_drop_tab(connection, cmd, exec_ctx);
+    		break;
+		
 	    case SELECTRANGE:
 	    case SELECTWHERE:
 	    case SELECTCOUNT:
+	    case SELECTSUM:
 	    	rtn_stat = mt_cli_exec_selrang(connection, cmd, exec_ctx, querytype);
 	    	
 		break;
 
 	    default:
-	    	rtn_stat = FALSE;
+	    	rtn_stat = CLI_FAIL;
 	        break;
 	}
 
@@ -2000,7 +2365,7 @@ mt_cli_prt_help(char *cmd)
 }
 
 int
-mt_mapred_get_splits(conn *connection, mt_split ** splits, int * split_count, char * table_name)
+mt_mapred_get_splits(CONN *connection, MT_SPLIT ** splits, int * split_count, char * table_name)
 {
 	//LOCALTSS(tss);
 	char		send_buf[LINE_BUF_SIZE];/* Buffer for the data sending. */
@@ -2035,8 +2400,8 @@ mt_mapred_get_splits(conn *connection, mt_split ** splits, int * split_count, ch
 	
 	if(resp)
 	{
-		*splits= (mt_split*)resp->result;
-		*split_count = resp->result_length/sizeof(mt_split);
+		*splits= (MT_SPLIT*)resp->result;
+		*split_count = resp->result_length/sizeof(MT_SPLIT);
 
 		int i;
 
@@ -2056,13 +2421,13 @@ mt_mapred_get_splits(conn *connection, mt_split ** splits, int * split_count, ch
 
 
 
-int mt_mapred_free_splits(mt_split * splits)
+int mt_mapred_free_splits(MT_SPLIT * splits)
 {
 	MEMFREEHEAP(splits);
 	return TRUE;
 }
 
-int mt_mapred_get_reader_meta(mt_reader * reader)
+int mt_mapred_get_reader_meta(MT_READER * reader)
 {
 	char		send_buf[LINE_BUF_SIZE];/* Buffer for the data sending. */
 	int 	send_buf_size;		/* Buffer size. */
@@ -2124,15 +2489,15 @@ int mt_mapred_get_reader_meta(mt_reader * reader)
 
 }
 
-int mt_mapred_create_reader(mt_reader ** mtreader, mt_split * split)
+int mt_mapred_create_reader(MT_READER ** mtreader, MT_SPLIT * split)
 {
-	mt_reader * reader = (mt_reader *)MEMALLOCHEAP(sizeof(mt_reader));
-	MEMSET(reader, sizeof(mt_reader));
+	MT_READER * reader = (MT_READER *)MEMALLOCHEAP(sizeof(MT_READER));
+	MEMSET(reader, sizeof(MT_READER));
 	*mtreader = reader;
 	
 	char	send_rg_buf[LINE_BUF_SIZE]; 
 	int rtn_stat;			/* return state. */
-	rg_conn *rg_connection = &(reader->connection); 		
+	RG_CONN *rg_connection = &(reader->connection); 		
 
 	rg_connection->rg_server_port = split->range_port;
 	strcpy(rg_connection->rg_server_ip, split->range_ip);
@@ -2192,7 +2557,7 @@ int mt_mapred_create_reader(mt_reader ** mtreader, mt_split * split)
 	conn_destroy_resp(rg_resp);
 	rg_resp = NULL;
 
-	rg_conn *data_connection = &(reader->data_connection); 		
+	RG_CONN *data_connection = &(reader->data_connection); 		
 
 	data_connection->rg_server_port = data_port;
 	strcpy(data_connection->rg_server_ip, split->range_ip);
@@ -2219,9 +2584,9 @@ int mt_mapred_create_reader(mt_reader ** mtreader, mt_split * split)
 }
 
 char*
-mt_mapred_get_cache_nextvalue(mt_reader * reader, int * rp_len)
+mt_mapred_get_cache_nextvalue(MT_READER * reader, int * rp_len)
 {
-	mt_block_cache *cache = reader->block_cache;
+	MT_BLOCK_CACHE *cache = reader->block_cache;
 	assert(cache);
 	assert(cache->cache_index < cache->max_row_count);
 
@@ -2243,7 +2608,7 @@ mt_mapred_get_cache_nextvalue(mt_reader * reader, int * rp_len)
 }
 
 int
-mt_mapred_get_rg_nextvalue(mt_reader * reader)
+mt_mapred_get_rg_nextvalue(MT_READER * reader)
 {
 	if(reader->block_cache)
 	{
@@ -2252,7 +2617,7 @@ mt_mapred_get_rg_nextvalue(mt_reader * reader)
 	}
 
 	char	send_rg_buf[LINE_BUF_SIZE]; 
-	rg_conn *rg_connection = &(reader->data_connection);		
+	RG_CONN *rg_connection = &(reader->data_connection);		
 		
 	assert(rg_connection->status == ESTABLISHED);
 	
@@ -2307,7 +2672,7 @@ mt_mapred_get_rg_nextvalue(mt_reader * reader)
 
 	assert(rg_resp->result != NULL);
 		
-	reader->block_cache = (mt_block_cache *)rg_resp->result;
+	reader->block_cache = (MT_BLOCK_CACHE *)rg_resp->result;
 	reader->block_cache->cache_index = 0;
 		
 	reader->status &= ~READER_CACHE_NO_DATA;
@@ -2319,7 +2684,7 @@ mt_mapred_get_rg_nextvalue(mt_reader * reader)
 }
 
 char *
-mt_mapred_get_nextvalue(mt_reader * reader, int * rp_len)
+mt_mapred_get_nextvalue(MT_READER * reader, int * rp_len)
 {
 	if(reader->status & READER_RG_NO_DATA)
 	{		
@@ -2351,7 +2716,7 @@ mt_mapred_get_nextvalue(mt_reader * reader, int * rp_len)
 	return mt_mapred_get_cache_nextvalue(reader, rp_len);
 }
 
-char * mt_mapred_get_currentvalue(mt_reader * reader, char * row, int col_idx, int * value_len)
+char * mt_mapred_get_currentvalue(MT_READER * reader, char * row, int col_idx, int * value_len)
 {
 	TABLEHDR *table_hdr = (TABLEHDR *)reader->table_header;
 	COLINFO * col_info = (COLINFO *)reader->col_info;
@@ -2369,9 +2734,10 @@ char * mt_mapred_get_currentvalue(mt_reader * reader, char * row, int col_idx, i
 	return ret_rp;
 }
 
-int mt_mapred_free_reader(mt_reader * reader)
+int mt_mapred_free_reader(MT_READER * reader)
 {
-	/*char	send_rg_buf[LINE_BUF_SIZE]; 
+#if 0
+	char	send_rg_buf[LINE_BUF_SIZE]; 
 	rg_conn *rg_connection = &(reader->data_connection);		
 			
 	assert(rg_connection->status == ESTABLISHED);
@@ -2393,8 +2759,8 @@ int mt_mapred_free_reader(mt_reader * reader)
 		traceprint("\n ERROR in rg_server response \n");
 
 		Assert(0);
-	}*/
-
+	}
+#endif
 	conn_close(reader->connection.connection_fd, NULL, NULL);
 	conn_close(reader->data_connection.connection_fd, NULL, NULL);
 
@@ -2408,5 +2774,3 @@ int mt_mapred_free_reader(mt_reader * reader)
 
 	return TRUE;
 }
-
-
