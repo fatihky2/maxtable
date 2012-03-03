@@ -7,51 +7,63 @@ MQL is based on the style of traditional relational query language.
   * *SELECT*..................select table_name (column1_value)
   * *SELECTRANGE*......selectrange table_name (column1_value1, column1_value2)
   * *SELECTWHERE*......selectwhere table_name where columnX_name(columnX_value1, columnX_value2) and columnY_name(columnY_value1, columnY_value2)
+  * *SELECTSUM*..........selectsum (column_name) table_name where columnX_name(columnX_value1, columnX_value2) and columnY_name(columnY_value1, columnY_value2)
+  * *SELECTCOUNT*......selectcount table_name where columnX_name(columnX_value1, columnX_value2) and columnY_name(columnY_value1, columnY_value2)
   * *DROP*.....................drop table_name
 
 *Examples*
-  * create table that stores the file metadata.
+  * create table
 {{{
-create table metabase (filename varchar, filesize int, serveraddr varchar)
+create table gu(id1 varchar, id2 varchar,id3 int, id4 varchar,id5 varchar,id6 varchar,id7 varchar,id8 varchar,id9 varchar)
 return: success or fail
 }}}
   * insert data
 {{{
-insert into metabase (/home/tnsoft/yxue/maxtable/victory.txt, 16000, 192.168.1.152)
-insert into metabase (/home/tnsoft/yxue/maxtable/bsheng.txt, 1600, 192.168.1.152)
-insert into metabase (/home/tnsoft/yxue/maxtable/paul.txt, 17000, 192.168.1.152)
-insert into metabase (/home/tnsoft/yxue/maxtable/jeff.txt, 18000, 192.168.1.152)
-insert into metabase (/home/tnsoft/yxue/maxtable/brian.txt, 1000, 192.168.1.152)
+insert into gu(aaaa1, bbbb1, 1, cccccc1, dddddd1, eeeeee1, ffffff1, gggggg1, hhhhhh1)
+...
+insert into gu(aaaa9999, bbbb9999, 9999, cccccc9999, dddddd9999, eeeeee9999, ffffff9999, gggggg9999, hhhhhh9999)
 return: success or fail
 }}}
   * select data by the default key column
 {{{
-select metabase (/home/tnsoft/yxue/maxtable/victory.txt)
+select gu (aaaa1)
 return: 
-/home/tnsoft/yxue/maxtable/victory.txt, 16000, 192.168.1.152
+aaaa1bbbb1cccccc1dddddd1eeeeee1ffffff1gggggg1hhhhhh1A
 }}}
   * select data by the range user specified
 {{{
-selectrange metabase (/home/tnsoft/yxue/maxtable/bsheng.txt, /home/tnsoft/yxue/maxtable/jeff.txt)
+selectrange gu(*, *)
 return:
-/home/tnsoft/yxue/maxtable/bsheng.txt, 1600, 192.168.1.152
-/home/tnsoft/yxue/maxtable/brian.txt, 1000, 192.168.1.152
-/home/tnsoft/yxue/maxtable/jeff.txt, 18000, 192.168.1.152
+aaaa1bbbb1cccccc1dddddd1eeeeee1ffffff1gggggg1hhhhhh1A
+...
 }}}
   * select data by the WHERE clause
 {{{
-selectwhere metebase where filename(*, *) AND filesize(16500, 20000)
+selectwhere gu where id1(aaaa1, *) and id2(bbbb35, bbbb46)
 return:
-/home/tnsoft/yxue/maxtable/paul.txt, 17000, 192.168.1.152
-/home/tnsoft/yxue/maxtable/jeff.txt, 18000, 192.168.1.152
+aaaa35bbbb35cccccc35dddddd35eeeeee35ffffff35gggggg35hhhhhh35A
+...
+aaaa46bbbb46cccccc46dddddd46eeeeee46ffffff46gggggg46hhhhhh46A
+}}}
+  * selectsum data by the WHERE clause
+{{{
+selectsum (id3) gu where id1(aaaa38, aaaa47) and id2(bbbb39, bbbb40)
+return:
+The total value is 398978
+}}}
+  * selectcount data by the WHERE clause
+{{{
+selectcount gu where id1(aaaa38, aaaa47) and id2(bbbb35, bbbb46)
+return:
+The total row # is 890
 }}}
   * delete data
 {{{
-delete metabase (/home/tnsoft/yxue/maxtable/victory.txt)
+delete gu (aaaa1)
 return: success or fail
 }}}
   * drop table
 {{{
-drop metabase
+drop gu
 return: success or fail
 }}}
