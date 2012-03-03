@@ -17,7 +17,8 @@ _Target Release Date: December 15th 2011_
 == 1.6 ==
 _Target Release Date: TBD
 
-        * Multi-index 
+        * Multi-index
+        * MapReduce interface support
         * Compaction command
 
 This point is feature freeze with respect to 2.0 for this software. It will go into the bug fix and document writing for the release of 2.0.
