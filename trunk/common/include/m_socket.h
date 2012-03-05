@@ -25,4 +25,7 @@ tcp_get_data(int socket, char *recvbp, int count);
 int
 tcp_put_data(int socket, char *sendbp, int count);
 
+void
+tcp_get_err_output(int rtn_num);
+
 #endif

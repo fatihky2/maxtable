@@ -393,15 +393,16 @@ conn_recv_resp(int sockfd)
 	n = tcp_get_data(sockfd, buf, CONN_BUF_SIZE);
 
 	//If n == 0, measn the remote node have encounter some bad problems
-	if(n == 0)
-	{    	
-		resp = conn_build_resp(NULL);
-
-		traceprint("Remote Server is not connectable!\n");
-	}
-	else
+	if(n > 0)
 	{
 		resp = conn_build_resp(buf);
+	}
+	else
+	{	
+		tcp_get_err_output(n);
+		
+		resp = conn_build_resp(NULL);
+		resp->status_code = RPC_UNAVAIL;
 	}
     
 	free(buf);
@@ -432,28 +433,9 @@ conn_recv_resp_abt(int sockfd)
 		resp = conn_build_resp(buf);
 	}
 	else
-	{
-		if(n == 0)
-		{
-			traceprint("Rg server is closed after client send request, before client receive response!\n");
-		}
-		else if(errno == ECONNRESET)
-		{
-			traceprint("Rg server is closed before client send request!\n");
-		}
-		else if((errno == ETIMEDOUT)||(errno == EHOSTUNREACH)||(errno == ENETUNREACH))
-		{
-			traceprint("Rg server is breakdown before client send request!\n");
-		}
-		else if(errno == EWOULDBLOCK)
-		{
-			traceprint("Rg server is breakdown after client send request, before client receive response!\n");
-		}
-		else
-		{
-			traceprint("Client receive response error for unknown reason (ErrNum = %d)!\n", n);
-			perror("Error in rg server response");
-		}
+	{	
+		tcp_get_err_output(n);
+		
 		resp = conn_build_resp(NULL);
 		resp->status_code = RPC_UNAVAIL;
 	}
@@ -491,27 +473,8 @@ conn_recv_resp_meta(int sockfd, char *recv_buf)
 	}
 	else
 	{
-		if(n == 0)
-		{
-			traceprint("Rg server is closed after client send request, before client receive response!\n");
-		}
-		else if(errno == ECONNRESET)
-		{
-			traceprint("Rg server is closed before client send request!\n");
-		}
-		else if((errno == ETIMEDOUT)||(errno == EHOSTUNREACH)||(errno == ENETUNREACH))
-		{
-			traceprint("Rg server is breakdown before client send request!\n");
-		}
-		else if(errno == EWOULDBLOCK)
-		{
-			traceprint("Rg server is breakdown after client send request, before client receive response!\n");
-		}
-		else
-		{
-			traceprint("Client receive response error for unknown reason!\n");
-			perror("Error in rg server response");
-		}
+		tcp_get_err_output(n);
+		
 		resp = conn_build_resp_meta(NULL, recv_buf);
 		resp->status_code = RPC_UNAVAIL;
 	}
@@ -599,7 +562,6 @@ void
 start_daemon(int listenfd, char * (*handler_request)(char *req_buf))
 {
 	LOCALTSS(tss);
-	int ret;
 	struct sockaddr_in cliaddr;
 	int connfd, n;
 	char buf[CONN_BUF_SIZE];
@@ -622,34 +584,14 @@ start_daemon(int listenfd, char * (*handler_request)(char *req_buf))
 		}
 		MEMSET(buf, CONN_BUF_SIZE);
 
-_read_again:
 //		n = read(connfd, buf, CONN_BUF_SIZE - 1);
 
 		n = tcp_get_data(connfd, buf, CONN_BUF_SIZE - 1);
 
-		if (n > 0) 
-		{
-			buf[n] = '\0'; 
-		} 
-		else if (n == 0) 
-		{
-			close(connfd);
-		} 
-		else if (errno == EINTR) 
-		{
-			goto _read_again;
-		} 
-		else 
-		{
-			close(connfd);
-			ret = errno;
-			break;
-		}
-
-		req = conn_build_req(buf, n);
-		  
 		if(n)
 		{
+			req = conn_build_req(buf, n);
+			
 			resp = handler_request(req->data);
 
 			if (resp == NULL)
@@ -658,7 +600,9 @@ _read_again:
 			}
 		}
 		else
-		{	resp = conn_build_resp_byte(RPC_PARSER_ERR, 0, NULL);
+		{
+			tcp_get_err_output(n);
+			resp = conn_build_resp_byte(RPC_PARSER_ERR, 0, NULL);
 		}
 
 		resp_size = conn_get_resp_size((RPCRESP *)resp);
