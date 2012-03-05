@@ -165,29 +165,23 @@ void * msg_recv(void *args)
 
 				n = tcp_get_data(sockfd, buf, MSG_SIZE);
 
-				if (n < RPC_MAGIC_MAX_LEN)
-				{					
+				if (n < 0)
+				{	
+					tcp_get_err_output(n);
+		
 					switch (n)
 					{
-					    case MT_READDISCONNECT:
+					   case MT_READDISCONNECT:
 					    	close(sockfd);
 						break;
 						
 					    case MT_READQUIT:
 					    	close(sockfd);
-						printf("client close connect!\n");
-						break;
-						
-					    case MT_READERROR:
-					    	perror("error in read");
 						break;
 						
 					    default:
-					    	Assert(0);
 					    	break;
 					}
-
-					traceprint("TODO: Tcp/ip information definition (%d)\n", n);
 
 					goto finish;
 				}
@@ -210,7 +204,7 @@ void * msg_recv(void *args)
 				else
 				{
 					printf("read %d->[%s]\n", n, buf);
-#endif
+
 
 				if (!strncasecmp(RPC_RBD_MAGIC, buf, STRLEN(RPC_RBD_MAGIC)))
 				{
@@ -251,7 +245,10 @@ void * msg_recv(void *args)
 					new_msg->block_buffer = buffer;
 					new_msg->next = NULL;
 				}
-				else if (n > MSG_SIZE)
+				else 
+#endif
+
+				if (n > MSG_SIZE)
 				{
 					/* TODO : for the big data transferring. */
 					Assert(0);

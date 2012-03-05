@@ -146,7 +146,11 @@ retry:
 
 	if (n < RPC_MAGIC_MAX_LEN)
 	{
-		/* TODO: further research. */
+		/* 
+		** TODO: further research.
+		** We set this error with suspected because one message and the 
+		** first tcp/ip read will not be less than 12 generally.
+		*/
 		traceprint("TCP: suspect read data (len = %d).\n", n);
 		goto retry;
 	}
@@ -155,7 +159,8 @@ retry:
 
 	if (n > need)
 	{
-		Assert(0);
+		traceprint("TCP: the read data (%d)is greater than the expected (%d). \n", n, need);
+		return MT_READERROR;
 	}
 	
 	need -= n;
@@ -221,4 +226,45 @@ tcp_put_data(int socket, char *sendbp, int count)
 
 	return put;
 	//return m_senddata(socket, sendbp, count);
+}
+
+void
+tcp_get_err_output(int rtn_num)
+{
+	if(errno == ECONNRESET)
+	{
+		traceprint("Socket: Rg server is closed before client send request!\n");
+	}
+	else if((errno == ETIMEDOUT)||(errno == EHOSTUNREACH)||(errno == ENETUNREACH))
+	{
+		traceprint("Socket: Rg server is breakdown before client send request!\n");
+	}
+	else if(errno == EWOULDBLOCK)
+	{
+		traceprint("Socket: Rg server is breakdown after client send request, before client receive response!\n");
+	}
+	else
+	{
+		traceprint("Socket: Client receive response error for unknown reason!\n");
+	}
+
+	switch (rtn_num)
+	{
+	   case MT_READDISCONNECT:
+	    	traceprint("Socket: Socket has disconnected! (ErrNum = %d)!\n", rtn_num);
+		break;
+		
+	    case MT_READQUIT:
+	    	traceprint("Socket: Socket has quit! (ErrNum = %d)!\n", rtn_num);
+		break;
+		
+	    case MT_READERROR:
+	    	traceprint("Socket: System i/o error! (ErrNum = %d)!\n", rtn_num);
+		break;
+		
+	    default:
+	    	//Assert(0);
+	    	traceprint("Socket: Client receive response error for UNKNOWN reason (ErrNum = %d)!\n", rtn_num);
+	    	break;
+	}
 }
