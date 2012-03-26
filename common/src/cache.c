@@ -19,6 +19,7 @@
 */
 #include "master/metaserver.h"
 #include "buffer.h"
+#include "rpcfmt.h"
 #include "block.h"
 #include "cache.h"
 #include "memcom.h"

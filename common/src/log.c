@@ -21,6 +21,8 @@
 #include "global.h"
 #include "strings.h"
 #include "master/metaserver.h"
+#include "rpcfmt.h"
+#include "parser.h"
 #include "ranger/rangeserver.h"
 #include "memcom.h"
 #include "buffer.h"

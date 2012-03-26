@@ -119,7 +119,11 @@ row_col_compare(int coltype, char *colval1, int colen1, char *colval2, int colen
 
 		result = MT_COMPARE(type_char2int(colval1), type_char2int(colval2));
 
-	    break;
+	    	break;
+
+	    case INVALID_TYPE:
+	    	Assert(0);
+	    	break;
 
         }   
 	

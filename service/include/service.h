@@ -6,6 +6,7 @@ using namespace std;
 
 extern "C"
 {
+#include "rpcfmt.h"
 #include "interface.h"
 }
 

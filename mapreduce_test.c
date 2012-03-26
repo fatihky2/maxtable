@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include "rpcfmt.h"
 #include "interface.h"
 #include "master/metaserver.h"
 
@@ -70,7 +71,7 @@ int main(int argc, char *argv[])
 		if (match(argv[1], "inputtest"))
 		{
 			MT_SPLIT * splits = NULL;
-			char *table_name = "test";
+			char *table_name = "gu";
 			int split_count = 0;
 
 			mt_mapred_get_splits(connection, &splits, &split_count, table_name);

@@ -23,6 +23,7 @@
 #include "master/metaserver.h"
 #include "row.h"
 #include "buffer.h"
+#include "rpcfmt.h"
 #include "block.h"
 #include "strings.h"
 #include "file_op.h"
@@ -30,7 +31,7 @@
 
 
 COLINFO *
-meta_get_colinfor(int colid, int totcol, COLINFO *colinfor)
+meta_get_colinfor(int colid, char *col_name, int totcol, COLINFO *colinfor)
 {
 	int	i;
 
@@ -38,7 +39,14 @@ meta_get_colinfor(int colid, int totcol, COLINFO *colinfor)
 	i = 0;
 	while(i < totcol)
 	{
-		if (colinfor[i].col_id == colid)
+		if(col_name != NULL)
+		{
+			if (!strcmp(colinfor[i].col_name, col_name))
+			{
+				return &(colinfor[i]);
+			}
+		}
+		else if (colinfor[i].col_id == colid)
 		{
 			return &(colinfor[i]);
 		}
@@ -97,6 +105,46 @@ meta_save_sysobj(char *tab_dir, char *tab_hdr)
 	if (status != sizeof(TABLEHDR))
 	{
 		traceprint("Table %s sysobjects hit error!\n", tab_dir);
+		rtn_stat = FALSE;
+		
+	}
+
+	CLOSE(fd);
+
+	return rtn_stat;
+}
+
+
+int
+meta_save_sysindex(char *sysindex)
+{
+	char	tab_meta_dir[TABLE_NAME_MAX_LEN];
+	int	fd;
+	int	status;
+	int	rtn_stat;
+
+
+	rtn_stat = TRUE;
+	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
+	
+	MEMCPY(tab_meta_dir, MT_META_INDEX, STRLEN(MT_META_INDEX));
+	str1_to_str2(tab_meta_dir, '/', "sysindex");
+
+	OPEN(fd, tab_meta_dir, (O_RDWR));
+
+	if (fd < 0)
+	{
+		return FALSE;
+	}
+
+
+	status = WRITE(fd, sysindex, sizeof(META_SYSINDEX));
+
+	Assert(status == sizeof(META_SYSINDEX));
+
+	if (status != sizeof(META_SYSINDEX))
+	{
+		traceprint("Save sysindex hit error!\n");
 		rtn_stat = FALSE;
 		
 	}

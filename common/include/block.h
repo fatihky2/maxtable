@@ -22,10 +22,10 @@
 
 
 
-#define	BLKHEADERSIZE	60
+#define	BLKHEADERSIZE	68
 
 
-#define	BLOCKSIZE		(64 * 1024)		
+//#define	BLOCKSIZE		(64 * 1024)		
 //#define BLOCKSIZE		(512)
 //#define BLOCKSIZE		(128 * 1024)
 
@@ -57,6 +57,8 @@ typedef	struct block
 	
 	int		bblkno;			
 	int		bnextblkno;	
+	int		bindex_other;	
+	int		pad1;
 	int		bsstabnum;	
 	int		bsstabid;	
 	int		btabid;		
@@ -85,6 +87,7 @@ typedef	struct block
 
 #define	BLK_TABLET_SCHM		0x0001	
 #define BLK_SSTAB_SPLIT		0x0002	
+#define	BLK_INDEX_ROOT		0x0004	
 
 
 #define	ROW_OFFSET_ENTRYSIZE	sizeof(int)
@@ -196,5 +199,9 @@ blk_appendrow(BLOCK *blk, char *rp, int rlen);
 
 int
 blkupdate(TABINFO *tabinfo, char *newrp);
+
+int
+blk_get_totrow_sstab(BUF *bp);
+
 
 #endif

@@ -19,6 +19,7 @@
 */
 #include "master/metaserver.h"
 #include "memcom.h"
+#include "rpcfmt.h"
 #include "buffer.h"
 #include "block.h"
 #include "cache.h"
@@ -84,8 +85,10 @@ nextsstab:
 	tabinfo->t_sinfo->sistate &= ~SI_INDEX_BLK;
 
 	
-	if (   (tss->topid & TSS_OP_RANGESERVER) 
-	    && ((tss->topid & TSS_OP_INSTAB) || (tss->topid & TSS_OP_SELDELTAB)))
+	if (   !(tss->topid & TSS_OP_INDEX_CASE)
+	    && (tss->topid & TSS_OP_RANGESERVER) 
+	    && (   (tss->topid & TSS_OP_INSTAB) 
+	        || (tss->topid & TSS_OP_SELDELTAB)))
 	{
 		BUF	*tmpbp;
 		int	tmpblkidx;
@@ -139,7 +142,7 @@ nextsstab:
 		
 		if (   (   (tss->topid & TSS_OP_SELDELTAB) 
 			&& (tabinfo->t_sinfo->sistate & SI_NODATA))
-		    || (   (tss->topid & TSS_OP_INSTAB) 
+		    || (   (tss->topid & TSS_OP_INSTAB)
 		    	&& (tabinfo->t_rowinfo->roffset == tmpbp->bblk->bfreeoff)))
 		{
 			
@@ -378,7 +381,8 @@ blk_getsstable(TABINFO *tabinfo)
 		if (   (   (tss->topid & TSS_OP_RANGESERVER) 
 			&& (   (tabinfo->t_insmeta) 
 			    && (tabinfo->t_insmeta->status & INS_META_1ST)))
-		    || (   (tss->topid & TSS_OP_METASERVER) 
+		    || (   (   (tss->topid & TSS_OP_METASERVER) 
+		    	    || (tss->topid & TSS_OP_CRTINDEX))
 		        && (tabinfo->t_stat & TAB_CRT_NEW_FILE)))
 		{
 			bp->bstat |= BUF_READ_EMPTY;
@@ -539,7 +543,9 @@ finish:
 
 	if (tabinfo->t_stat & TAB_SSTAB_SPLIT)
 	{
-		bp->bsstab->bblk->bstat |= BLK_SSTAB_SPLIT;
+		
+		bp->bsstab->bblk->bstat |= 
+			(tss->topid & TSS_OP_INDEX_CASE) ? 0 : BLK_SSTAB_SPLIT;
 		tabinfo->t_stat |= TAB_LOG_SKIP_LOG;		
 	}
 	
@@ -908,6 +914,7 @@ blk_check_sstab_space(TABINFO *tabinfo, BUF *bp, char *rp, int rlen,
 			{
 				if(tabinfo->t_stat & TAB_INS_SPLITING_SSTAB)
 				{
+					Assert(!(tabinfo->t_stat & TAB_DO_INDEX));
 					
 					traceprint("Hit the new split on the splitting sstable %s.\n", tabinfo->t_sstab_name);
 
@@ -984,6 +991,8 @@ blk_check_sstab_space(TABINFO *tabinfo, BUF *bp, char *rp, int rlen,
 				{
 					if(tabinfo->t_stat & TAB_INS_SPLITING_SSTAB)
 					{
+						Assert(!(tabinfo->t_stat & TAB_DO_INDEX));
+						
 						traceprint("Hit the new split on the splitting sstable %s.\n", tabinfo->t_sstab_name);
 
 						
@@ -1221,5 +1230,36 @@ blk_appendrow(BLOCK *blk, char *rp, int rlen)
 	BLK_GET_NEXT_ROWNO(blk)++;
 
 	return TRUE;
+}
+
+
+int
+blk_get_totrow_sstab(BUF *bp)
+{
+	int	totrow;
+
+
+	totrow = 0;
+
+	while(bp->bblk->bblkno != -1)
+	{
+		totrow += BLK_GET_NEXT_ROWNO(bp->bblk);
+		
+		if (BLK_GET_NEXT_ROWNO(bp->bblk) == 0)
+		{
+			break;
+		}
+		
+		if (bp->bblk->bnextblkno != -1)
+		{
+			bp++;
+		}
+		else
+		{
+			break;
+		}
+	}
+
+	return totrow;
 }
 

@@ -27,11 +27,6 @@
 #include "spinlock.h"
 
 
-#ifndef	BLOCKSIZE
-#define	BLOCKSIZE		(64 * 1024)
-//#define	BLOCKSIZE		512
-#endif
-
 #define MAX_RG_NUM 256
 
 #define ESTABLISHED 1
@@ -63,39 +58,12 @@ typedef struct conn
 	
 }CONN;
 
-/* The context of range query. */
-typedef struct range_query_contex
-{
-	int	status;			/* Status for the range query. */
-	int	first_rowpos;		/* The index of first row in the current 
-					** query context. 
-					*/
-	int	end_rowpos;		/* The index of last row in the current 
-					** query context. 
-					*/
-	int	cur_rowpos;		/* The index of current row in the 
-					** current  query context. 
-					*/
-	int	rowminlen;		/* The min-length of row. */
-	char	data[BLOCKSIZE];	/* The data context from ranger server. */
-}RANGE_QUERYCTX;
-
 typedef struct mt_cli_context
 {
 	LOCKATTR mutexattr;
 	SPINLOCK mutex;
 }MT_CLI_CONTEXT;
 
-#define	DATA_CONT	0x0001		/* There're still some data in the ranger
-					** and The ranger is waitting for the 
-					** response of data sending.
-					*/
-#define DATA_DONE	0x0002		/* No data need to be read from the 
-					** ranger.
-					*/
-#define DATA_EMPTY	0x0004		/* There're no data in the current query
-					** context. 
-					*/
 
 /* Following definition is for the return value of mt_cli_exec_crtseldel(). */
 #define	CLI_FAIL		-1	/* The operation is failed. */

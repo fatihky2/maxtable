@@ -13,6 +13,7 @@
 
 extern "C"
 {
+#include "rpcfmt.h"
 #include "interface.h"
 }
 

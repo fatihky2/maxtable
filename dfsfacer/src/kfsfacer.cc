@@ -10,6 +10,7 @@ extern "C" {
 #include <stdlib.h>
 #include <dirent.h>
 #include <fcntl.h>
+#include "rpcfmt.h"
 }
 
 #include "libkfsClient/KfsClient.h"
@@ -36,7 +37,7 @@ typedef struct mt_entries
 
 #define	KFS_LOG_FILE_SIZE	(4 * 1024 * 1024)
 
-#define	BLOCKSIZE		(64 * 1024)		
+//#define	BLOCKSIZE		(64 * 1024)		
 //#define BLOCKSIZE		(512)
 
 

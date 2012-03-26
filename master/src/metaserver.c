@@ -23,10 +23,11 @@
 #include "utils.h"
 #include "list.h"
 #include "master/metaserver.h"
+#include "rpcfmt.h"
+#include "parser.h"
 #include "ranger/rangeserver.h"
 #include "conf.h"
 #include "netconn.h"
-#include "parser.h"
 #include "tss.h"
 #include "token.h"
 #include "memcom.h"
@@ -49,6 +50,8 @@
 #include "m_socket.h"
 #include "rginfo.h"
 #include "interface.h"
+#include "index.h"
+#include "qryoptimizer.h"
 
 
 extern	TSS	*Tss;
@@ -180,6 +183,10 @@ meta_server_setup(char *conf_path)
 	/* column information. */
 	Master_infor->meta_syscol = malloc(sizeof(META_SYSCOLUMN));
 	memset(Master_infor->meta_syscol, 0, sizeof(META_SYSCOLUMN));
+
+	/* sysindex information. */
+	Master_infor->meta_sysindex = malloc(sizeof(META_SYSINDEX));
+	memset(Master_infor->meta_sysindex, 0, sizeof(META_SYSINDEX));
 
 	conf_get_value_by_key(port, conf_path, CONF_PORT_KEY);
 
@@ -317,6 +324,38 @@ meta_server_setup(char *conf_path)
 	if (STAT(MT_META_INDEX, &st) != 0)
 	{
 		MKDIR(status, MT_META_INDEX, 0755); 
+
+		MEMSET(rang_server, 256);
+		MEMCPY(rang_server, MT_META_INDEX, STRLEN(MT_META_INDEX));
+		str1_to_str2(rang_server, '/', "sysindex");
+	
+		OPEN(fd, rang_server, (O_CREAT|O_WRONLY|O_TRUNC));
+
+		Master_infor->meta_sysindex->idx_magic[0] = 's';
+		Master_infor->meta_sysindex->idx_magic[1] = 'y';
+		Master_infor->meta_sysindex->idx_magic[2] = 's';
+		Master_infor->meta_sysindex->idx_magic[3] = 'i';
+		Master_infor->meta_sysindex->idx_magic[4] = 'n';
+		Master_infor->meta_sysindex->idx_magic[5] = 'd';
+		Master_infor->meta_sysindex->idx_magic[6] = 'e';
+		Master_infor->meta_sysindex->idx_magic[7] = 'x';
+		
+		WRITE(fd, Master_infor->meta_sysindex, sizeof(META_SYSINDEX));
+	
+		CLOSE(fd);
+
+	}
+	else
+	{		
+		MEMSET(rang_server, 256);
+		MEMCPY(rang_server, MT_META_INDEX, STRLEN(MT_META_INDEX));
+		str1_to_str2(rang_server, '/', "sysindex");
+
+		OPEN(fd, rang_server, (O_RDONLY));
+		
+		READ(fd, Master_infor->meta_sysindex, sizeof(META_SYSINDEX));
+	
+		CLOSE(fd);
 	}
 
 	if (STAT(LOG_FILE_DIR, &st) != 0)
@@ -431,6 +470,7 @@ meta_crtab(TREE *command)
 	tablet_store = NULL;
 	sstab_map_tmp = NULL;
 	col_buf = NULL;
+	tab_hdr	= NULL;
 	tab_name = command->sym.command.tabname;
 	tab_name_len = command->sym.command.tabname_len;
 
@@ -710,11 +750,14 @@ meta_crtab(TREE *command)
 	MEMCPY(&(Master_infor->meta_syscol->colinfor[Master_infor->meta_systab->tabnum - 1]),
 					col_buf, col_buf_idx);
 	
-	MEMFREEHEAP(tab_hdr);
-
 	rtn_stat = TRUE;
 	
-exit:
+exit:	
+	if (tab_hdr != NULL)
+	{
+		MEMFREEHEAP(tab_hdr);
+	}
+	
 	if (sstab_map_tmp != NULL)
 	{
 		free(sstab_map_tmp);
@@ -807,7 +850,6 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 	int		col_buf_idx;
 	int		col_buf_len;
 	char		*resp;
-	char		tablet_name[32];
 	int		tablet_min_rlen;
 	int		namelen;
 	char		*name;
@@ -868,8 +910,6 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 	keycol = par_get_colval_by_colid(command, tab_hdr->tab_key_colid, 
 					&keycolen);
 
-	MEMSET(sstab_name, SSTABLE_NAME_MAX_LEN);
-
 	sstab_map = sstab_map_get(tab_hdr->tab_id, tab_dir, &tab_sstabmap);
 
 	Assert(sstab_map != NULL);
@@ -887,7 +927,7 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 		MEMCPY(tab_tabletschm_dir, tab_dir, STRLEN(tab_dir));
 		str1_to_str2(tab_tabletschm_dir, '/', "tabletscheme");
 
-		tabletschm_rp = tablet_schm_srch_row(tab_hdr, tab_hdr->tab_id, 
+		tabletschm_rp = tablet_schm_srch_row(tab_hdr->tab_id, 
 						     TABLETSCHM_ID, 
 						     tab_tabletschm_dir,
 						     keycol, keycolen);
@@ -967,7 +1007,7 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 		/* This flag is just only for the tablet. */
 		tabinfo->t_stat &= ~TAB_TABLET_KEYROW_CHG;
 		
-		rp = tablet_srch_row(tabinfo, tab_hdr, tab_hdr->tab_id, tabletid, 
+		rp = tablet_srch_row(tabinfo, tab_hdr->tab_id, tabletid, 
 				     tab_meta_dir, keycol, keycolen);
 
 		/* Get the file name for sstable. */
@@ -975,6 +1015,9 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 					ROW_MINLEN_IN_TABLET, &sstab_namelen);
 
 		sstab_namelen = STRLEN(name);
+
+		MEMSET(sstab_name, SSTABLE_NAME_MAX_LEN);
+		
 		/* 3rd step: copy the sstable name into the common buffer. */	
 		MEMCPY(sstab_name, name, sstab_namelen);
 
@@ -1143,12 +1186,8 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 	}
 	else if (tab_hdr->tab_tablet == 0)
 	{
-		MEMCPY(sstab_name, tab_name, tab_name_len);
-		build_file_name("tablet", tablet_name, tab_hdr->tab_tablet);
-		MEMCPY((sstab_name + tab_name_len), tablet_name, 
-			STRLEN(tablet_name));
-		build_file_name("sstable", sstab_name + tab_name_len + STRLEN(tablet_name), 
-				tab_hdr->tab_sstab);
+		sstab_bld_name(sstab_name, tab_name, tab_name_len, 
+						tab_hdr->tab_sstab);
 	}
 	else
 	{
@@ -1167,8 +1206,13 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 		** Building a row that save the information of sstable,  this row
 		** is also the index, so we have to specify a  key for this row.
 		*/
-		sstab_rlen = ROW_MINLEN_IN_TABLET + keycolen + 4 + 4;
+		sstab_rlen = ROW_MINLEN_IN_TABLET + keycolen + 4 + COLOFFSETENTRYSIZE;
 
+		/* TODO: support "int" type of key column. */
+#if 0
+		((!TYPE_IS_FIXED(tab_hdr->tab_key_coltype)) ? 
+		COLOFFSETENTRYSIZE : 0);
+#endif
 		sstab_rp = MEMALLOCHEAP(sstab_rlen);
 
 		sstab_id = meta_get_free_sstab();
@@ -1723,7 +1767,7 @@ meta_seldeltab(TREE *command, TABINFO *tabinfo)
 	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
 	str1_to_str2(tab_meta_dir, '/', "tabletscheme");
 
-	rp = tablet_schm_srch_row(tab_hdr, tab_hdr->tab_id, TABLETSCHM_ID,
+	rp = tablet_schm_srch_row(tab_hdr->tab_id, TABLETSCHM_ID,
 				tab_meta_dir, keycol, keycolen);
 
 	name = row_locate_col(rp, TABLETSCHM_TABLETNAME_COLOFF_INROW, 
@@ -1788,7 +1832,7 @@ meta_seldeltab(TREE *command, TABINFO *tabinfo)
 	tabletid = *(int *)row_locate_col(rp, TABLETSCHM_TABLETID_COLOFF_INROW, 
 					  ROW_MINLEN_IN_TABLETSCHM, &namelen);
 
-	rp = tablet_srch_row(tabinfo, tab_hdr, tab_hdr->tab_id, tabletid, 
+	rp = tablet_srch_row(tabinfo, tab_hdr->tab_id, tabletid, 
 				tab_meta_dir, keycol, keycolen);
 
 	/* Get the file name for sstable. */
@@ -2043,21 +2087,21 @@ meta_selrangetab(TREE *command, TABINFO *tabinfo)
 			
 			if (k == 0)
 			{
-				rp = tablet_schm_get_row(tab_hdr, 
-						tab_hdr->tab_id, TABLETSCHM_ID,
-						tab_meta_dir, 0);
+				rp = tablet_schm_get_row(tab_hdr->tab_id, 
+							TABLETSCHM_ID,
+							tab_meta_dir, 0);
 			}
 			else
 			{
-				rp = tablet_schm_get_row(tab_hdr, 
-						tab_hdr->tab_id, TABLETSCHM_ID,
-						tab_meta_dir, -1);
+				rp = tablet_schm_get_row(tab_hdr->tab_id,
+							TABLETSCHM_ID,
+							tab_meta_dir, -1);
 			}
 		}
 		else
 		{
 			/* Case for the key user specified. */
-			rp = tablet_schm_srch_row(tab_hdr, tab_hdr->tab_id,
+			rp = tablet_schm_srch_row(tab_hdr->tab_id,
 						TABLETSCHM_ID, tab_meta_dir, 
 						keycol, keycolen);
 		}
@@ -2127,16 +2171,14 @@ meta_selrangetab(TREE *command, TABINFO *tabinfo)
 		{
 			if (k == 0)
 			{
-				rp = tablet_get_1st_or_last_row(tab_hdr,
-								tab_hdr->tab_id,
+				rp = tablet_get_1st_or_last_row(tab_hdr->tab_id,
 								tabletid, 
 								tab_meta_dir,
 								TRUE);
 			}
 			else
 			{
-				rp = tablet_get_1st_or_last_row(tab_hdr, 
-								tab_hdr->tab_id, 
+				rp = tablet_get_1st_or_last_row(tab_hdr->tab_id, 
 								tabletid, 
 								tab_meta_dir, 
 								FALSE);
@@ -2144,7 +2186,7 @@ meta_selrangetab(TREE *command, TABINFO *tabinfo)
 		}
 		else
 		{
-			rp = tablet_srch_row(tabinfo, tab_hdr, tab_hdr->tab_id, 
+			rp = tablet_srch_row(tabinfo, tab_hdr->tab_id, 
 						tabletid, tab_meta_dir, keycol, 
 						keycolen);
 		}
@@ -2336,6 +2378,8 @@ meta_selwheretab(TREE *command, TABINFO *tabinfo)
 	int	leftkeylen;
 	char	*range_rightkey;
 	int	rightkeylen;
+	int	colmap; 
+	int	syscolidx;
 	
 
 	Assert(Master_infor->meta_syscol->colnum[tabidx] == tab_hdr->tab_col);
@@ -2372,6 +2416,20 @@ meta_selwheretab(TREE *command, TABINFO *tabinfo)
 			range_rightkey = "*\0";
 			leftkeylen = 1;
 			rightkeylen= 1;
+								
+			colmap = qryopt_get_colmap_by_cmd(command, 
+							(COLINFO *)col_buf,
+							tab_hdr->tab_col);
+			syscolidx = index_get_meta_by_colmap(tab_hdr->tab_id,
+					colmap, Master_infor->meta_sysindex);
+
+			if (syscolidx != -1)
+			{
+				MEMCPY(&(selwhere.idxmeta), 
+				   &(Master_infor->meta_sysindex->idx_meta[syscolidx]),
+				   sizeof(IDXMETA));
+				selwhere.use_idxmeta = TRUE;
+			}
 		}
 		else
 		{
@@ -2409,22 +2467,22 @@ meta_selwheretab(TREE *command, TABINFO *tabinfo)
 			if (k == 0)
 			{
 				/* Left range. */
-				rp = tablet_schm_get_row(tab_hdr,
-						tab_hdr->tab_id, TABLETSCHM_ID, 
-						tab_meta_dir, 0);
+				rp = tablet_schm_get_row(tab_hdr->tab_id,
+							TABLETSCHM_ID, 
+							tab_meta_dir, 0);
 			}
 			else
 			{
 				/* Right range. */
-				rp = tablet_schm_get_row(tab_hdr, 
-						tab_hdr->tab_id, TABLETSCHM_ID, 
-						tab_meta_dir, -1);
+				rp = tablet_schm_get_row(tab_hdr->tab_id,
+							TABLETSCHM_ID, 
+							tab_meta_dir, -1);
 			}
 		}
 		else
 		{
 			/* Non-expand case. */
-			rp = tablet_schm_srch_row(tab_hdr, tab_hdr->tab_id, 
+			rp = tablet_schm_srch_row(tab_hdr->tab_id, 
 						TABLETSCHM_ID, tab_meta_dir, 
 					  	keycol, keycolen);
 		}
@@ -2445,9 +2503,6 @@ meta_selwheretab(TREE *command, TABINFO *tabinfo)
 			selwhere.rightnamelen = STRLEN(name);
 		}
 	}	
-
-
-	
 
 	col_buf_len = sizeof(SELWHERE) + sizeof(SVR_IDX_FILE) + sizeof(TABLEHDR) + 
 					tab_hdr->tab_col * (sizeof(COLINFO));
@@ -2645,7 +2700,7 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 	str1_to_str2(tab_meta_dir, '/', "tabletscheme");
 
 	/* 0 is the reserved tabletscheme id. */
-	rp = tablet_schm_srch_row(tab_hdr, tab_hdr->tab_id, TABLETSCHM_ID, 
+	rp = tablet_schm_srch_row(tab_hdr->tab_id, TABLETSCHM_ID, 
 				  tab_meta_dir, keycol, keycolen);
 
 	/* Tabletname is a fixed column, its length value is equal to TABLET_NAME_MAX_LEN. */
@@ -3431,9 +3486,8 @@ meta_sharding(TREE *command)
 
 	while(TRUE)
 	{	
-		rp = tablet_schm_get_row(tab_hdr, tab_hdr->tab_id, 
-					TABLETSCHM_ID,  tab_tabletschm_dir,
-					rowno);	
+		rp = tablet_schm_get_row(tab_hdr->tab_id, TABLETSCHM_ID,
+					tab_tabletschm_dir, rowno);	
 
 		if (rp == NULL)
 		{
@@ -3656,6 +3710,165 @@ exit:
 }
 
 
+
+char *
+meta_crtidx(TREE *command)
+{
+	char		*tab_name;
+	int		tab_name_len;
+	char		*idx_name;
+	int		idx_name_len;
+	char		tab_dir[256];
+	int		rtn_stat;
+	TABLEHDR	*tab_hdr;
+	char 		*resp;
+	int		tabidx;
+	int		rpc_status;
+	char		*resp_buf;
+	int		resp_buf_len;
+	int		resp_buf_idx;
+
+
+	Assert(command);
+	
+	rtn_stat = FALSE;
+	resp = NULL;
+	rpc_status = 0;
+	resp_buf = NULL;
+	resp_buf_len = 0;
+	resp_buf_idx = 0;
+
+	/* Index name*/
+	idx_name = command->sym.command.tabname;
+	idx_name_len = command->sym.command.tabname_len;
+
+	/* Table name locate at the sub-command ON. */
+	tab_name = (command->right)->sym.command.tabname;
+	tab_name_len = (command->right)->sym.command.tabname_len;
+
+	/* Create the file named table name. */
+	MEMSET(tab_dir, 256);
+	MEMCPY(tab_dir, MT_META_TABLE, STRLEN(MT_META_TABLE));
+	str1_to_str2(tab_dir, '/', tab_name);
+
+	if ((tabidx = meta_table_is_exist(tab_dir)) == -1)
+	{
+		traceprint("Table %s is not exist!\n", tab_name);
+
+		rpc_status |= RPC_TABLE_NOT_EXIST;
+		goto exit;
+	}
+
+
+	tab_hdr = &(Master_infor->meta_sysobj->sysobject[tabidx]);
+
+	if (tab_hdr->tab_stat & TAB_DROPPED)
+	{
+		traceprint("This table has been dropped.\n");
+		rpc_status |= RPC_TABLE_NOT_EXIST;
+		goto exit;
+	}
+
+	int	meta_num;
+	
+	meta_num = index_get_meta_by_idxname(tab_hdr->tab_id, idx_name, 
+				Master_infor->meta_sysindex);
+
+	if (meta_num != -1)
+	{
+		traceprint("The index (%s) was exist on the table (%s)", idx_name, tab_name);
+		goto exit;
+	}
+
+	/* The id of index and table id share the same count number. */
+	++(Master_infor->last_tabid);
+	
+	IDXMETA	idxmeta;
+	COLINFO *colinfo = (COLINFO *)(&(Master_infor->meta_syscol->colinfor[tabidx]));
+
+	MEMSET(&idxmeta, sizeof(IDXMETA));
+	MEMCPY(idxmeta.idxname, idx_name, idx_name_len);
+	index_bld_meta(&idxmeta, tab_hdr, colinfo, command, Master_infor->last_tabid);
+
+	index_ins_meta(&idxmeta, Master_infor->meta_sysindex);
+
+	meta_save_sysindex((char *)(Master_infor->meta_sysindex));
+	
+	
+	rtn_stat = TRUE;
+
+
+	char	tab_dir1[256];
+	int	fd;
+	
+	MEMSET(tab_dir1, 256);
+	MEMCPY(tab_dir1, MT_META_TABLE, STRLEN(MT_META_TABLE));
+	str1_to_str2(tab_dir1, '/', "systable");
+
+	OPEN(fd, tab_dir1, (O_RDWR));
+	
+	/* 
+	** We only reserve the ID for this index, so that the index sstable 
+	** can be cached.
+	*/
+	Master_infor->meta_systab->last_tabid = Master_infor->last_tabid;
+
+	/* Flush this creating information into the disk. */
+	WRITE(fd, Master_infor->meta_systab, sizeof(META_SYSTABLE));
+
+	CLOSE(fd);
+
+	resp_buf_len = sizeof(IDXMETA) + sizeof(SVR_IDX_FILE) + sizeof(TABLEHDR) + 
+					tab_hdr->tab_col * (sizeof(COLINFO));
+	
+	resp_buf = MEMALLOCHEAP(resp_buf_len);
+	MEMSET(resp_buf, resp_buf_len);
+	
+	resp_buf_idx = 0;		
+	
+	/* Index meta */
+	MEMCPY((resp_buf + resp_buf_idx), &idxmeta, sizeof(IDXMETA));
+	resp_buf_idx += sizeof(IDXMETA);
+
+	/* Range server list */
+	MEMCPY((resp_buf + resp_buf_idx), &(Master_infor->rg_list), 
+					sizeof(SVR_IDX_FILE));
+	resp_buf_idx += sizeof(SVR_IDX_FILE);
+	
+	/* Table meta. */
+	MEMCPY((resp_buf + resp_buf_idx), tab_hdr, sizeof(TABLEHDR));
+
+	resp_buf_idx += sizeof(TABLEHDR);
+
+	/* Column information. */
+	MEMCPY((resp_buf + resp_buf_idx), colinfo, tab_hdr->tab_col * sizeof(COLINFO));
+	
+	resp_buf_idx += tab_hdr->tab_col * sizeof(COLINFO);
+
+	rtn_stat = TRUE;
+
+exit:
+	if (rtn_stat)
+	{
+		rpc_status |= RPC_SUCCESS;
+		resp = conn_build_resp_byte(rpc_status, resp_buf_idx, resp_buf);
+	}
+	else
+	{
+		rpc_status |= RPC_FAIL;
+		resp = conn_build_resp_byte(rpc_status, 0, NULL);
+	}
+
+	if (resp_buf != NULL)
+	{
+		MEMFREEHEAP(resp_buf);
+	}
+
+	
+	return resp;
+}
+
+
 char *
 meta_handler(char *req_buf, int fd)
 {
@@ -3769,6 +3982,13 @@ parse_again:
 		break;
 
 	    case CRTINDEX:
+	    	resp = meta_crtidx(command);
+
+		if (DEBUG_TEST(tss))
+		{
+			traceprint("I got here - CREAT INDEX\n");
+		}
+		
 	    	break;
 
 	    case SELECT:
@@ -3987,7 +4207,8 @@ meta_get_rg_by_ip_port(char *rgip, int rgport)
 	return NULL;
 }
 
-void * meta_heartbeat(void *args)
+void * 
+meta_heartbeat(void *args)
 {
 	RANGE_PROF 	*rg_addr = (RANGE_PROF *)args;
 	int 		hb_conn;

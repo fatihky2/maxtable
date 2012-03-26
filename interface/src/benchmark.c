@@ -1,4 +1,5 @@
 #include "global.h"
+#include "rpcfmt.h"
 #include "interface.h"
 
 struct timeval tpStart;

@@ -38,12 +38,12 @@
 #define RPC_MASTER2RG_NOTIFY	"rsync"
 #define RPC_SELECTWHERE_MAGIC	"sel_wh"
 #define	RPC_RECOVERY		"rg_reco"
-#define RPC_MAPRED_GET_SPLITS "rgsplit"
-#define RPC_MAPRED_GET_META "rgmeta"
+#define RPC_MAPRED_GET_SPLITS	"rgsplit"
+#define RPC_MAPRED_GET_META	"rgmeta"
 #define RPC_MAPRED_GET_DATAPORT "dataport"
 #define RPC_MAPRED_GET_NEXT_VALUE "nextval"
-#define RPC_MAPRED_EXIT "rg_exit"
-
+#define RPC_MAPRED_EXIT		"rg_exit"
+#define	RPC_CRT_INDEX_MAGIC	"crt_idx"
 
 
 
@@ -112,6 +112,7 @@ typedef struct rpcresp
 #define	RPC_REQ_RECOVERY_RG_OP	0x0080
 #define RPC_REQ_MAPRED_GET_DATAPORT_OP 		0x0100
 #define RPC_REQ_MAPRED_GET_NEXT_VALUE_OP	0x0200
+#define	RPC_REQ_CRT_IDX_OP	0x0400
 
 
 char *

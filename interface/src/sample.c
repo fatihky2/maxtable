@@ -1,4 +1,5 @@
 #include "global.h"
+#include "rpcfmt.h"
 #include "interface.h"
 
 
@@ -130,9 +131,9 @@ exitins:
 		{	
 			memset(resp, 0, 256);
 			memset(cmd, 0, 256);
-			sprintf(cmd, "selectwhere gu where id1(aaaa1, *) and id2(bbbb35, bbbb46)");
+			//sprintf(cmd, "selectwhere gu where id1(aaaa1, *) and id2(bbbb35, bbbb46)");
 			//sprintf(cmd, "selectwhere gu where id2(bbbb39, bbbb39) and id4(cccccc39, cccccc39)");
-			//sprintf(cmd, "selectwhere gu where id2(bbbb3, *)");
+			sprintf(cmd, "selectwhere gu where id2(bbbb5, bbbb50)");
 
 			
 			rtn_stat = mt_cli_open_execute(connection, cmd, &exec_ctx);
@@ -257,7 +258,45 @@ exitselsum:
 				mt_cli_close_execute(exec_ctx);
 			}
 		}
-				
+
+		
+		if (match(argv[1], "crtindex"))
+		{	
+			memset(resp, 0, 256);
+			memset(cmd, 0, 256);
+			sprintf(cmd, "create index idx1 on gu (id2)");
+//			sprintf(cmd, "selectwhere gu where id2(bbbb3, bbbb8)");
+
+			
+			rtn_stat = mt_cli_open_execute(connection, cmd, &exec_ctx);
+
+			if (rtn_stat != CLI_SUCCESS)
+			{
+				printf ("Error! \n");
+				goto exitcrtidx;
+			}
+
+			printf("Client 1: %s\n", cmd);
+
+			MT_CLI_EXEC_CONTEX	*t_exec_ctx;
+
+			t_exec_ctx = exec_ctx;
+
+			int	sum_colval = 0;
+			
+			for (i = 0; i < exec_ctx->rg_cnt; i++, t_exec_ctx++)
+			{
+				mt_cli_exec_builtin(t_exec_ctx);
+			}
+
+			printf(" The total value is %d\n", sum_colval);
+exitcrtidx:
+			if (exec_ctx)
+			{
+				mt_cli_close_execute(exec_ctx);
+			}
+		}
+		
 		if (match(argv[1], "select"))
 		{
 			/* Select datas from table */

@@ -1,7 +1,7 @@
 /*
-** sstab.h 2011-07-25 xueyingfei
+** qryoptimizer.h 2012-03-18 xueyingfei
 **
-** Copyright flying/xueyingfei..
+** Copyright flying/xueyingfei.
 **
 ** This file is part of MaxTable.
 **
@@ -17,32 +17,11 @@
 ** implied. See the License for the specific language governing
 ** permissions and limitations under the License.
 */
-#ifndef	SSTAB_H_
-#define SSTAB_H_
 
-
-void
-sstab_namebyname(char *old_sstab, char *new_sstab);
-
-void
-sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp);
-
-void
-sstab_namebyid(char *old_sstab, char *new_sstab, int new_sstab_id);
-
-SSTAB_INFOR *
-sstab_map_get(int tabid, char *tab_dir, TAB_SSTAB_MAP **tab_sstab_map);
-
-void
-sstab_map_release(int tabid, int flag, TAB_SSTAB_MAP *tab_sstab_map);
+#ifndef	QRYOPTMIZER_H_
+#define QRYOPTMIZER_H_
 
 int
-sstab_map_put(int tabid, TAB_SSTAB_MAP *tab_sstab_map);
-
-int
-sstab_bld_name(char *sstab_name, char *tab_name, int tab_name_len, 
-				int sstabid);
-
-
+qryopt_get_colmap_by_cmd(TREE *command, COLINFO *colinfo, int colnum);
 
 #endif

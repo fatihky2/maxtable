@@ -36,6 +36,8 @@ struct insert_meta;
 struct rg_prof;
 struct master_infor;
 struct tab_sstab_map;
+struct table_hdr;
+
 
 
 
@@ -65,6 +67,8 @@ typedef struct tss
 
 	struct insert_meta
 			*tmeta_hdr;	
+	struct table_hdr
+			*ttab_hdr;	
 
 	struct tab_info	*ttabinfo;
 	struct tab_info *toldtabinfo;
@@ -108,6 +112,9 @@ typedef struct tssobj
 #define		TSS_OP_INSTAB		0x0010
 #define		TSS_OP_SELDELTAB	0x0020
 #define		TSS_OP_RECOVERY		0x0040
+#define		TSS_OP_SELWHERE		0x0080
+#define		TSS_OP_CRTINDEX		0x0100
+#define		TSS_OP_INDEX_CASE	0x0200
 
 TSS *
 tss_alloc(void);

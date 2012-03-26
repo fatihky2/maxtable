@@ -81,6 +81,7 @@ tss_init(TSS *tss)
 	tss->ttabinfo = tss->toldtabinfo = NULL;
 	tss->tcmd_parser = NULL;
 	tss->tmeta_hdr = NULL;
+	tss->ttab_hdr = NULL;
 
 	ex_init(tss);
 
