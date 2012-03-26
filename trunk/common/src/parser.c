@@ -18,9 +18,10 @@
 ** permissions and limitations under the License.
 */
 #include "master/metaserver.h"
+#include "rpcfmt.h"
+#include "parser.h"
 #include "ranger/rangeserver.h"
 #include "utils.h"
-#include "parser.h"
 #include "tss.h"
 #include "token.h"
 #include "memcom.h"
@@ -28,6 +29,7 @@
 #include "strings.h"
 #include "metadata.h"
 #include "file_op.h"
+#include "row.h"
 
 
 extern	TSS	*Tss;
@@ -98,6 +100,7 @@ par_bld_const(char *data, int datalen, int datatype, char *rightdata, int rightd
 	}
 	else
 	{
+		
 		int tmp_val = m_atoi(data, datalen);
 		MEMCPY(const_node->value, &tmp_val, len);
 	}
@@ -241,7 +244,8 @@ parser_open(char *s_str)
 	        break;
 
 	    case CRTINDEX:
-	        
+	    	tss->topid |= TSS_OP_CRTINDEX;
+	    	rtn_stat = par_crt_idx_tab((s_str + s_idx), CRTINDEX);	        
 	        break;
 
 	    case SELECT:		
@@ -290,6 +294,7 @@ parser_open(char *s_str)
 	    	break;
 
 	    case SELECTWHERE:
+	    	tss->topid |= TSS_OP_SELWHERE;
 	    	rtn_stat = par_selwherecnt_tab(s_str + s_idx, SELECTWHERE);
 		break;
 
@@ -682,6 +687,7 @@ par_crtins_tab(char *s_str, int querytype)
 	int		start;
 	int		end;
 	char		*col_info;
+	TREE		*command;
 
 
 	if (s_str == NULL || (STRLEN(s_str) == 0))
@@ -721,8 +727,27 @@ par_crtins_tab(char *s_str, int querytype)
 		return FALSE;
 	}
 
-	tss->tcmd_parser = par_bld_cmd(&(tab_name[start]), 
-					tab_name_len, querytype);
+	if (querytype == CRTINDEX)
+	{
+		
+		command = tss->tcmd_parser;
+	
+		
+		while(command->right)
+		{
+			command = command->right;
+		}
+
+		
+		command->right = par_bld_cmd(&(tab_name[start]), 
+						tab_name_len, querytype);
+	}
+	else
+	{
+	
+		tss->tcmd_parser = par_bld_cmd(&(tab_name[start]), 
+						tab_name_len, querytype);
+	}
 	
 	start = len;
 	col_info = s_str + start;
@@ -995,7 +1020,7 @@ par_selwherecnt_tab(char *s_str, int querytype)
 		if (len < 2)
 		{
 			traceprint("Value is not allowed with NULL.\n");
-			return parser_result;
+			goto exit;
 		}
 
 		str0n_trunc_0t(col_info, len - 1, &start, &end);
@@ -1015,7 +1040,7 @@ par_selwherecnt_tab(char *s_str, int querytype)
 	if (len < 0)
 	{
 		traceprint("Value is not allowed with NULL.\n");
-		return parser_result;
+		goto exit;
 	}
 
 	MEMSET(tab_name, 64);
@@ -1029,12 +1054,12 @@ par_selwherecnt_tab(char *s_str, int querytype)
 	if (tab_name_len < 1)
 	{
 		traceprint("Table name not allowed with NULL.\n");
-		return parser_result;
+		goto exit;
 	}
 	
 	if (!par_name_check(&(tab_name[start]), tab_name_len))
 	{
-		return parser_result;
+		goto exit;
 	}
 
 	
@@ -1084,7 +1109,7 @@ par_selwherecnt_tab(char *s_str, int querytype)
 		if (len < 2)
 		{
 			traceprint("Value is not allowed with NULL.\n");
-			return parser_result;
+			goto exit;
 		}
 
 		MEMSET(colname, 64);
@@ -1098,7 +1123,7 @@ par_selwherecnt_tab(char *s_str, int querytype)
 		if (colnamelen < 1)
 		{
 			traceprint("Column name not allowed with NULL.\n");
-			return parser_result;
+			goto exit;
 		}
 
 		col_info = &(col_info[len]);
@@ -1110,7 +1135,7 @@ par_selwherecnt_tab(char *s_str, int querytype)
 		if (len < 2)
 		{
 			traceprint("Value is not allowed with NULL.\n");
-			return parser_result;
+			goto exit;
 		}
 		
 		str0n_trunc_0t(col_info, len - 1, &start, &end);
@@ -1118,7 +1143,7 @@ par_selwherecnt_tab(char *s_str, int querytype)
 		
 		if (!par_col_info4where((col_info + start), (end - start), querytype, tmpcolname))
 		{
-			return parser_result;
+			goto exit;
 		}
 
 
@@ -1157,10 +1182,86 @@ par_selwherecnt_tab(char *s_str, int querytype)
 		}
 	}
 
-
+exit:
 	if (!parser_result)
 	{
 		traceprint("selectwhere parser hit error, please type help for information.\n");
+	}
+
+	return parser_result;
+}
+
+
+
+
+int 
+par_crt_idx_tab(char *s_str, int querytype)
+{
+	LOCALTSS(tss);
+	int		len;
+	char		tab_name[64];
+	int		cmd_len;
+	char		tab_name_len;
+	int		start;
+	int		end;
+	char		*cmd_str;
+	int		cmd_strlen;
+	int		parser_result;
+
+	
+
+	if (s_str == NULL || (STRLEN(s_str) == 0))
+	{
+		return FALSE;
+	}
+
+	parser_result = FALSE;
+		
+	len = 0;
+	cmd_len = STRLEN(s_str);
+	cmd_str = "on\0";
+	cmd_strlen = STRLEN(cmd_str);
+	
+	len = str1nstr(s_str, cmd_str, cmd_len);
+
+	if (len < 0)
+	{
+		traceprint("Value is not allowed with NULL.\n");
+		goto exit;
+	}
+
+	MEMSET(tab_name, 64);
+
+	
+	MEMCPY(tab_name, s_str, len - cmd_strlen);
+	
+	str0n_trunc_0t(tab_name, len - cmd_strlen, &start, &end);
+	tab_name_len = end - start;
+
+	if (tab_name_len < 1)
+	{
+		traceprint("Index name not allowed with NULL.\n");
+		goto exit;
+	}
+	
+	if (!par_name_check(&(tab_name[start]), tab_name_len))
+	{
+		goto exit;
+	}
+
+	
+	tss->tcmd_parser = par_bld_cmd(&(tab_name[start]), 
+					tab_name_len, querytype);
+
+	if (par_crtins_tab(s_str + len, querytype))
+	{
+		parser_result = TRUE;
+	}
+
+exit:	
+	if (!parser_result)
+	{
+		traceprint("create index parser hit error, please type help for information.\n");
 	}
 
 	return parser_result;
@@ -1325,8 +1426,9 @@ par_col_info(char *cmd, int cmd_len, int querytype)
 
 	colid = 0;
 	len = 0;
-	rg_insert = ((tss->topid & TSS_OP_RANGESERVER) && (tss->topid & TSS_OP_INSTAB)) ? TRUE : FALSE;
-
+	rg_insert = (   (tss->topid & TSS_OP_RANGESERVER)
+		     && (tss->topid & TSS_OP_INSTAB)) ? TRUE : FALSE;
+	
 	while((cmd_len -= len) > 0 )
 	{
 		cmd = &(cmd[len]);
@@ -1401,6 +1503,7 @@ par_col_info(char *cmd, int cmd_len, int querytype)
 				command = command->left;
 			}
 
+			
 		        command->left = par_bld_resdom(colname, coltype, ++colid, 0);
 		}
 		else if (   (querytype == INSERT) || (querytype == ADDSERVER) 
@@ -1422,7 +1525,7 @@ par_col_info(char *cmd, int cmd_len, int querytype)
 					traceprint("Colum number is invalid in the insertion.\n");
 					return FALSE;
 				}
-				colinfor = meta_get_colinfor(colid, 
+				colinfor = meta_get_colinfor(colid, NULL, 
 						      tss->tmeta_hdr->col_num, 
 						      tss->tcol_info);
 			}
@@ -1451,6 +1554,26 @@ par_col_info(char *cmd, int cmd_len, int querytype)
 			command->left->right = par_bld_const(coldata, (end - start),
 							INVALID_TYPE, NULL, 0);
 		}
+		else if (querytype == CRTINDEX)
+		{
+			command = tss->tcmd_parser;
+
+			while(command->right)
+			{
+				command = command->right;
+			}
+
+			while(command->left)
+			{
+				command = command->left;
+			}
+
+			MEMSET(colname, 256);
+
+			MEMCPY(colname, coldata, (end - start));
+			
+			command->left = par_bld_resdom(colname, NULL, -1, 0);
+		}
 		
 		len += 2;
 	}
@@ -1469,19 +1592,18 @@ par_col_info4where(char *cmd, int cmd_len, int querytype, char *colname)
 	int	end;
 	int	len;
 	TREE	*command;
-	int	rg_insert;
 	int	leftlen;
 	int	rightlen;
 	int	left_context;
 	char	*leftdata;
 	char	*rightdata;
+	int	rg_selwhere;
+	COLINFO	*colinfor;
 
 
 	Assert(   (querytype == SELECTWHERE) || (querytype == SELECTCOUNT)
 	       || (querytype == SELECTSUM));
 	
-	rg_insert = ((tss->topid & TSS_OP_RANGESERVER) && (tss->topid & TSS_OP_INSTAB)) ? TRUE : FALSE;
-
 	rightdata = NULL;
 	leftdata = NULL;
 	command = tss->tcmd_parser;
@@ -1533,8 +1655,18 @@ par_col_info4where(char *cmd, int cmd_len, int querytype, char *colname)
 		len +=2;
 	}
 
+	rg_selwhere = (   (tss->topid & TSS_OP_RANGESERVER) 
+		       && (tss->topid & TSS_OP_SELWHERE)) ? TRUE : FALSE;
+
+	if (rg_selwhere)
+	{
+		colinfor = meta_get_colinfor(0, colname, tss->ttab_hdr->tab_col,
+						      tss->tcol_info);
+	}
 	
-	command->left->right = par_bld_const(leftdata, leftlen, INVALID_TYPE,
+	command->left->right = par_bld_const(leftdata, leftlen, 
+						rg_selwhere ? colinfor->col_type 
+								: INVALID_TYPE,
 						rightdata, rightlen);
 	
 	return TRUE;
@@ -1698,3 +1830,142 @@ par_release_orandplan(ORANDPLAN *orandplan)
 		MEMFREEHEAP(tmp);
 	}
 }
+
+int
+par_process_orplan(ORANDPLAN *cmd, char *rp, int minrowlen)
+{
+	int		coloffset;
+	int		length;
+	char		*colp;
+	char		*leftval;
+	int		leftvallen;
+	char		*rightval;
+	int		rightvallen;
+	int		result;
+	int		rtn_stat;
+	int		coltype;
+	SRCHCLAUSE	*srchclause;
+
+	
+	if (cmd == NULL)
+	{
+		return TRUE;
+	}
+
+	rtn_stat = FALSE;
+	
+	while(cmd)
+	{
+		srchclause = &(cmd->orandsclause);
+		
+		coloffset = srchclause->scterms->left->sym.resdom.coloffset;
+		coltype = srchclause->scterms->left->sym.resdom.coltype;
+
+		colp = row_locate_col(rp, coloffset, minrowlen, &length);
+
+		leftval = srchclause->scterms->left->right->sym.constant.value;
+		leftvallen = srchclause->scterms->left->right->sym.constant.len;
+		rightval = srchclause->scterms->left->right->sym.constant.rightval;
+		rightvallen = srchclause->scterms->left->right->sym.constant.rightlen;
+
+		result = row_col_compare(coltype, colp, length, leftval, 
+					leftvallen);
+
+		if (result == LE)
+		{
+			cmd = cmd->orandplnext;
+			continue;
+		}
+
+		result = row_col_compare(coltype, colp, length, rightval, 
+					rightvallen);
+
+		if (result == GR)
+		{
+			cmd = cmd->orandplnext;
+			continue;
+		}
+
+		
+		rtn_stat = TRUE;
+
+		break;
+		
+	}
+
+	return rtn_stat;
+}
+
+
+
+int
+par_process_andplan(ORANDPLAN *cmd, char *rp, int minrowlen)
+{
+	int		coloffset;
+	int		length;
+	char		*colp;
+	char		*leftval;
+	int		leftvallen;
+	char		*rightval;
+	int		rightvallen;
+	int		result;
+	int		rtn_stat;
+	int		coltype;
+	SRCHCLAUSE	*srchclause;
+
+	
+	if (cmd == NULL)
+	{
+		return TRUE;
+	}
+
+	rtn_stat = FALSE;
+		
+	while(cmd)
+	{
+		srchclause = &(cmd->orandsclause);
+		
+		coloffset = srchclause->scterms->left->sym.resdom.coloffset;
+		coltype = srchclause->scterms->left->sym.resdom.coltype;
+
+		colp = row_locate_col(rp, coloffset, minrowlen, &length);
+
+		leftval = srchclause->scterms->left->right->sym.constant.value;
+		leftvallen = srchclause->scterms->left->right->sym.constant.len;
+		rightval = srchclause->scterms->left->right->sym.constant.rightval;
+		rightvallen = srchclause->scterms->left->right->sym.constant.rightlen;
+
+		if (strncasecmp("*", leftval, leftvallen) != 0)
+		{
+			result = row_col_compare(coltype, colp, length, leftval, 
+						leftvallen);
+
+			if (result == LE)
+			{
+				break;
+			}
+		}
+
+		if (strncasecmp("*", rightval, rightvallen) != 0)
+		{
+			result = row_col_compare(coltype, colp, length, rightval, 
+						rightvallen);
+
+			if (result == GR)
+			{
+				break;
+			}
+		}
+		
+		cmd = cmd->orandplnext;
+		
+	}
+
+	if (cmd == NULL)
+	{
+		rtn_stat = TRUE;
+	}
+
+	return rtn_stat;
+}
+

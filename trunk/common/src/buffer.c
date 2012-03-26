@@ -22,6 +22,7 @@
 #include "master/metaserver.h"
 #include "utils.h"
 #include "buffer.h"
+#include "rpcfmt.h"
 #include "block.h"
 #include "cache.h"
 #include "dskio.h"

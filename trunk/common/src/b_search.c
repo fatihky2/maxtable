@@ -21,6 +21,7 @@
 #include "utils.h"
 #include "row.h"
 #include "buffer.h"
+#include "rpcfmt.h"
 #include "block.h"
 #include "tss.h"
 #include "b_search.h"
@@ -55,6 +56,37 @@ nextrow:
 	srchinfo->brow = ROW_GETPTR_FROM_OFFTAB(bp->bblk, srchinfo->brownum);
 	srchinfo->boffset = ROW_OFFSET_PTR(bp->bblk)[-((int)(srchinfo->brownum))];
 
+	if ((tss->topid & TSS_OP_RANGESERVER) && (ROW_IS_DELETED(srchinfo->brow)))
+	{	
+				
+		Assert(   (bp->bblk->bblkno == 0) 
+		       && (srchinfo->boffset == BLKHEADERSIZE));
+
+		
+		if (   (tabinfo->t_sinfo->sistate & SI_INS_DATA) 
+		    || (tabinfo->t_stat & TAB_SRCH_RANGE))
+		{
+			result = GR;
+			goto do_gr_case;
+		}
+		
+		else if (tabinfo->t_stat & (TAB_SRCH_DATA | TAB_DEL_DATA))
+		{				
+			result = LE;
+
+			
+			if (srchinfo->bhigh > srchinfo->blow)
+			{
+				BSRCH_MOVE_LEFT(bp->bblk, srchinfo);
+
+				
+				goto nextrow;
+			}
+		}
+
+		goto finish;
+	}		
+
 	key_in_blk = row_locate_col(srchinfo->brow, coloffset, bp->bblk->bminlen, 
 				    &keylen_in_blk);
 
@@ -64,37 +96,6 @@ nextrow:
 	{
 	    case EQ:
 	    	
-		if (tss->topid & TSS_OP_RANGESERVER)
-		{	
-			
-			if (ROW_IS_DELETED(srchinfo->brow))
-			{
-				Assert(   (bp->bblk->bblkno == 0) 
-				       && (srchinfo->boffset == BLKHEADERSIZE));
-
-				
-				if (tabinfo->t_sinfo->sistate & SI_INS_DATA) 
-				{
-					result = GR;
-					goto do_gr_case;
-				}
-				
-				else if (tabinfo->t_stat & (TAB_SRCH_DATA | TAB_DEL_DATA))
-				{				
-					result = LE;
-
-					
-					if (srchinfo->bhigh > srchinfo->blow)
-					{
-						BSRCH_MOVE_LEFT(bp->bblk, srchinfo);
-
-						
-						goto nextrow;
-					}
-				}
-			}				
-		}		
-
 	    	break;
 		
 	    case LE:
@@ -181,6 +182,7 @@ do_gr_case:
 	    	break;
 	}
 
+finish:
 	srchinfo->bcomp = result;
 
 	return;

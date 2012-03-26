@@ -21,6 +21,7 @@
 #include "utils.h"
 #include "memcom.h"
 #include "buffer.h"
+#include "rpcfmt.h"
 #include "block.h"
 #include "cache.h"
 #include "tss.h"

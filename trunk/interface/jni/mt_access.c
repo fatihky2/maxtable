@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include "rpcfmt.h"
 #include "interface.h"
 
 JNIEXPORT void JNICALL Java_org_maxtable_client_MtAccess_createContext

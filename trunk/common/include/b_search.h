@@ -43,7 +43,7 @@ do								\
 	(srchinfo)->brow = NULL;				\
 	(srchinfo)->brownum = (low + high)>>1;			\
 	(srchinfo)->blow = low;					\
-	(srchinfo)->bhigh	= high;				\
+	(srchinfo)->bhigh = high;				\
 	(srchinfo)->bcomp = result;				\
 	(srchinfo)->btotrows = total;				\
 	(srchinfo)->boffset = 0;				\

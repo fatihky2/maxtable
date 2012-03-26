@@ -21,16 +21,16 @@
 #include "global.h"
 #include "utils.h"
 #include "master/metaserver.h"
+#include "rpcfmt.h"
+#include "parser.h"
 #include "ranger/rangeserver.h"
 #include "netconn.h"
 #include "conf.h"
 #include "token.h"
 #include "tss.h"
-#include "parser.h"
 #include "memcom.h"
 #include "strings.h"
 #include "trace.h"
-#include "row.h"
 #include "type.h"
 #include "interface.h"
 #include "row.h"
@@ -48,7 +48,7 @@ static int
 mt_cli_prt_help(char *cmd);
 
 static RG_CONN *
-mt_cli_rgsel_ranger(CONN * connection, char * cmd, MT_CLI_EXEC_CONTEX *exec_ctx, char *ip, int port);
+mt_cli_rgsel__ranger(CONN * connection, char * cmd, MT_CLI_EXEC_CONTEX *exec_ctx, char *ip, int port);
 
 static int
 mt_cli_rgsel_meta(CONN * connection, char * cmd, char **meta_resp);
@@ -66,7 +66,7 @@ static char *
 mt_cli_get__nextrow(RANGE_QUERYCTX *rgsel_cont, int *rlen);
 
 static int
-mt_cli_send_bigdata_req_rg(CONN * connection, char * cmd, MT_CLI_EXEC_CONTEX *exec_ctx, 
+mt_cli_rgsel_ranger(CONN * connection, char * cmd, MT_CLI_EXEC_CONTEX *exec_ctx, 
 				char *ip, int port);
 
 
@@ -1041,7 +1041,8 @@ finish:
 }
 
 /*
-** This routine processes the command of SELECTRANGE and SELECTWHERE.
+** This routine processes the command of SELECTRANGE and SELECTWHERE 
+** and CREATE INDEX.
 **
 ** Parameters:
 **	connection	- (IN) the context of net connection.
@@ -1060,7 +1061,6 @@ mt_cli_exec_selrang(CONN * connection, char * cmd, MT_CLI_EXEC_CONTEX **exec_ctx
 {
 	char		*ip;		/* Ranger address. */
 	int		port;		/* Ranger port. */
-	SELWHERE	*selwh;		/* Ptr to the context of the SELECTWHERE. */
 	SVR_IDX_FILE	*rglist;	/* Ptr to the list of ranger. */
 	int		rtn_state;	/* Return state. */
 	char		*meta_resp;
@@ -1083,13 +1083,17 @@ mt_cli_exec_selrang(CONN * connection, char * cmd, MT_CLI_EXEC_CONTEX **exec_ctx
 
 	Assert(((RPCRESP *)(meta_resp))->status_code & RPC_SUCCESS);
 	
-	
-	/* Get the context of the selectwhere. */
-	selwh = (SELWHERE *)(((RPCRESP *)(meta_resp))->result);
-
 	/* Get the ranger profiler. */
-	rglist =  (SVR_IDX_FILE *)(((RPCRESP *)(meta_resp))->result + sizeof(SELWHERE));		
-	
+	if (querytype == CRTINDEX)
+	{
+		rglist =  (SVR_IDX_FILE *)(((RPCRESP *)(meta_resp))->result + 
+				sizeof(IDXMETA));
+	}
+	else
+	{
+		rglist =  (SVR_IDX_FILE *)(((RPCRESP *)(meta_resp))->result + 
+				sizeof(SELWHERE));		
+	}
 
 	rg_prof = (RANGE_PROF *)(rglist->data);
 	
@@ -1101,7 +1105,8 @@ mt_cli_exec_selrang(CONN * connection, char * cmd, MT_CLI_EXEC_CONTEX **exec_ctx
 		}
 	}
 		
-	*exec_ctx = (MT_CLI_EXEC_CONTEX *)MEMALLOCHEAP(rg_cnt * sizeof(MT_CLI_EXEC_CONTEX));
+	*exec_ctx = (MT_CLI_EXEC_CONTEX *)MEMALLOCHEAP(rg_cnt * 
+						sizeof(MT_CLI_EXEC_CONTEX));
 	MEMSET(*exec_ctx, rg_cnt * sizeof(MT_CLI_EXEC_CONTEX));
 
 	t_exec_ctx = *exec_ctx;
@@ -1125,7 +1130,7 @@ mt_cli_exec_selrang(CONN * connection, char * cmd, MT_CLI_EXEC_CONTEX **exec_ctx
 			** Once one ranger server hit the connection issue,
 			** it will abort this session.
 			*/
-			if (!mt_cli_send_bigdata_req_rg(connection, cmd,
+			if (!mt_cli_rgsel_ranger(connection, cmd,
 					t_exec_ctx, ip, port))
 			{
 				rtn_state = CLI_FAIL;
@@ -1148,7 +1153,7 @@ exit:
 
 
 static int
-mt_cli_send_bigdata_req_rg(CONN * connection, char * cmd, MT_CLI_EXEC_CONTEX *exec_ctx, 
+mt_cli_rgsel_ranger(CONN * connection, char * cmd, MT_CLI_EXEC_CONTEX *exec_ctx, 
 				char *ip, int port)
 {
 	RG_CONN		*rg_connection;	/* The context of connection to the ranger. */
@@ -1161,11 +1166,12 @@ mt_cli_send_bigdata_req_rg(CONN * connection, char * cmd, MT_CLI_EXEC_CONTEX *ex
 	rtn_state = TRUE;
 	
 	/* Switch the query to the range server. */
-	rg_connection = mt_cli_rgsel_ranger(connection, cmd, exec_ctx, ip, port);
+	rg_connection = mt_cli_rgsel__ranger(connection, cmd, exec_ctx, ip, port);
 
 	if (   (rg_connection == NULL) 
 	    || (   (exec_ctx->querytype != SELECTCOUNT) 
-	        && (exec_ctx->querytype != SELECTSUM) 
+	        && (exec_ctx->querytype != SELECTSUM)
+	        && (exec_ctx->querytype != CRTINDEX)
 		&& (!mt_cli_rgsel_is_bigdata(rg_connection, &bigdataport))))
 	{
 		rtn_state = FALSE;
@@ -1174,7 +1180,8 @@ mt_cli_send_bigdata_req_rg(CONN * connection, char * cmd, MT_CLI_EXEC_CONTEX *ex
 
 	/* The result from SELECTCOUNT doesn't need to be sent by the bigdata port. */
 	if (   (exec_ctx->querytype == SELECTCOUNT)
-	    || (exec_ctx->querytype == SELECTSUM))
+	    || (exec_ctx->querytype == SELECTSUM)
+	    || (exec_ctx->querytype == CRTINDEX))
 	{
 		rtn_state = TRUE;
 		exec_ctx->rg_conn = rg_connection;
@@ -1329,7 +1336,6 @@ mt_cli_rgsel_meta(CONN * connection, char * cmd, char **meta_resp)
 {
 	LOCALTSS(tss);
 	char		send_buf[LINE_BUF_SIZE];/* Buffer for the data sending. */
-	char		tab_name[64];		/* Table name. */
 	int		send_buf_size;		/* Buffer size. */
 	RPCRESP		*resp;			/* Ptr to the response information. */
 	int		querytype;		/* Query type. */
@@ -1342,9 +1348,6 @@ mt_cli_rgsel_meta(CONN * connection, char * cmd, char **meta_resp)
 	meta_retry = 0;
 
 	querytype = ((TREE *)(tss->tcmd_parser))->sym.command.querytype;
-	MEMSET(tab_name, 64);
-	MEMCPY(tab_name, ((TREE *)(tss->tcmd_parser))->sym.command.tabname,
-		((TREE *)(tss->tcmd_parser))->sym.command.tabname_len);
 
 retry:
 
@@ -1419,7 +1422,7 @@ finish:
 
 /*
 ** Send the requirment to the range server and receive the result of query
-** in the case of SELECTRANGE and SELECTWHERE.
+** in the case of SELECTRANGE and SELECTWHERE or CREATE INDEX.
 **
 ** Parameters:
 **	connection	- (IN) the context of net connection.
@@ -1435,8 +1438,8 @@ finish:
 **	None
 **
 */
-RG_CONN *
-mt_cli_rgsel_ranger(CONN * connection, char * cmd, MT_CLI_EXEC_CONTEX *exec_ctx, 
+static RG_CONN *
+mt_cli_rgsel__ranger(CONN * connection, char * cmd, MT_CLI_EXEC_CONTEX *exec_ctx, 
 			char *ip, int port)
 {
 	char	*send_rg_buf;			/* Buffer for the data sending
@@ -1448,11 +1451,13 @@ mt_cli_rgsel_ranger(CONN * connection, char * cmd, MT_CLI_EXEC_CONTEX *exec_ctx,
 						** connection to the range 
 						** server.
 						*/
+	TABLEHDR *tab_hdr;
 	int 	i;
 	int	k;
 
 
 	rg_connection = NULL;
+	tab_hdr = NULL;
 	k = -1;
 	
 	for(i = 0; i < connection->rg_list_len; i++)
@@ -1517,7 +1522,7 @@ mt_cli_rgsel_ranger(CONN * connection, char * cmd, MT_CLI_EXEC_CONTEX *exec_ctx,
 		}
 	}
 
-	int send_buf_size = strlen(cmd);
+	int cmd_size = strlen(cmd);
 
 #if 0
 	if (exec_ctx->querytype == SELECTRANGE)
@@ -1533,41 +1538,90 @@ mt_cli_rgsel_ranger(CONN * connection, char * cmd, MT_CLI_EXEC_CONTEX *exec_ctx,
 				((RPCRESP *)(exec_ctx->meta_resp))->result, 
 				sizeof(SELRANGE));
 		MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN + sizeof(SELRANGE), cmd, 
-				send_buf_size);
+				cmd_size);
 
 		/* Send the requirment to the range server. */
 		tcp_put_data(rg_connection->connection_fd, send_rg_buf, 
-			(sizeof(SELRANGE) + send_buf_size + RPC_MAGIC_MAX_LEN));
+			(sizeof(SELRANGE) + cmd_size + RPC_MAGIC_MAX_LEN));
 	}
 	else if (exec_ctx->querytype == SELECTWHERE)
 	{
 #endif
-	MEMCPY(((RPCRESP *)(exec_ctx->meta_resp))->result, 
-			RPC_SELECTWHERE_MAGIC, RPC_MAGIC_MAX_LEN);
-
-
-	TABLEHDR *tab_hdr = (TABLEHDR *)(((RPCRESP *)(exec_ctx->meta_resp))->result +
-				sizeof(SELWHERE) + sizeof(SVR_IDX_FILE));
+	MEMSET(((RPCRESP *)(exec_ctx->meta_resp))->result, RPC_MAGIC_MAX_LEN);
 
 	
-	send_rg_buflen = RPC_MAGIC_MAX_LEN + sizeof(SELWHERE) + sizeof(TABLEHDR)
-			+ (tab_hdr->tab_col) * sizeof(COLINFO) + send_buf_size;
-	
-	send_rg_buf = malloc(send_rg_buflen);
-	MEMSET(send_rg_buf, send_rg_buflen);
-	MEMCPY(send_rg_buf, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
+	if (exec_ctx->querytype == CRTINDEX)
+	{
+		MEMCPY(((RPCRESP *)(exec_ctx->meta_resp))->result, 
+				RPC_CRT_INDEX_MAGIC, RPC_MAGIC_MAX_LEN);
+
+		tab_hdr = (TABLEHDR *)(((RPCRESP *)(exec_ctx->meta_resp))->result +
+					sizeof(IDXMETA) + sizeof(SVR_IDX_FILE));
+
+		
+		send_rg_buflen = RPC_MAGIC_MAX_LEN + sizeof(IDXMETA) + sizeof(TABLEHDR)
+				+ (tab_hdr->tab_col) * sizeof(COLINFO) + cmd_size;
+		
+		send_rg_buf = malloc(send_rg_buflen);
+		MEMSET(send_rg_buf, send_rg_buflen);
+
+//		MEMCPY(send_rg_buf, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
+
+		int	buf_idx = 0;
+
+		PUT_TO_BUFFER(send_rg_buf, buf_idx, RPC_REQUEST_MAGIC, 
+				RPC_MAGIC_MAX_LEN);
+
+		PUT_TO_BUFFER(send_rg_buf, buf_idx, 
+				((RPCRESP *)(exec_ctx->meta_resp))->result, 
+				sizeof(IDXMETA));
+		
+//		MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN, 
+//				((RPCRESP *)(exec_ctx->meta_resp))->result, 
+//				sizeof(IDXMETA));
+
+		PUT_TO_BUFFER(send_rg_buf, buf_idx, (char *)tab_hdr,
+				sizeof(TABLEHDR)+ (tab_hdr->tab_col) * sizeof(COLINFO));
+
+//		MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN + sizeof(IDXMETA), (char *)tab_hdr,
+//				sizeof(TABLEHDR)+ (tab_hdr->tab_col) * sizeof(COLINFO));
+
+		PUT_TO_BUFFER(send_rg_buf, buf_idx, cmd, cmd_size);
+
+//		MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN + sizeof(IDXMETA) +
+//				sizeof(TABLEHDR) + (tab_hdr->tab_col) * sizeof(COLINFO), 
+//				cmd, cmd_size);
+	}
+	else
+	{
+		/* SELECTWHERE/SELECTRANGE/COUNT/SUM. */
+		MEMCPY(((RPCRESP *)(exec_ctx->meta_resp))->result, 
+				RPC_SELECTWHERE_MAGIC, RPC_MAGIC_MAX_LEN);
 
 
-	MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN, 
-			((RPCRESP *)(exec_ctx->meta_resp))->result, 
-			sizeof(SELWHERE));
+		tab_hdr = (TABLEHDR *)(((RPCRESP *)(exec_ctx->meta_resp))->result +
+					sizeof(SELWHERE) + sizeof(SVR_IDX_FILE));
 
-	MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN + sizeof(SELWHERE), (char *)tab_hdr,
-			sizeof(TABLEHDR)+ (tab_hdr->tab_col) * sizeof(COLINFO));
-	
-	MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN + sizeof(SELWHERE) +
-			sizeof(TABLEHDR) + (tab_hdr->tab_col) * sizeof(COLINFO), 
-			cmd, send_buf_size);
+		
+		send_rg_buflen = RPC_MAGIC_MAX_LEN + sizeof(SELWHERE) + sizeof(TABLEHDR)
+				+ (tab_hdr->tab_col) * sizeof(COLINFO) + cmd_size;
+		
+		send_rg_buf = malloc(send_rg_buflen);
+		MEMSET(send_rg_buf, send_rg_buflen);
+		MEMCPY(send_rg_buf, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
+
+
+		MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN, 
+				((RPCRESP *)(exec_ctx->meta_resp))->result, 
+				sizeof(SELWHERE));
+
+		MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN + sizeof(SELWHERE), (char *)tab_hdr,
+				sizeof(TABLEHDR)+ (tab_hdr->tab_col) * sizeof(COLINFO));
+		
+		MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN + sizeof(SELWHERE) +
+				sizeof(TABLEHDR) + (tab_hdr->tab_col) * sizeof(COLINFO), 
+				cmd, cmd_size);
+	}
 
 	/* Send the requirment to the range server. */
 	tcp_put_data(rg_connection->connection_fd, send_rg_buf, send_rg_buflen);
@@ -1686,7 +1740,8 @@ mt_cli_read_range(MT_CLI_EXEC_CONTEX *exec_ctx)
 	
 
 	if (   (exec_ctx->querytype == SELECTCOUNT)
-	    || (exec_ctx->querytype == SELECTSUM))
+	    || (exec_ctx->querytype == SELECTSUM)
+	    || (exec_ctx->querytype == CRTINDEX))
 	{
 		sockfd = exec_ctx->rg_conn->connection_fd;
 	}
@@ -1705,7 +1760,8 @@ retry:
 		traceprint("\n need to re-get rg meta \n");
 		
 		if (   (exec_ctx->querytype == SELECTCOUNT)
-		    || (exec_ctx->querytype == SELECTSUM))
+		    || (exec_ctx->querytype == SELECTSUM)
+		    || (exec_ctx->querytype == CRTINDEX))
 		{
 			exec_ctx->rg_conn->status = CLOSED;
 		}
@@ -2008,6 +2064,15 @@ mt_cli_exec_builtin(MT_CLI_EXEC_CONTEX *exec_ctx)
 		exec_ctx->sum_colval = *(int *)(((RPCRESP *)(exec_ctx->rg_resp))->result);
 		
 		break;
+		
+	    case CRTINDEX:
+	    	if (!mt_cli_read_range(exec_ctx))
+		{
+			exec_ctx->status |= CLICTX_RANGER_IS_UNCONNECT;
+			rtn_stat = FALSE;
+		}
+		
+	    	break;
 
 	    default:
 	    	break;
@@ -2080,7 +2145,7 @@ mt_cli_get_colvalue(MT_CLI_EXEC_CONTEX *exec_ctx, char *rowbuf, int col_idx,
 	if ((col_idx < 0) || ((col_idx + 1) > tab_hdr->tab_col))
 	{
 		traceprint("Can't find the column.\n");
-		return FALSE;
+		return NULL;
 	}
 	
 	meta_buf += sizeof(TABLEHDR);
@@ -2221,6 +2286,10 @@ mt_cli_open_execute(CONN *connection, char *cmd, MT_CLI_EXEC_CONTEX **exec_ctx)
 	    case SELECTSUM:
 	    	rtn_stat = par_selwherecnt_tab(cmd + s_idx, SELECTSUM);
 	    	break;
+		
+	    case CRTINDEX:
+	    	rtn_stat = par_crt_idx_tab(cmd + s_idx, CRTINDEX);
+		break;
 
 	    default:
 	    	rtn_stat = FALSE;
@@ -2253,6 +2322,7 @@ mt_cli_open_execute(CONN *connection, char *cmd, MT_CLI_EXEC_CONTEX **exec_ctx)
 	    case SELECTWHERE:
 	    case SELECTCOUNT:
 	    case SELECTSUM:
+	    case CRTINDEX:
 	    	rtn_stat = mt_cli_exec_selrang(connection, cmd, exec_ctx, querytype);
 	    	
 		break;

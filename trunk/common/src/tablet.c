@@ -20,6 +20,7 @@
 #include "master/metaserver.h"
 #include "strings.h"
 #include "buffer.h"
+#include "rpcfmt.h"
 #include "block.h"
 #include "cache.h"
 #include "memcom.h"
@@ -362,6 +363,7 @@ tablet_bld_row(char *sstab_rp, int sstab_rlen, char *tab_name, int tab_name_len,
 
 	min_rlen = sstab_idx - sizeof(int);
 
+	
 	if (!TYPE_IS_FIXED(keycol_type))
 	{
 		
@@ -370,6 +372,8 @@ tablet_bld_row(char *sstab_rp, int sstab_rlen, char *tab_name, int tab_name_len,
 		sstab_idx += COLOFFSETENTRYSIZE;
 
 		min_rlen -= keycolen;
+
+		Assert(min_rlen == ROW_MINLEN_IN_TABLET);
 	}
 	
 	
@@ -388,7 +392,7 @@ tablet_bld_row(char *sstab_rp, int sstab_rlen, char *tab_name, int tab_name_len,
 
 
 char *
-tablet_srch_row(TABINFO *usertabinfo, TABLEHDR *tablehdr, int tabid, int sstabid, 
+tablet_srch_row(TABINFO *usertabinfo, int tabid, int sstabid, 
 			char *systab, char *key, int keylen)
 {
 	TABINFO		*tabinfo;
@@ -428,7 +432,7 @@ tablet_srch_row(TABINFO *usertabinfo, TABLEHDR *tablehdr, int tabid, int sstabid
 	bufunkeep(bp->bsstab);
 	session_close(tabinfo);
 
-	if (tabinfo->t_stat & TAB_TABLET_KEYROW_CHG)
+	if ((usertabinfo)&& (tabinfo->t_stat & TAB_TABLET_KEYROW_CHG))
 	{
 		usertabinfo->t_stat |= TAB_TABLET_KEYROW_CHG;
 	}
@@ -443,7 +447,7 @@ tablet_srch_row(TABINFO *usertabinfo, TABLEHDR *tablehdr, int tabid, int sstabid
 
 
 char *
-tablet_get_1st_or_last_row(TABLEHDR *tablehdr, int tabid, int sstabid, char *systab, int firstrow)
+tablet_get_1st_or_last_row(int tabid, int sstabid, char *systab, int firstrow)
 {
 	TABINFO		*tabinfo;
 	int		minrowlen;
@@ -682,8 +686,7 @@ tablet_schm_del_row(int tabid, int sstabid, char *systab, char *row)
 
 
 char *
-tablet_schm_srch_row(TABLEHDR *tablehdr, int tabid, int sstabid, 
-			  char *systab, char *key, int keylen)
+tablet_schm_srch_row(int tabid, int sstabid, char *systab, char *key, int keylen)
 {
 	TABINFO		*tabinfo;
 	int		minrowlen;
@@ -732,7 +735,7 @@ tablet_schm_srch_row(TABLEHDR *tablehdr, int tabid, int sstabid,
 }
 
 char *
-tablet_schm_get_row(TABLEHDR *tablehdr, int tabid, int sstabid, char *systab, int rowno)
+tablet_schm_get_row(int tabid, int sstabid, char *systab, int rowno)
 {
 	TABINFO		*tabinfo;
 	int		minrowlen;
@@ -1248,6 +1251,57 @@ finish:
 
 	return rtn_stat;
 	
+}
+
+
+int
+tablet_schm_get_totrow(int tabid, int sstabid, char *systab, char *key, int keylen)
+{
+	TABINFO		*tabinfo;
+	int		minrowlen;
+	BUF		*bp;
+	BLK_ROWINFO	blk_rowinfo;
+	int		totrow;
+
+
+	totrow = 0;
+	
+	tabinfo = MEMALLOCHEAP(sizeof(TABINFO));
+	MEMSET(tabinfo, sizeof(TABINFO));
+
+	tabinfo->t_sinfo = (SINFO *)MEMALLOCHEAP(sizeof(SINFO));
+	MEMSET(tabinfo->t_sinfo, sizeof(SINFO));
+
+	tabinfo->t_rowinfo = &blk_rowinfo;
+	MEMSET(tabinfo->t_rowinfo, sizeof(BLK_ROWINFO));
+
+	tabinfo->t_dold = tabinfo->t_dnew = (BUF *) tabinfo;
+
+	tabinfo_push(tabinfo);
+
+	minrowlen = ROW_MINLEN_IN_TABLETSCHM;
+
+	TABINFO_INIT(tabinfo, systab,NULL, 0, tabinfo->t_sinfo, minrowlen,
+		     TAB_SCHM_SRCH, tabid, sstabid);
+
+	
+	SRCH_INFO_INIT(tabinfo->t_sinfo, key, keylen, 
+		       TABLETSCHM_KEY_COLID_INROW, VARCHAR, -1);
+			
+	
+	bp = blk_getsstable(tabinfo);
+
+	totrow = blk_get_totrow_sstab(bp->bsstab);
+	
+	bufunkeep(bp->bsstab);
+	session_close(tabinfo);
+	
+	MEMFREEHEAP(tabinfo->t_sinfo);
+	MEMFREEHEAP(tabinfo);
+	
+	tabinfo_pop();
+
+	return totrow;
 }
 
 

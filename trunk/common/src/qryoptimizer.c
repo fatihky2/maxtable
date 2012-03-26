@@ -1,5 +1,5 @@
 /*
-** metadata.h 2011-02-15 xueyingfei
+** qryoptimizer.c 2012-03-18 xueyingfei
 **
 ** Copyright flying/xueyingfei.
 **
@@ -18,27 +18,48 @@
 ** permissions and limitations under the License.
 */
 
+#include "master/metaserver.h"
+#include "parser.h"
 
-#ifndef METADATA_H_
-#define METADATA_H_
-
-
-struct col_info;
-struct buf;
-
-struct col_info *
-meta_get_colinfor(int colid, char *col_name, int totcol, struct col_info *colinfor);
-
-char *
-meta_get_coldata(struct buf *bp, int rowoffset, int coloffset);
 
 int
-meta_save_sysobj(char *tab_dir, char *tab_hdr);
+qryopt_get_colmap_by_cmd(TREE *command, COLINFO *colinfo, int colnum)
+{
+	int	i;
+	int	colmap;
+
+
+	colmap = 0;
+	
+	for (i = 0; i < colnum; i++)
+	{
+		if ((par_get_constant_by_colname(command, 
+					colinfo[i].col_name)) != NULL)
+		{
+			TAB_COL_SET_INDEX(colmap, colinfo[i].col_id);
+		}
+	}
+
+	return colmap;	 
+}
 
 int
-meta_save_sysindex(char *sysindex);
+qryopt_get_index_col(int colmap)
+{
+	int	colidx;
+	int	tmp_colmap;
 
 
+	colidx = 0;
+	tmp_colmap = colmap;
+	
+	while(tmp_colmap)				
+	{					
+		tmp_colmap >>=1;			
+		colidx++;			
+	}
 
-#endif
+	return colidx;
+}
+
 

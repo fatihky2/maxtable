@@ -20,6 +20,7 @@
 #include "master/metaserver.h"
 #include "strings.h"
 #include "buffer.h"
+#include "rpcfmt.h"
 #include "block.h"
 #include "cache.h"
 #include "memcom.h"
@@ -127,7 +128,8 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 
 
 	
-	ins_nxtsstab = (srcbp->bblk->bblkno > ((BLK_CNT_IN_SSTABLE / 2) - 1)) ? TRUE : FALSE;
+	ins_nxtsstab = (srcbp->bblk->bblkno > ((BLK_CNT_IN_SSTABLE / 2) - 1))
+			? TRUE : FALSE;
 
 	nextblk = srcbp->bsstab->bblk;
 
@@ -173,7 +175,8 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 	MEMSET(destbuf->bsstab_name, 256);
 
 //	sstab_namebyname(srctabinfo->t_sstab_name, destbuf->bsstab_name);
-	sstab_namebyid(srctabinfo->t_sstab_name, destbuf->bsstab_name, srctabinfo->t_insmeta->res_sstab_id);
+	sstab_namebyid(srctabinfo->t_sstab_name, destbuf->bsstab_name, 
+				srctabinfo->t_insmeta->res_sstab_id);
 
 	tabinfo = MEMALLOCHEAP(sizeof(TABINFO));
 	MEMSET(tabinfo, sizeof(TABINFO));
@@ -190,7 +193,8 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 
 	LOGREC logrec;
 
-	log_build(&logrec, LOG_BEGIN, 0, 0, srctabinfo->t_sstab_name, NULL, 0, 0, 0);
+	log_build(&logrec, LOG_BEGIN, 0, 0, srctabinfo->t_sstab_name, 
+							NULL, 0, 0, 0);
 
 	log_insert_sstab_split(tss->rglogfile, &logrec, SPLIT_LOG);
 
@@ -388,7 +392,8 @@ sstab_map_release(int tabid, int flag, TAB_SSTAB_MAP *tab_sstab_map)
 			}
 			else
 			{
-				sstab_map_last->nexttabmap = sstab_map_cur->nexttabmap;
+				sstab_map_last->nexttabmap = 
+						sstab_map_cur->nexttabmap;
 
 				free(sstab_map_cur);
 			}
@@ -444,3 +449,18 @@ sstab_map_put(int tabid, TAB_SSTAB_MAP *tab_sstab_map)
 	return TRUE;
 }
 
+int
+sstab_bld_name(char *sstab_name, char *tab_name, int tab_name_len, int sstabid)
+{
+	MEMSET(sstab_name, SSTABLE_NAME_MAX_LEN);
+	
+	MEMCPY(sstab_name, tab_name, tab_name_len);
+
+//	build_file_name("tablet", tablet_name, tabletid);
+
+//	MEMCPY((sstab_name + tab_name_len), tablet_name, STRLEN(tablet_name));
+	
+	build_file_name("sstable", sstab_name + tab_name_len, sstabid);
+
+	return TRUE;
+}

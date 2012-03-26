@@ -185,7 +185,43 @@ typedef struct table_hdr
 	int	tab_stat;		/* the state of table */
 	int 	offset_c1;		/* the column of tablet name */
 	int 	offset_c2;		/* the column of key */
+	int	index_root;		/* The number of sstable for index root */
+	int	index_map;		/* This map will flag which column is 
+					** indexed.
+					*/
 } TABLEHDR;
+
+/*
+** INT 32 bit
+**	31 <----- 0    column number
+** 00000000  00000000  00000000  00000000
+**
+** NOTE: the id of column start from the '1' (column id of cluster key)
+*/
+#define	TAB_COL_IS_INDEX(index_map, col_num)	((index_map >> (col_num - 1)) & 0x1)
+#define	TAB_COL_SET_INDEX(index_map, col_num)	(index_map |= (1 << (col_num - 1)))
+#define	TAB_COL_CLEAR_INDEX(index_map, col_num)	(index_map &= ~(1 << (col_num - 1)))
+
+
+
+/* Get the column beased on index. */
+#define INDEX_MAP_GET_COLUMN_NUM(col_map, col_idx)	\
+	do{						\
+		if (col_map & 0x01)			\
+		{					\
+			break;				\
+		}					\
+							\
+		col_map >>= 1;				\
+		col_idx++;				\
+							\
+		if (col_idx > COL_MAX_NUM)		\
+		{					\
+			col_idx = -1;			\
+			break;				\
+		}					\
+	}while (col_map)				\
+
 
 /* Following definition is for the tab_stat. */
 #define	TAB_DROPPED	0x0001		/* This table has been dropped. */
@@ -318,6 +354,20 @@ typedef struct insert_meta
 #define	INS_META_1ST	0x0001		/* Falg if this insert is first row 
 					** in this sstable file.
 					*/
+/*
+** These meta information will be stored to the disk.
+** The tuple of data in the file sysindex.
+*/
+typedef struct idxmeta
+{
+	char	magic[RPC_MAGIC_MAX_LEN];
+	int	idx_tabid;	/* The id of table which the index is based on.  */
+	int	idx_id; 	/* The id of index. */
+	int	idx_stat;	/* The status of index. */		
+	int	idx_col_map;	/* Flag this index is created on which columns.*/
+	char	idxname[TABLE_NAME_MAX_LEN];
+}IDXMETA;
+
 
 typedef struct select_range
 {
@@ -332,6 +382,9 @@ typedef struct select_where
 	int		rightnamelen;
 	char		lefttabletname[128];
 	char		righttabletname[128];
+	int		use_idxmeta;
+	int		pad;
+	IDXMETA		idxmeta;
 }SELWHERE;
 
 typedef union context
@@ -439,6 +492,13 @@ typedef struct tab_info
 #define	TAB_SCHM_UPDATE		0x00080000	/* Update for the tablet or
 						** tabletschme.
 						*/
+#define	TAB_DO_INDEX		0x00100000	/* Table is processing in the 
+						** index related work, such
+						** as the building index, delete
+						** index, insert index.
+						*/
+#define	TAB_INS_INDEX		0x00200000	/* Insert index row. */
+#define	TAB_SRCH_RANGE		0x00400000	/* Range query*/
 
 
 #define TAB_IS_SYSTAB(tabinfo)	(tabinfo->t_stat & TAB_META_SYSTAB)
@@ -448,6 +508,9 @@ typedef struct tab_info
 
 #define	COL_MAX_NUM	32
 #define	TAB_MAX_NUM	64
+
+/* Temp solution is to support the index on one column. */
+#define	IDX_MAX_NUM	(TAB_MAX_NUM * COL_MAX_NUM)
 
 
 #define MAX_RANGER_NUM	1024
@@ -496,6 +559,14 @@ typedef struct meta_sysobject
 	TABLEHDR	sysobject[TAB_MAX_NUM];
 }META_SYSOBJECT;
 
+typedef struct meta_sysindex
+{
+	char		idx_magic[8];
+	int		idx_num;	/* The total number of index in system. */
+	int		pad;
+	IDXMETA		idx_meta[IDX_MAX_NUM];	
+}META_SYSINDEX;
+
 typedef struct master_infor
 {
 	char		conf_path[META_CONF_PATH_MAX_LEN];
@@ -504,6 +575,7 @@ typedef struct master_infor
 	META_SYSTABLE	*meta_systab;
 	META_SYSOBJECT	*meta_sysobj;
 	META_SYSCOLUMN	*meta_syscol;	
+	META_SYSINDEX	*meta_sysindex;
 	LOCKATTR 	mutexattr;
 	SPINLOCK	rglist_spinlock;	
 	SVR_IDX_FILE	rg_list;

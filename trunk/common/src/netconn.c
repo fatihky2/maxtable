@@ -28,6 +28,7 @@
 #include "strings.h"
 #include <pthread.h>
 #include "buffer.h"
+#include "rpcfmt.h"
 #include "block.h"
 #include "thread.h"
 #include "hkgc.h"
@@ -540,6 +541,10 @@ conn_chk_reqmagic(char *str)
 	{
 		return RPC_REQ_MAPRED_GET_NEXT_VALUE_OP;
 	}
+	else if (!strncasecmp(RPC_CRT_INDEX_MAGIC, str, STRLEN(RPC_CRT_INDEX_MAGIC)))
+	{
+		return RPC_REQ_CRT_IDX_OP;
+	}
 		
 
 	return 0;
@@ -646,10 +651,10 @@ conn_socket_accept(int sockfd)
 	struct sockaddr_in cliaddr;
 	socklen_t cliaddr_len = sizeof(cliaddr);
 	
-	//struct timeval tv;
-	//tv.tv_sec = RECVIO_TIMEOUT;
-	//tv.tv_usec = 0;
-	//setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));	
+	struct timeval tv;
+	tv.tv_sec = RECVIO_TIMEOUT;
+	tv.tv_usec = 0;
+	setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));	
 
 	connfd = accept(sockfd, (struct sockaddr *)&cliaddr, &cliaddr_len);
 

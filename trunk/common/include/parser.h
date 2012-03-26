@@ -195,6 +195,13 @@ par_release_orandplan(ORANDPLAN *orandplan);
 int
 par_chk_fill_resdom(TREE *command, int colnum, COLINFO* col_buf);
 
+int 
+par_crt_idx_tab(char *s_str, int querytype);
 
+int
+par_process_orplan(ORANDPLAN *cmd, char *rp, int minrowlen);
+
+int
+par_process_andplan(ORANDPLAN *cmd, char *rp, int minrowlen);
 
 #endif
