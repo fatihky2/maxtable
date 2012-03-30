@@ -101,9 +101,10 @@ int init_data_port = 40000;
 
 typedef struct _mapred_arg
 {
-	char * table_name;
-	char * tablet_name;
+	char table_name[128];
+	char * tablet_name[128];
 	int data_port;
+	int pad;
 }mapred_arg;
 
 
@@ -5071,8 +5072,10 @@ rg_mapred_process(void *args)
 
 	TABLEHDR tab_hdr;
 
-	char		tablet_bp[SSTABLE_SIZE];
-	char		sstable_buf[SSTABLE_SIZE];
+	//char		tablet_bp[SSTABLE_SIZE];
+	//char		sstable_buf[SSTABLE_SIZE];
+	char * tablet_bp = (char *)malloc(SSTABLE_SIZE);
+	char * sstable_buf = (char *)malloc(SSTABLE_SIZE);
 
 	int listenfd = 0;
 	int connfd = 0;
@@ -5145,7 +5148,8 @@ rg_mapred_process(void *args)
 	char *rp;
 	char tab_sstab_dir[TABLE_NAME_MAX_LEN];
 
-	MT_BLOCK_CACHE block_cache;
+	//MT_BLOCK_CACHE block_cache;
+	MT_BLOCK_CACHE *block_cache = (MT_BLOCK_CACHE *)malloc(sizeof(MT_BLOCK_CACHE));
 	char data_req[RPC_MAGIC_MAX_LEN];
 	
 	for(i = 0; i < BLK_CNT_IN_SSTABLE; i ++)
@@ -5231,16 +5235,16 @@ rg_mapred_process(void *args)
 				//process one req
 				if (!strncasecmp(RPC_MAPRED_GET_NEXT_VALUE, data_req, STRLEN(RPC_MAPRED_GET_NEXT_VALUE)))
 				{
-					MEMSET(&block_cache, sizeof(MT_BLOCK_CACHE));
-					MEMCPY(block_cache.data_cache, (char *)sstable_blk, BLOCKSIZE);
-					MEMCPY(block_cache.current_sstable_name, sstabname, sstabname_length);
-					block_cache.current_block_index = j;
-					block_cache.cache_index = 0;
-					block_cache.max_row_count = sstable_blk->bnextrno;
-					block_cache.row_min_len = sstable_blk->bminlen;
+					MEMSET(block_cache, sizeof(MT_BLOCK_CACHE));
+					MEMCPY(block_cache->data_cache, (char *)sstable_blk, BLOCKSIZE);
+					MEMCPY(block_cache->current_sstable_name, sstabname, sstabname_length);
+					block_cache->current_block_index = j;
+					block_cache->cache_index = 0;
+					block_cache->max_row_count = sstable_blk->bnextrno;
+					block_cache->row_min_len = sstable_blk->bminlen;
 					
 					char * resp = conn_build_resp_byte(RPC_SUCCESS, sizeof(MT_BLOCK_CACHE), 
-						(char *)&block_cache);
+						(char *)block_cache);
 					int resp_size = conn_get_resp_size((RPCRESP *)resp);
 					/* Send the result to the client. */
 					tcp_put_data(connfd, resp, resp_size);
@@ -5311,7 +5315,10 @@ exit:
 		conn_socket_close(listenfd);
 
 	MEMFREEHEAP(in);
-	
+	free(tablet_bp);	
+	free(sstable_buf);
+	free(block_cache);
+
 	return NULL;	
 }
 
@@ -5376,8 +5383,11 @@ rg_mapred_setup(char * req_buf)
 
 	mapred_arg* args = MEMALLOCHEAP(sizeof(mapred_arg));
 	//mapred_arg* args = malloc(sizeof(mapred_arg));
-	args->table_name = table_name;
-	args->tablet_name = tablet_name;
+	//args->table_name = table_name;
+	//args->tablet_name = tablet_name;
+	MEMSET(args, sizeof(mapred_arg));
+	MEMCPY(args->table_name, table_name, strlen(table_name));
+	MEMCPY(args->tablet_name, tablet_name, strlen(tablet_name));
 	args->data_port = data_port;
 
 	pthread_create(&pthread_id, NULL, rg_mapred_process, (void *)args);	
