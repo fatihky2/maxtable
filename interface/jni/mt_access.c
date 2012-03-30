@@ -24,7 +24,7 @@ JNIEXPORT jlong JNICALL Java_org_maxtable_client_MtAccess_openConnection
 {
 	CONN 	*connection;
 
-	const char *meta_server_host = (*jenv)->GetStringUTFChars(jenv, jmeta_server_host, 0);
+	char *meta_server_host = (char *)(*jenv)->GetStringUTFChars(jenv, jmeta_server_host, 0);
 
 	if(!mt_cli_open_connection(meta_server_host, jmeta_server_port, &connection))
 	{		
@@ -39,7 +39,7 @@ JNIEXPORT jlong JNICALL Java_org_maxtable_client_MtAccess_openConnection
 JNIEXPORT void JNICALL Java_org_maxtable_client_MtAccess_closeConnection
   (JNIEnv * jenv, jclass jcls, jlong jconn)
 {
-	CONN 	*connection = (conn *) jconn;
+	CONN 	*connection = (CONN *) jconn;
 
 	mt_cli_close_connection(connection);
 }
@@ -49,9 +49,9 @@ JNIEXPORT jlong JNICALL Java_org_maxtable_client_MtAccess_openExecute
 	MT_CLI_EXEC_CONTEX *exec_ctx = (MT_CLI_EXEC_CONTEX *)malloc(sizeof(MT_CLI_EXEC_CONTEX));
 	memset(exec_ctx, 0, sizeof(MT_CLI_EXEC_CONTEX));
 	
-	CONN	*connection = (conn *) jconn;
+	CONN	*connection = (CONN *) jconn;
 
-	const char *cmd = (*jenv)->GetStringUTFChars(jenv, jcmd, 0);
+	char *cmd = (char *)(*jenv)->GetStringUTFChars(jenv, jcmd, 0);
 	
 	mt_cli_open_execute(connection, cmd, exec_ctx);
 
@@ -136,4 +136,270 @@ JNIEXPORT jint JNICALL Java_org_maxtable_client_MtAccess_getFixedColValue
 	//printf("fix col: %d\n", ret);
 
 	return ret;
+}
+
+JNIEXPORT void JNICALL Java_org_maxtable_client_MtAccess_getSplits
+  (JNIEnv * jenv, jclass jcls, jlong conn_ptr, jstring table_name, jobject obj)
+{
+	CONN    *connection = (CONN *) conn_ptr;
+
+	char *tablename = (char *)(*jenv)->GetStringUTFChars(jenv, table_name, 0);
+
+	MT_SPLIT * splits = NULL;
+	int splitcount = 0;
+	mt_mapred_get_splits(connection, &splits, &splitcount, tablename);
+
+	printf("c_getsplits: total %d splits got\n", splitcount);
+
+	int i;
+	for(i = 0; i < splitcount; i++)
+	{
+		MT_SPLIT * current = splits + i;
+		printf("c_getsplits: %s, %d, %s, %d\n", current->range_ip, current->range_port, current->tablet_name, current->meta_port);
+	}
+
+	(*jenv)->ReleaseStringUTFChars(jenv, table_name, tablename);
+
+	printf("c_getsplits: step0\n");
+
+	jclass    m_cls   = (*jenv)->GetObjectClass(jenv, obj);
+	//(*jenv)->FindClass(jenv, "org/maxtable/client/cRet");
+
+	//printf("c_getsplits: step0.1\n");
+
+        //jmethodID m_mid   = (*jenv)->GetMethodID(jenv, m_cls,"<init>","()V");
+
+	printf("c_getsplits: step1\n");
+
+        jfieldID  m_fid_1 = (*jenv)->GetFieldID(jenv, m_cls,"ptr","J");
+        jfieldID  m_fid_2 = (*jenv)->GetFieldID(jenv, m_cls,"length","I");
+
+	printf("c_getsplits: step2\n");
+
+        //jobject   m_obj   = (*jenv)->NewObject(jenv, m_cls,m_mid);
+
+	printf("c_getsplits: step3\n");
+
+        (*jenv)->SetLongField(jenv, obj,m_fid_1,(jlong)(splits));
+        (*jenv)->SetIntField(jenv, obj,m_fid_2,splitcount);
+
+	printf("c_getsplits: step4\n");
+
+	//return m_obj;
+}
+
+JNIEXPORT jobject JNICALL Java_org_maxtable_client_MtAccess_getSplit
+  (JNIEnv * env, jclass jcls, jlong split_ptr, jint split_num)
+{
+	MT_SPLIT * split = (MT_SPLIT *) split_ptr;
+	split += split_num;
+
+	
+	jclass    m_cls   = (*env)->FindClass(env, "org/maxtable/client/MtAccess$Split");
+
+
+        jmethodID m_mid   = (*env)->GetMethodID(env, m_cls,"<init>","()V");
+
+
+        jfieldID  m_fid_1 = (*env)->GetFieldID(env, m_cls,"tableName","Ljava/lang/String;");
+        jfieldID  m_fid_2 = (*env)->GetFieldID(env, m_cls,"tabletName","Ljava/lang/String;");
+        jfieldID  m_fid_3 = (*env)->GetFieldID(env, m_cls,"rangeIp","Ljava/lang/String;");
+        jfieldID  m_fid_4 = (*env)->GetFieldID(env, m_cls,"rangePort","I");
+	jfieldID  m_fid_5 = (*env)->GetFieldID(env, m_cls,"metaIp","Ljava/lang/String;");
+	jfieldID  m_fid_6 = (*env)->GetFieldID(env, m_cls,"metaPort","I");
+
+        jobject   m_obj   = (*env)->NewObject(env, m_cls,m_mid);
+
+        (*env)->SetObjectField(env, m_obj,m_fid_1,(*env)->NewStringUTF(env, split->table_name));
+        (*env)->SetObjectField(env, m_obj,m_fid_2,(*env)->NewStringUTF(env, split->tablet_name));
+        (*env)->SetObjectField(env, m_obj,m_fid_3,(*env)->NewStringUTF(env, split->range_ip));
+	(*env)->SetIntField(env, m_obj,m_fid_4,split->range_port);
+	(*env)->SetObjectField(env, m_obj,m_fid_5,(*env)->NewStringUTF(env, split->meta_ip));
+	printf("c_getsplit: %d\n", split->meta_port);
+        (*env)->SetIntField(env, m_obj,m_fid_6,split->meta_port);
+
+	return m_obj;
+}
+
+JNIEXPORT void JNICALL Java_org_maxtable_client_MtAccess_freeSplits
+  (JNIEnv * jenv, jclass jcls, jlong split_ptr)
+{
+	MT_SPLIT * splits = (MT_SPLIT *) split_ptr;
+	
+	mt_mapred_free_splits(splits);
+}
+
+JNIEXPORT jlong JNICALL Java_org_maxtable_client_MtAccess_createReader
+  (JNIEnv * env, jclass jcls, jobject jsplit)
+{
+	printf("c_createreader:step1\n");
+
+	MT_SPLIT * split = (MT_SPLIT *)malloc(sizeof(MT_SPLIT));
+	memset(split, 0, sizeof(MT_SPLIT));
+	 
+	jclass   m_cls   =   (*env)-> GetObjectClass(env,  jsplit);
+	jfieldID  m_fid_1 = (*env)->GetFieldID(env, m_cls,"tableName","Ljava/lang/String;");
+        jfieldID  m_fid_2 = (*env)->GetFieldID(env, m_cls,"tabletName","Ljava/lang/String;");
+        jfieldID  m_fid_3 = (*env)->GetFieldID(env, m_cls,"rangeIp","Ljava/lang/String;");
+        jfieldID  m_fid_4 = (*env)->GetFieldID(env, m_cls,"rangePort","I");
+        jfieldID  m_fid_5 = (*env)->GetFieldID(env, m_cls,"metaIp","Ljava/lang/String;");
+        jfieldID  m_fid_6 = (*env)->GetFieldID(env, m_cls,"metaPort","I");
+
+	jstring jstr;
+	char * cstr;
+	int strlen;
+
+ 	jstr = (*env)->GetObjectField(env, jsplit, m_fid_1);
+	cstr = (char *)(*env)->GetStringUTFChars(env, jstr, 0);
+	strlen = (*env)->GetStringLength(env, jstr);
+	memcpy(split->table_name, cstr, strlen);
+	(*env)->ReleaseStringUTFChars(env, jstr, cstr);
+
+	jstr = (*env)->GetObjectField(env, jsplit, m_fid_2);
+        cstr = (char *)(*env)->GetStringUTFChars(env, jstr, 0);
+        strlen = (*env)->GetStringLength(env, jstr);
+        memcpy(split->tablet_name, cstr, strlen);
+	(*env)->ReleaseStringUTFChars(env, jstr, cstr);
+
+	jstr = (*env)->GetObjectField(env, jsplit, m_fid_3);
+        cstr = (char *)(*env)->GetStringUTFChars(env, jstr, 0);
+        strlen = (*env)->GetStringLength(env, jstr);
+        memcpy(split->range_ip, cstr, strlen);
+        (*env)->ReleaseStringUTFChars(env, jstr, cstr);
+
+	split->range_port = (*env)->GetIntField(env,jsplit,m_fid_4);
+
+	jstr = (*env)->GetObjectField(env, jsplit, m_fid_5);
+        cstr = (char *)(*env)->GetStringUTFChars(env, jstr, 0);
+        strlen = (*env)->GetStringLength(env, jstr);
+        memcpy(split->meta_ip, cstr, strlen);
+        (*env)->ReleaseStringUTFChars(env, jstr, cstr);
+
+        split->meta_port = (*env)->GetIntField(env,jsplit,m_fid_6);
+
+	MT_READER * mtreader = NULL;
+
+	mt_mapred_create_reader(&mtreader, split);
+	
+	printf("c_createreader: %d\n", mtreader->data_connection.rg_server_port);
+
+	return (jlong)(mtreader);
+
+}
+
+JNIEXPORT void JNICALL Java_org_maxtable_client_MtAccess_freeReader
+  (JNIEnv * jenv, jclass jcls, jlong reader_ptr)
+{
+	MT_READER * reader = (MT_READER *) reader_ptr;
+
+        mt_mapred_free_reader(reader);
+}
+
+
+JNIEXPORT void JNICALL Java_org_maxtable_client_MtAccess_getNextKeyValue
+  (JNIEnv * jenv, jclass jcls, jlong reader_ptr, jobject obj)
+{
+	MT_READER * reader = (MT_READER *) reader_ptr;
+
+	int rp_len;
+	char * rp;
+
+	jclass    m_cls   = (*jenv)->GetObjectClass(jenv, obj);//(*jenv)->FindClass(jenv, "cRet");
+
+        //jmethodID m_mid   = (*jenv)->GetMethodID(jenv, m_cls,"<init>","()V");
+
+        jfieldID  m_fid_1 = (*jenv)->GetFieldID(jenv, m_cls,"ptr","J");
+        jfieldID  m_fid_2 = (*jenv)->GetFieldID(jenv, m_cls,"length","I");
+
+        //jobject   m_obj   = (*jenv)->NewObject(jenv, m_cls,m_mid);
+
+	//printf("c_getnext: %d\n", reader->data_connection.rg_server_port);
+
+	if(rp = mt_mapred_get_nextvalue(reader, &rp_len))
+	{
+		(*jenv)->SetLongField(jenv, obj,m_fid_1,(jlong)(rp));
+        	(*jenv)->SetIntField(jenv, obj,m_fid_2,rp_len);
+		//printf("c_getnext: get row %d: %s with size %d\n", reader->block_cache->cache_index, rp, rp_len);
+	}
+	else
+	{
+		(*jenv)->SetLongField(jenv, obj,m_fid_1,(jlong)(0));
+                (*jenv)->SetIntField(jenv, obj,m_fid_2,0);
+		//printf("c_getnext: reader is over\n");
+	}
+
+
+	//return m_obj;
+}
+
+JNIEXPORT void JNICALL Java_org_maxtable_client_MtAccess_getKey
+  (JNIEnv * jenv, jclass jcls, jlong reader_ptr, jlong row_ptr, jobject obj)
+{
+	MT_READER * reader = (MT_READER *) reader_ptr;
+	char * rp = (char *) row_ptr;
+
+	int value_len;
+	char * value = mt_mapred_get_currentvalue(reader, rp, 0, &value_len);
+
+	jclass    m_cls   = (*jenv)->GetObjectClass(jenv, obj);//(*jenv)->FindClass(jenv, "cRet");
+
+        //jmethodID m_mid   = (*jenv)->GetMethodID(jenv, m_cls,"<init>","()V");
+
+        jfieldID  m_fid_1 = (*jenv)->GetFieldID(jenv, m_cls,"ptr","J");
+        jfieldID  m_fid_2 = (*jenv)->GetFieldID(jenv, m_cls,"length","I");
+
+        //jobject   m_obj   = (*jenv)->NewObject(jenv, m_cls,m_mid);
+
+        (*jenv)->SetLongField(jenv, obj,m_fid_1,(jlong)(value));
+        (*jenv)->SetIntField(jenv, obj,m_fid_2,value_len);
+
+	printf("c_getkey: get value: %s with size %d\n", value, value_len);
+
+        //return m_obj;
+}
+
+JNIEXPORT void JNICALL Java_org_maxtable_client_MtAccess_getValue
+  (JNIEnv * jenv, jclass jcls, jlong reader_ptr, jlong row_ptr, jint rp_len, jobject obj)
+{
+        MT_READER * reader = (MT_READER *) reader_ptr;
+        char * rp = (char *) row_ptr;
+
+        int value_len;
+        char * value = mt_mapred_reorg_value(reader, rp, rp_len, &value_len);
+
+        jclass    m_cls   = (*jenv)->GetObjectClass(jenv, obj);//(*jenv)->FindClass(jenv, "cRet");
+
+        //jmethodID m_mid   = (*jenv)->GetMethodID(jenv, m_cls,"<init>","()V");
+
+        jfieldID  m_fid_1 = (*jenv)->GetFieldID(jenv, m_cls,"ptr","J");
+        jfieldID  m_fid_2 = (*jenv)->GetFieldID(jenv, m_cls,"length","I");
+
+        //jobject   m_obj   = (*jenv)->NewObject(jenv, m_cls,m_mid);
+
+        (*jenv)->SetLongField(jenv, obj,m_fid_1,(jlong)(value));
+        (*jenv)->SetIntField(jenv, obj,m_fid_2,value_len);
+
+        printf("c_getvalue: get value: %s with size %d\n", value, value_len);
+
+        //return m_obj;
+}
+
+JNIEXPORT void JNICALL Java_org_maxtable_client_MtAccess_freeValue
+  (JNIEnv * jenv, jclass jcls, jlong value_ptr)
+{
+	char * value = (char *) value_ptr;
+	free(value);
+}
+
+JNIEXPORT void JNICALL Java_org_maxtable_client_MtAccess_arrayCopy
+  (JNIEnv * jenv, jclass jcls, jbyteArray value_array, jlong value_ptr, jint value_length)
+{
+	char * value = (char *) value_ptr;
+
+	jbyte * arrayBody = (*jenv)->GetByteArrayElements(jenv, value_array, 0);
+        char * temp = (char *)arrayBody;
+
+	memcpy(temp, value, value_length);
+
+	(*jenv)->ReleaseByteArrayElements(jenv, value_array, arrayBody, 0);	
 }

@@ -315,6 +315,8 @@ mt_mapred_get_nextvalue(MT_READER * reader, int * rp_len);
 extern char *
 mt_mapred_get_currentvalue(MT_READER * reader, char * row, int col_idx, int * value_len);
 
+extern char *
+mt_mapred_reorg_value(MT_READER * reader, char * row, int row_len, int * new_row_len);
 
 #endif
 

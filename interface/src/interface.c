@@ -2844,3 +2844,55 @@ int mt_mapred_free_reader(MT_READER * reader)
 
 	return TRUE;
 }
+
+#define TYPE_INT        0x00
+#define TYPE_VARCHAR    0x01
+char * mt_mapred_reorg_value(MT_READER * reader, char * row, int row_len, int * new_row_len)
+{
+        char * new_row = (char *)malloc(row_len * 2);
+        memset(new_row, 0, row_len*2);
+        char * index = new_row;
+
+        int i;
+
+        TABLEHDR *table_hdr = (TABLEHDR *)reader->table_header;
+        COLINFO * col_info = (COLINFO *)reader->col_info;
+
+        //set column num
+        *((int *)index) = table_hdr->tab_col;
+        index += 4;
+        //printf("total %d cols\n", table_hdr->tab_col);
+
+        //set each colume
+        for(i = 1; i < table_hdr->tab_col; i ++)
+        {
+                int value_len = (col_info + i)->col_len;
+                char *value =  row_locate_col(row, (col_info + i)->col_offset,
+                                table_hdr->tab_row_minlen, &value_len);
+
+                int value_type = 0;
+
+                if((col_info + i)->col_offset > 0)
+                {
+                        value_type |= TYPE_INT;
+                }
+                else
+                {
+                        value_type |= TYPE_VARCHAR;
+                }
+
+                value_type |= (value_len << 2);
+                //printf("reorg debug%d: %s, %d, %d\n", i, value_len, value_type);
+
+                *((int *)index) = value_type;
+                index += 4;
+                memcpy(index, value, value_len);
+                index += value_len;
+
+        }
+
+        *new_row_len = index - new_row;
+        //printf("new reorg row len: %d\n", *new_row_len);
+        return new_row;
+}
+
