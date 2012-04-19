@@ -1,19 +1,20 @@
 #summary Benchmark working
 
-* CPU information *
+* Background
+
+  # CPU information
 {{{
 model name	: Intel(R) Xeon(R) CPU           E5506  @ 2.13GHz
 cpu MHz		: 2127.683
 cache size	: 4096 KB
 }}}
-* Data scheme * 
+  # Data scheme
 {{{
 create table maxtab(id1 varchar, id2 varchar,id3 int, id4 varchar,id5 varchar,id6 varchar,id7 varchar,id8 varchar,id9 varchar)
 }}}
+  # One testing machine and single thread
 
-* One testing machine and single thread *
-
-* Performance *
+* Performance
 {{{
 1. insert into table without secondary index
   Client 1: insert into maxtab(aaaa1, bbbb1, 1, cccccc1, dddddd1, eeeeee1, ffffff1, gggggg1, hhhhhh1)
