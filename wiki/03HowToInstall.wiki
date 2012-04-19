@@ -59,6 +59,11 @@ vim ranger.conf
 ./sample select
 ./sample selectrange
 ./sample selectwhere
+./sample selectcount
+./sample selectsum
+./sample crtindex
+./sample dropindex
+./sample delete
 ./sample drop
 }}}
 

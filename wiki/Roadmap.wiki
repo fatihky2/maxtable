@@ -15,17 +15,21 @@ _Target Release Date: December 15th 2011_
         * Introduce the object mempool for the network processing
 
 == 1.6 ==
-_Target Release Date: TBD
+_Target Release Date: Apr 7th 2012_
 
         * Multi-index
         * MapReduce interface support
-        * Compaction command
+
+== 1.8 ==
+_Target Release Date: TBD_
+
+	* Compaction command
 
 This point is feature freeze with respect to 2.0 for this software. It will go into the bug fix and document writing for the release of 2.0.
 
 == 2.0 ==
 
-_Target Release Date: TBD
+_Target Release Date: TBD_
 
 Code freeze for 2.0 and first major release. 
 
