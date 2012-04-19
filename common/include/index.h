@@ -1,24 +1,32 @@
 /*
-** index.h 2012-03-06 xueyingfei
-**
-** Copyright flying/xueyingfei.
+** Copyright (C) 2011 Xue Yingfei
 **
 ** This file is part of MaxTable.
 **
-** Licensed under the Apache License, Version 2.0
-** (the "License"); you may not use this file except in compliance with
-** the License. You may obtain a copy of the License at
+** Maxtable is free software: you can redistribute it and/or modify
+** it under the terms of the GNU General Public License as published by
+** the Free Software Foundation, either version 3 of the License, or
+** (at your option) any later version.
 **
-** http://www.apache.org/licenses/LICENSE-2.0
+** Maxtable is distributed in the hope that it will be useful,
+** but WITHOUT ANY WARRANTY; without even the implied warranty of
+** MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+** GNU General Public License for more details.
 **
-** Unless required by applicable law or agreed to in writing, software
-** distributed under the License is distributed on an "AS IS" BASIS,
-** WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
-** implied. See the License for the specific language governing
-** permissions and limitations under the License.
+** You should have received a copy of the GNU General Public License
+** along with Maxtable. If not, see <http://www.gnu.org/licenses/>.
 */
+
 #ifndef	INDEX_H_
 #define INDEX_H_
+
+
+struct tree;
+struct tablet_scancontext;
+struct sstab_scancontext;
+struct orandplan;
+
+
 
 
 
@@ -33,49 +41,42 @@
 
 #define INDEXBLK_RIDNUM_COLOFF_INROW	(sizeof(ROWFMT))
 //#define INDEXBLK_RIDARRAY_COLOFF_INROW	(sizeof(ROWFMT) + sizeof(int))
-#define TABLE_KEYCOL_FAKE_COLOFF_INROW		-1
-#define TABLE_RIDARRAY_FAKE_COLOFF_INROW	-2
+#define IDXBLK_KEYCOL_FAKE_COLOFF_INROW		-1
+#define IDXBLK_RIDARRAY_FAKE_COLOFF_INROW	-2
 
 
 
 
-
-
-
-typedef struct rid
-{
-	int	sstable_id;	
-	int	block_id;	
-	int	row_id;		
-	int	pad;
-}RID;
-
-
-
-#define	IDX_IN_CREATE	0x0001	
-#define	IDX_IN_WORKING	0x0002	
-#define	IDX_IN_DROP	0x0004	
 
 
 
 typedef struct idxbld
 {
 	int	idx_root_sstab;		
-	int	idx_data_sstab;		
-	int	idx_data_blk;		
-	int	idx_data_row;		
 	int	idx_stat;		
 	char	*idx_rp;		
 	int	idx_rlen;
 	char	*idx_tab_name;		
-	char	*idx_tablet_name;	
+
 	IDXMETA	*idx_meta;		
 	int	idx_index_sstab_cnt;	
-	int	pad;
 } IDXBLD;
 
 
 #define	IDXBLD_FIRST_DATAROW_IN_TABLET	0x0001	
+#define IDXBLD_NOLOG			0x0002	
+#define	IDXBLD_IDXROOT_SPLIT		0x0004	
+#define	IDXBLD_SSTAB_SPLIT		0x0008	
+
+typedef struct idxupd
+{
+	BLOCK	*oldblk;		
+	BLOCK	*newblk;		
+	int	old_sstabid;		
+	int	new_sstabid;		
+	int	start_row;		
+	int	pad;
+}IDXUPD;
 
 
 typedef struct idx_root_srch
@@ -125,7 +126,7 @@ typedef struct idx_range_ctx
 
 int
 index_bld_meta(IDXMETA *idxmeta, TABLEHDR *tabhdr, COLINFO *colinfo, 
-					TREE *command, int idxid);
+					struct tree *command, int idxid);
 
 int
 index_get_meta_by_idxname(int tabid, char *idxname, META_SYSINDEX *meta_sysidx);
@@ -144,31 +145,74 @@ int
 index_ins_row(IDXBLD *idxbld);
 
 int
+index_bld_root_dir(char *tab_meta_dir, char *tab_name, char *idx_name, 
+			int tablet_id);
+
+int
 index_bld_root_name(char *tab_meta_dir, char *tab_name, char *idx_name, 
-			char *tablet_name);
+			int tablet_id, int mk_dir);
 
 int
 index_bld_leaf_name(char *tab_meta_dir, char *index_sstab_name, char *tab_name, 
-			char *idx_name, char *tablet_name, int tablet_num, 
-			int sstab_num);
+			char *idx_name, int tablet_num, int sstab_num);
+
+void
+index_range_sstab_scan(TABLET_SCANCTX * tablet_scanctx,IDXMETA * idxmeta,
+				char *tabname, int tabnamelen, int tabletid);
 
 int
-index_range_sstab_scan(TABLET_SCANCTX *tablet_scanctx, IDXMETA *idxmeta , 
-			IDX_RANGE_CTX *idx_range_ctx, char *tabdir);
-
-int
-index_get_datarow(SSTAB_SCANCTX *scanctx, char *tabname, int tab_name_len, 
-			int tabletid);
+index_get_datarow(struct sstab_scancontext *scanctx, char *tabname,
+				int tab_name_len, int tabletid);
 
 int
 index_get_meta_by_colmap(int tabid, int colmap, META_SYSINDEX *meta_sysidx);
 
 int
-index_fill_rangectx_andplan(ORANDPLAN *cmd, int col_map, 
+index_fill_rangectx_andplan(struct orandplan *cmd, int col_map, 
 				IDX_RANGE_CTX *idx_range_ctx);
 
 int
 index_srch_root(IDX_ROOT_SRCH *root_srchctx);
 
+int
+index_del_row(IDXBLD *idxbld);
+
+int
+index_update(IDXBLD *idxbld, IDXUPD *idxupd, TABINFO *tabinfo,
+				META_SYSINDEX *meta_sysidx);
+
+int
+index_insert(IDXBLD *idxbld, TABINFO *tabinfo,	META_SYSINDEX *meta_sysidx);
+
+int
+index_delete(IDXBLD *idxbld, TABINFO *tabinfo, META_SYSINDEX *meta_sysidx);
+
+int
+index_root_crt_empty(int tabid, char *tabname, int tabletid,
+			int ovflow_tablet, META_SYSINDEX *meta_sysidx);
+
+int
+index_root_sstabmov(IDXBLD *idxbld, BLOCK *srcblk, int indexid,
+				char *src_rootname, char *dest_rootname, 
+				int dest_rootid,int sstabid);
+
+int
+index_root_move(IDXBLD *idxbld, BLOCK *srcblk, BLOCK *destblk, int indexid,
+			char *src_root_name, char * dest_rootname,int dest_rootid);
+
+void
+index_rmrid(BLOCK *blk, int rnum, int del_ridnum);
+
+void
+index_addrid(BLOCK *blk,int rnum, RID *newridp);
+
+int
+index_rid_cmp(char *rid1, char *rid2);
+
+int
+index_tab_has_index(META_SYSINDEX *meta_sysidx, int tabid);
+
+int
+index_tab_check_index(META_SYSINDEX *meta_sysidx, int tabid);
 
 #endif

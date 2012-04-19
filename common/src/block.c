@@ -1,25 +1,28 @@
 /*
-** block.c 2010-10-08 xueyingfei
-**
-** Copyright flying/xueyingfei.
+** Copyright (C) 2011 Xue Yingfei
 **
 ** This file is part of MaxTable.
 **
-** Licensed under the Apache License, Version 2.0
-** (the "License"); you may not use this file except in compliance with
-** the License. You may obtain a copy of the License at
+** Maxtable is free software: you can redistribute it and/or modify
+** it under the terms of the GNU General Public License as published by
+** the Free Software Foundation, either version 3 of the License, or
+** (at your option) any later version.
 **
-** http://www.apache.org/licenses/LICENSE-2.0
+** Maxtable is distributed in the hope that it will be useful,
+** but WITHOUT ANY WARRANTY; without even the implied warranty of
+** MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+** GNU General Public License for more details.
 **
-** Unless required by applicable law or agreed to in writing, software
-** distributed under the License is distributed on an "AS IS" BASIS,
-** WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
-** implied. See the License for the specific language governing
-** permissions and limitations under the License.
+** You should have received a copy of the GNU General Public License
+** along with Maxtable. If not, see <http://www.gnu.org/licenses/>.
 */
+
 #include "master/metaserver.h"
+#include "tabinfo.h"
 #include "memcom.h"
 #include "rpcfmt.h"
+#include "parser.h"
+#include "ranger/rangeserver.h"
 #include "buffer.h"
 #include "block.h"
 #include "cache.h"
@@ -28,16 +31,20 @@
 #include "utils.h"
 #include "tss.h"
 #include "sstab.h"
+#include "metadata.h"
 #include "tablet.h"
 #include "b_search.h"
 #include "timestamp.h"
 #include "log.h"
 #include "hkgc.h"
 #include "type.h"
+#include "rginfo.h"
+#include "index.h"
 
 
 extern TSS	*Tss;
-
+extern RANGEINFO *Range_infor;
+extern KERNEL	*Kernel;
 
 BUF *
 blkget(TABINFO *tabinfo)
@@ -62,17 +69,6 @@ nextsstab:
 
 	Assert(bp);
 
-
-	if (0 && BLOCK_IS_EMPTY(bp))
-	{
-		tabinfo->t_rowinfo->rblknum = bp->bblk->bblkno;
-		tabinfo->t_rowinfo->roffset = BLKHEADERSIZE;
-		tabinfo->t_rowinfo->rsstabid = bp->bblk->bsstabid;
-
-		
-		return bp->bsstab;
-	}
-	
 
 	
 
@@ -143,7 +139,7 @@ nextsstab:
 		if (   (   (tss->topid & TSS_OP_SELDELTAB) 
 			&& (tabinfo->t_sinfo->sistate & SI_NODATA))
 		    || (   (tss->topid & TSS_OP_INSTAB)
-		    	&& (tabinfo->t_rowinfo->roffset == tmpbp->bblk->bfreeoff)))
+		    	&& (tabinfo->t_rowinfo->rnum == tmpbp->bblk->bnextrno)))
 		{
 			
 			if (tmpblkidx < (BLK_CNT_IN_SSTABLE - 1))
@@ -151,13 +147,13 @@ nextsstab:
 				tmpblkidx++;
 				tmpbp = bp->bsstab + tmpblkidx;
 
-				if (tmpbp->bblk->bfreeoff > BLKHEADERSIZE)
+				if (tmpbp->bblk->bnextrno > 0)
 				{
 					goto finish;
 				}
 				else
 				{
-					Assert(tmpbp->bblk->bfreeoff == BLKHEADERSIZE);				
+					Assert(tmpbp->bblk->bnextrno == 0);				
 				}
 			}
 
@@ -194,7 +190,7 @@ nextsstab:
 		}
 
 		
-		if (stat_chg && (tabinfo->t_rowinfo->roffset == BLKHEADERSIZE))
+		if (stat_chg && (tabinfo->t_rowinfo->rnum == 0))
 		{
 			tabinfo->t_sstab_id = last_sstabid;
 
@@ -222,8 +218,6 @@ int
 blksrch(TABINFO *tabinfo, BUF *bp)
 {
 	BLOCK		*blk;
-	char		*rp;
-	int		last_offset;
 	int		rowno;
 	int		minrowlen;
 	int     	blkidx;
@@ -236,12 +230,12 @@ blksrch(TABINFO *tabinfo, BUF *bp)
 
 
 	blkidx = -1;
+	rowno = BLOCK_EMPTY_ROWID;
 	
 	
 	if (BLK_GET_NEXT_ROWNO(bp->bblk) == 0)
 	{
 		blkidx = bp->bblk->bblkno;
-		last_offset = bp->bblk->bfreeoff;
 		tabinfo->t_sinfo->sistate |= SI_NODATA;
 		goto finish;
 	}
@@ -272,8 +266,6 @@ blksrch(TABINFO *tabinfo, BUF *bp)
 
 	result = srchinfo->bcomp;
 	rowno = srchinfo->brownum;
-	rp = srchinfo->brow;
-	last_offset = srchinfo->boffset;
 
 	
 	if (!(tabinfo->t_stat & TAB_SCHM_SRCH))
@@ -293,8 +285,7 @@ blksrch(TABINFO *tabinfo, BUF *bp)
 	{
 		if (!(tabinfo->t_stat & TAB_SCHM_SRCH))
 		{
-			
-			last_offset += ROW_GET_LENGTH(rp, minrowlen);
+			rowno++;
 		}
 
 	}
@@ -304,16 +295,16 @@ finish:
 
 	
 	tabinfo->t_rowinfo->rblknum = blkidx;
-	tabinfo->t_rowinfo->roffset = last_offset;
-	tabinfo->t_rowinfo->rsstabid = bp->bblk->bsstabid;
+	tabinfo->t_rowinfo->rnum = rowno;
+	tabinfo->t_rowinfo->rsstabid = bp->bsstab->bsstabid;
 	
 	if (tabinfo->t_sinfo->sistate & SI_INDEX_BLK)
 	{
 				
 		return blkidx;
 	}
-		
-        return last_offset;
+
+ 	return rowno;
 }
 
 void
@@ -353,6 +344,9 @@ blk_getsstable(TABINFO *tabinfo)
 	
 	if (tabinfo->t_stat & TAB_KEPT_BUF_VALID)
 	{
+		
+		bufkeep(tabinfo->t_keptbuf);
+		
 		Assert(tabinfo->t_keptbuf);
 
 		
@@ -377,12 +371,14 @@ blk_getsstable(TABINFO *tabinfo)
 		MEMCPY(bp->bsstab_name, sstab_name, STRLEN(sstab_name));	
 	
 		bp->bstat &= ~BUF_READ_EMPTY;
+
 		
 		if (   (   (tss->topid & TSS_OP_RANGESERVER) 
 			&& (   (tabinfo->t_insmeta) 
 			    && (tabinfo->t_insmeta->status & INS_META_1ST)))
 		    || (   (   (tss->topid & TSS_OP_METASERVER) 
-		    	    || (tss->topid & TSS_OP_CRTINDEX))
+		    	    || (tss->topid & TSS_OP_CRTINDEX)
+		    	    || (tss->topid & TSS_OP_IDXROOT_SPLIT))
 		        && (tabinfo->t_stat & TAB_CRT_NEW_FILE)))
 		{
 			bp->bstat |= BUF_READ_EMPTY;
@@ -427,23 +423,28 @@ blkins(TABINFO *tabinfo, char *rp)
 {
 	LOCALTSS(tss);
 	BUF	*bp;
-	int	offset;
+	int	rnum;
 	int	minlen;
 	int	ign;
 	int	rlen;
 	int	i;
 	int	*offtab;
 	int	blk_stat;
+	int	upd_in_place;
+	RID	*newridp;
 
 
 	minlen = tabinfo->t_row_minlen;
+	blk_stat = 0;
 	
 	tabinfo->t_sinfo->sistate |= SI_INS_DATA;
 	
 	bp = blkget(tabinfo);	
 
-	if ((tabinfo->t_stat & TAB_RETRY_LOOKUP) 
-	    || !(tabinfo->t_sinfo->sistate & SI_NODATA))
+	
+	if (   (tabinfo->t_stat & TAB_RETRY_LOOKUP) 
+	    || (   !(tabinfo->t_stat & TAB_INS_INDEX) 
+	    	&& !(tabinfo->t_sinfo->sistate & SI_NODATA)))
 	{
 		bufunkeep(bp->bsstab);
 		return FALSE;
@@ -452,17 +453,21 @@ blkins(TABINFO *tabinfo, char *rp)
 //	offset = blksrch(tabinfo, bp);
 
 	Assert(tabinfo->t_rowinfo->rblknum == bp->bblk->bblkno);
-	Assert(tabinfo->t_rowinfo->rsstabid == bp->bblk->bsstabid);
-	offset = tabinfo->t_rowinfo->roffset;
+	Assert(tabinfo->t_rowinfo->rsstabid == bp->bsstab->bsstabid);
+	rnum = tabinfo->t_rowinfo->rnum;
 
 	ign = 0;
 	rlen = ROW_GET_LENGTH(rp, minlen);
 
-	blk_stat = blk_check_sstab_space(tabinfo, bp, rp, rlen, offset);
+	tabinfo->t_cur_rowp = rp;
+	tabinfo->t_cur_rowlen = rlen;
 
-	
-	bufpredirty(bp);
-	
+	if (rnum != -1)
+	{
+		
+		blk_stat = blk_check_sstab_space(tabinfo, bp, rp, rlen, rnum);
+	}
+		
 	if (blk_stat & BLK_INS_SPLITTING_SSTAB)
 	{
 		bufdestroy(bp);
@@ -472,9 +477,12 @@ blkins(TABINFO *tabinfo, char *rp)
 	
 	if (blk_stat & BLK_ROW_NEXT_SSTAB)
 	{
+		
 		goto finish;
 	}
 
+	bufpredirty(bp->bsstab);
+	
 	
 	if (blk_stat & BLK_ROW_NEXT_BLK)
 	{
@@ -484,32 +492,55 @@ blkins(TABINFO *tabinfo, char *rp)
 	
 	if ((blk_stat & BLK_BUF_NEED_CHANGE))
 	{
-		offset = blksrch(tabinfo, bp);
+		rnum = blksrch(tabinfo, bp);
 	}
 
-	if (bp->bblk->bfreeoff - offset)
+	offtab = ROW_OFFSET_PTR(bp->bblk);
+
+	
+	upd_in_place = (   (tabinfo->t_stat & TAB_INS_INDEX) 
+			&& (!(tabinfo->t_sinfo->sistate & SI_NODATA))) 
+		      ? TRUE : FALSE; 
+
+	if (upd_in_place)
 	{
+		Assert(rnum != -1);
 		
-		offtab = ROW_OFFSET_PTR(bp->bblk);
+		newridp = (RID *)row_locate_col(rp, 
+					IDXBLK_RIDARRAY_FAKE_COLOFF_INROW,
+					ROW_MINLEN_IN_INDEXBLK, &ign);
 		
-		BACKMOVE((char *)bp->bblk + offset, 
-				(char *)bp->bblk + offset + rlen, 
-				bp->bblk->bfreeoff - offset);
-
+		index_addrid(bp->bblk, rnum, newridp);
+		i = rnum;
+	}
+	else
+	{
+		i = 0;
 		
-		for (i = bp->bblk->bnextrno; i > 0; i--)
+		if (rnum != -1)
 		{
-			if (offtab[-(i-1)] < offset)
+			
+			for (i = bp->bblk->bnextrno; i > rnum; i--)
 			{
-				break;
+				offtab[-i] = offtab[-(i-1)];
 			}
-
-			offtab[-i] = offtab[-(i-1)] + rlen;
-		
 		}
-		offtab[-i] = offset;
+
+		//ROW_SET_ROWNO(rp, rnum);
+		
+		
+		PUT_TO_BUFFER((char *)bp->bblk + bp->bblk->bfreeoff, ign, rp,
+				rlen);
+			
+		
+		offtab[-i] = bp->bblk->bfreeoff;
+			
+		bp->bblk->bfreeoff += rlen;
+		bp->bblk->bminlen = minlen;
 	}
 	
+	BLK_GET_NEXT_ROWNO(bp->bblk)++;
+
 	if (tss->topid & TSS_OP_RANGESERVER)
 	{
 		tabinfo->t_insdel_old_ts_lo = 
@@ -522,65 +553,60 @@ blkins(TABINFO *tabinfo, char *rp)
 					bp->bsstab->bblk->bsstab_insdel_ts_lo;
 	}
 
-	
-	PUT_TO_BUFFER((char *)bp->bblk + offset, ign, rp, rlen);
-
-	if (bp->bblk->bfreeoff == offset)
-	{
 		
-		ROW_SET_OFFSET(bp->bblk, BLK_GET_NEXT_ROWNO(bp->bblk), offset);
+	tabinfo->t_currid.block_id = bp->bblk->bblkno;
+	tabinfo->t_currid.sstable_id = bp->bsstab->bsstabid;
+	tabinfo->t_currid.roffset = offtab[-i];
+
+	bufdirty(bp->bsstab);
+
+	if (   (tss->topid & TSS_OP_RANGESERVER) 
+	    && (!(tss->tstat & TSS_OP_RECOVERY))
+	    && (!(tabinfo->t_stat & TAB_NOLOG_MODEL)))
+	{
+		LOGREC		logrec;
+		int		logid;
+
+		
+//		logid =   (tabinfo->t_stat & TAB_LOG_SKIP_LOG)
+//			? LOG_SKIP : LOG_DATA_INSERT;
+		logid = (tabinfo->t_stat & TAB_INS_INDEX)
+			? LOG_INDEX_INSERT: LOG_DATA_INSERT;
+
+		log_build(&logrec, logid, tabinfo->t_insdel_old_ts_lo,
+					tabinfo->t_insdel_new_ts_lo,
+					tabinfo->t_sstab_name, NULL, 
+					tabinfo->t_row_minlen,
+					tabinfo->t_tabid,
+					tabinfo->t_sstab_id,
+					bp->bblk->bblkno, i, NULL, NULL);
+
+		if (upd_in_place)
+		{
+			(&logrec)->loginsdel.status |= LOGINSDEL_RID_UPD;
+			log_put(&logrec, (char *)newridp, sizeof(RID));
+		}
+		else
+		{
+			log_put(&logrec, rp, rlen);
+		}
+		
+		if (0 && (tabinfo->t_stat & TAB_SSTAB_SPLIT))
+		{
+			hkgc_wash_sstab(TRUE);
+		}
 	}
-	
-
-
-	bp->bblk->bfreeoff += rlen;
-
-	bp->bblk->bminlen = minlen;
-	
-	BLK_GET_NEXT_ROWNO(bp->bblk)++;
-
+		
 finish:
 
-	if (tabinfo->t_stat & TAB_SSTAB_SPLIT)
-	{
-		
-		bp->bsstab->bblk->bstat |= 
-			(tss->topid & TSS_OP_INDEX_CASE) ? 0 : BLK_SSTAB_SPLIT;
-		tabinfo->t_stat |= TAB_LOG_SKIP_LOG;		
-	}
-	
-	bufdirty(bp);
-
-	
-	if ((SSTABLE_STATE(bp) & BUF_READ_EMPTY) && (SSTABLE_STATE(bp) & BUF_DIRTY))
+	if (   (SSTABLE_STATE(bp) & BUF_READ_EMPTY) 
+	    && (SSTABLE_STATE(bp) & BUF_DIRTY))
 	{		
 		DIRTYUNLINK(bp);
 		bufwrite(bp);
 		SSTABLE_STATE(bp) &= ~BUF_READ_EMPTY;
 	}
 
-	if ((tss->topid & TSS_OP_RANGESERVER) && (!(tss->tstat & TSS_OP_RECOVERY)))
-	{
-		LOGREC	logrec;
-		int	logid;
-
-		
-		logid = (tabinfo->t_stat & TAB_LOG_SKIP_LOG)? LOG_SKIP : LOG_INSERT;
-
-		log_build(&logrec, logid, tabinfo->t_insdel_old_ts_lo,
-					tabinfo->t_insdel_new_ts_lo,
-					tabinfo->t_sstab_name, NULL, 
-					tabinfo->t_row_minlen, tabinfo->t_tabid,
-					tabinfo->t_sstab_id);
-		
-		log_insert_insdel(&logrec, rp, rlen);
-
-		if (tabinfo->t_stat & TAB_SSTAB_SPLIT)
-		{
-			hkgc_wash_sstab(TRUE);
-		}
-	}
-	
 	bufunkeep(bp->bsstab);
 		
 	tabinfo->t_sinfo->sistate &= ~SI_INS_DATA;
@@ -595,7 +621,7 @@ blkdel(TABINFO *tabinfo)
 {
 	LOCALTSS(tss);
 	BUF	*bp;
-	int	offset;
+	int	rnum;
 	int	minlen;
 	int	rlen;
 	int	i;
@@ -617,31 +643,61 @@ blkdel(TABINFO *tabinfo)
 		return FALSE;
 	}
 
-	bufpredirty(bp);
+	
 
 //	offset = blksrch(tabinfo, bp);
 
 	Assert(tabinfo->t_rowinfo->rblknum == bp->bblk->bblkno);
-	Assert(tabinfo->t_rowinfo->rsstabid == bp->bblk->bsstabid);
-	offset = tabinfo->t_rowinfo->roffset;
+	Assert(tabinfo->t_rowinfo->rsstabid == bp->bsstab->bsstabid);
+	rnum = tabinfo->t_rowinfo->rnum;
 
 	if (tabinfo->t_sinfo->sistate & SI_NODATA)
 	{
 		traceprint("We can not find the row to be deleted.\n");	
+		bufunkeep(bp->bsstab);
 		return FALSE;
 	}
 
-	rp = (char *)(bp->bblk) + offset;
+	bufpredirty(bp->bsstab);
+
+	rp = ROW_GETPTR_FROM_OFFTAB(bp->bblk, rnum);
 	rlen = ROW_GET_LENGTH(rp, minlen);
 
-	if (tss->topid & TSS_OP_RANGESERVER)
+	if (   (tss->topid & TSS_OP_RANGESERVER) 
+	    && (!(tss->tstat & TSS_OP_RECOVERY))
+	    && (!(tabinfo->t_stat & TAB_NOLOG_MODEL)))
 	{
-		tabinfo->t_cur_rowp = (char *)MEMALLOCHEAP(rlen);
-
-		MEMCPY(tabinfo->t_cur_rowp, rp, rlen);
+		tabinfo->t_cur_rowp = rp;
 
 		tabinfo->t_cur_rowlen = rlen;
 
+		
+		tabinfo->t_insdel_old_ts_lo = 
+					bp->bsstab->bblk->bsstab_insdel_ts_lo;
+		
+		bp->bsstab->bblk->bsstab_insdel_ts_lo = mtts_increment(
+					bp->bsstab->bblk->bsstab_insdel_ts_lo);
+
+		tabinfo->t_insdel_new_ts_lo = 
+					bp->bsstab->bblk->bsstab_insdel_ts_lo;
+		
+		LOGREC		logrec;
+
+		log_build(&logrec, LOG_DATA_DELETE, 
+				tabinfo->t_insdel_old_ts_lo,
+				tabinfo->t_insdel_new_ts_lo,
+				tabinfo->t_sstab_name, NULL, 
+				tabinfo->t_row_minlen, 
+				tabinfo->t_tabid, 
+				tabinfo->t_sstab_id,
+				bp->bblk->bblkno, rnum, NULL, NULL);
+		
+		log_put(&logrec, tabinfo->t_cur_rowp,
+					tabinfo->t_cur_rowlen);
+	}	
+
+	ROW_SET_STATUS(rp, ROW_DELETED);
+#if 0		
 		if ((bp->bblk->bblkno == 0) && (offset == BLKHEADERSIZE))
 		{
 			
@@ -653,9 +709,18 @@ blkdel(TABINFO *tabinfo)
 			
 			
 			goto finish;
-		}		
-	}
+		}
+#endif
+	
+
+	offtab = ROW_OFFSET_PTR(bp->bblk);
+
 		
+	tabinfo->t_currid.block_id = bp->bblk->bblkno;
+	tabinfo->t_currid.sstable_id = bp->bsstab->bsstabid;
+	tabinfo->t_currid.roffset = offtab[-rnum];
+
+#if 0		
 	if (bp->bblk->bfreeoff - offset)
 	{
 		MEMCPY(rp, rp + rlen, (bp->bblk->bfreeoff - offset - rlen));
@@ -672,36 +737,38 @@ blkdel(TABINFO *tabinfo)
 			break;
 		}
 	}
-
-	int j;
-	for(j = i; j < (bp->bblk->bnextrno - 1); j++)
-	{
-		offtab[-j] = offtab[-(j + 1)] - rlen;
-	
-	}
-finish:
-
-	if (tss->topid & TSS_OP_RANGESERVER)
-	{
-		tabinfo->t_insdel_old_ts_lo = 
-					bp->bsstab->bblk->bsstab_insdel_ts_lo;
-		
-		bp->bsstab->bblk->bsstab_insdel_ts_lo = mtts_increment(
-					bp->bsstab->bblk->bsstab_insdel_ts_lo);
-
-		tabinfo->t_insdel_new_ts_lo = 
-					bp->bsstab->bblk->bsstab_insdel_ts_lo;
-	}
+#endif
 
 	
+	for(i = rnum; i < (bp->bblk->bnextrno - 1); i++)
+	{
+		offtab[-i] = offtab[-(i + 1)];	
+	}
+
+
+	
+#if 0
+
+	
+
 	if (del_stat)
 	{
 		bp->bblk->bfreeoff -= rlen;
 		BLK_GET_NEXT_ROWNO(bp->bblk)--;
 	}
+#endif
 
+	BLK_GET_NEXT_ROWNO(bp->bblk)--;
 
-	bufdirty(bp);
+	
+	if (   (bp->bblk->bnextrno == 0) 
+	    && !(   (tabinfo->t_stat & TAB_DEL_DATA)
+		 && (tabinfo->t_has_index)))
+	{
+		blk_compact(bp->bblk);
+	}
+
+	bufdirty(bp->bsstab);
 	bufunkeep(bp->bsstab);
 		
 	tabinfo->t_sinfo->sistate &= ~SI_DEL_DATA;
@@ -715,7 +782,7 @@ blkupdate(TABINFO *tabinfo, char *newrp)
 {
 	LOCALTSS(tss);
 	BUF	*bp;
-	int	offset;
+	int	rnum;
 	int	minlen;
 	int	oldrlen;
 	int	newrlen;
@@ -737,16 +804,18 @@ blkupdate(TABINFO *tabinfo, char *newrp)
 //	offset = blksrch(tabinfo, bp);
 
 	Assert(tabinfo->t_rowinfo->rblknum == bp->bblk->bblkno);
-	Assert(tabinfo->t_rowinfo->rsstabid == bp->bblk->bsstabid);
-	offset = tabinfo->t_rowinfo->roffset;
+	Assert(tabinfo->t_rowinfo->rsstabid == bp->bsstab->bsstabid);
+	rnum = tabinfo->t_rowinfo->rnum;
 
 	if (tabinfo->t_sinfo->sistate & SI_NODATA)
 	{
 		traceprint("We can not find the row to be deleted.\n");	
+		bufunkeep(bp->bsstab);
 		return FALSE;
 	}
 
-	oldrp = (char *)(bp->bblk) + offset;
+	
+	oldrp = ROW_GETPTR_FROM_OFFTAB(bp->bblk, rnum);
 	oldrlen = ROW_GET_LENGTH(oldrp, minlen);
 
 	newrlen = ROW_GET_LENGTH(newrp, minlen);
@@ -754,7 +823,7 @@ blkupdate(TABINFO *tabinfo, char *newrp)
 	
 	if (newrlen == oldrlen)
 	{
-		bufpredirty(bp);
+		bufpredirty(bp->bsstab);
 		
 		
 		MEMCPY(oldrp, newrp, newrlen);
@@ -771,7 +840,7 @@ blkupdate(TABINFO *tabinfo, char *newrp)
 					bp->bsstab->bblk->bsstab_insdel_ts_lo;
 		}		
 
-		bufdirty(bp);
+		bufdirty(bp->bsstab);
 	}
 	
 	else
@@ -866,27 +935,34 @@ blk_file_back_move(BLOCK *blk)
 
 int
 blk_check_sstab_space(TABINFO *tabinfo, BUF *bp, char *rp, int rlen, 
-			int ins_offset)
+			int ins_rnum)
 {
 	LOCALTSS(tss);
-	int	blkno;
-	int	rtn_stat;
-	int	row_cnt;
-	BLOCK	*blk;
-	BLOCK	*nextblk;
-	int	*thisofftab;
-
+	int		blkno;
+	int		rtn_stat;
+	int		row_cnt;
+	BLOCK		*blk;
+	BLOCK		*nextblk;
+	LOGREC		logrec;
 	
-	blk = bp->bblk;
-	rtn_stat = BLK_BUF_NEED_CHANGE;
-	blkno = blk->bblkno;
-	row_cnt = blk->bnextrno;
-
+	
+	blk		= bp->bblk;
+	rtn_stat	= BLK_BUF_NEED_CHANGE;
+	blkno		= blk->bblkno;
+	row_cnt		= blk->bnextrno;
+		
 	if ((blk->bfreeoff + rlen) < (BLOCKSIZE - BLK_TAILSIZE -
 					(ROW_OFFSET_ENTRYSIZE * (row_cnt + 1))))
 	{
 		rtn_stat &= ~BLK_BUF_NEED_CHANGE;
 
+		return rtn_stat;
+	}
+
+	if (ins_rnum == -1)
+	{
+		traceprint("The row looks expand the limit of max value.");
+		Assert(0);
 		return rtn_stat;
 	}
 	
@@ -899,6 +975,11 @@ blk_check_sstab_space(TABINFO *tabinfo, BUF *bp, char *rp, int rlen,
 					(ROW_OFFSET_ENTRYSIZE * (row_cnt + 1))))
 		{
 			break;
+		}
+		else
+		{
+			
+			Assert(blk->bnextrno > 0);
 		}
 
 		
@@ -926,11 +1007,12 @@ blk_check_sstab_space(TABINFO *tabinfo, BUF *bp, char *rp, int rlen,
 					break;
 				}
 
-				if (!(tss->tstat & TSS_OP_RECOVERY))
+				if (   (!(tss->tstat & TSS_OP_RECOVERY))
+				    && (!(tabinfo->t_stat & TAB_NOLOG_MODEL)))
 				{
 					hkgc_wash_sstab(TRUE);
 				}
-				
+
 				sstab_split(tabinfo, bp, rp);
 			}
 			else if (tss->topid & TSS_OP_METASERVER)
@@ -942,13 +1024,16 @@ blk_check_sstab_space(TABINFO *tabinfo, BUF *bp, char *rp, int rlen,
 		}
 
 		nextblk = (BLOCK *) ((char *)blk + BLOCKSIZE);
-
 		
-		if (nextblk->bfreeoff == BLKHEADERSIZE)
+		
+		if (nextblk->bnextrno == 0)
 		{
-			thisofftab = ROW_OFFSET_PTR(blk);
-
-			if (ins_offset > thisofftab[-((blk->bnextrno) / 2)])
+			if (nextblk->bfreeoff > BLKHEADERSIZE)
+			{
+				blk_compact(nextblk);
+			}
+			
+			if (ins_rnum > ((blk->bnextrno) / 2))
 			{
 				rtn_stat |= BLK_ROW_NEXT_BLK;
 
@@ -958,26 +1043,118 @@ blk_check_sstab_space(TABINFO *tabinfo, BUF *bp, char *rp, int rlen,
 					return rtn_stat;
 				}
 			}
+
 			
-			blk_split(blk);
+			if (   (tss->topid & TSS_OP_RANGESERVER)
+			    && (!(tss->tstat & TSS_OP_RECOVERY))
+			    && (!(tabinfo->t_stat & TAB_NOLOG_MODEL)))
+			{
+				Assert(tss->topid & TSS_OP_INSTAB);
+				
+				log_build(&logrec, LOG_BEGIN, 0, 0, 
+						tabinfo->t_sstab_name, 
+						NULL, 0, 0, 0, 0, 0, 
+						NULL, NULL);
+
+				log_put(&logrec, NULL, 0);
+						
+			}
+
+				
+			blk_split(blk, tabinfo);
+
+			if (   (tss->topid & TSS_OP_RANGESERVER)
+			    && (!(tss->tstat & TSS_OP_RECOVERY))
+			    && (!(tabinfo->t_stat & TAB_NOLOG_MODEL)))
+			{
+				Assert(tss->topid & TSS_OP_INSTAB);
+				
+				tabinfo->t_insdel_old_ts_lo = 
+					bp->bsstab->bblk->bsstab_insdel_ts_lo;
+	
+				bp->bsstab->bblk->bsstab_insdel_ts_lo = 
+						mtts_increment(bp->bsstab->bblk->bsstab_insdel_ts_lo);
+
+				tabinfo->t_insdel_new_ts_lo = 
+					bp->bsstab->bblk->bsstab_insdel_ts_lo;
+	
+				log_build(&logrec, LOG_BLK_SPLIT, 
+						tabinfo->t_insdel_old_ts_lo, 
+						tabinfo->t_insdel_new_ts_lo,
+						tabinfo->t_sstab_name, 
+						tabinfo->t_sstab_name,
+						0, 0, 0, 0, 0, NULL, NULL);
+				
+				log_put(&logrec, NULL, 0);				
+				
+				bufpredirty(bp->bsstab);
+				
+				bufdirty(bp->bsstab);
+				
+				log_build(&logrec, LOG_END, 0, 0,
+						tabinfo->t_sstab_name,
+						NULL, 0, 0, 0, 0, 0, NULL, NULL);
+
+				log_put(&logrec, NULL, 0);
+
+				hkgc_wash_sstab(TRUE);
+				
+			}
 		}
 		else
 		{
-			if (blk_backmov(nextblk))
+			if (blk_backmov(nextblk, tabinfo))
 			{
-				thisofftab = ROW_OFFSET_PTR(blk);
-
-				if (ins_offset > thisofftab[-((blk->bnextrno) / 2)])
+				if (ins_rnum > ((blk->bnextrno) / 2))
 				{
 					rtn_stat |= BLK_ROW_NEXT_BLK;
 
+					
 					if (blk->bnextrno == 1)
 					{
 						return rtn_stat;
 					}
 				}
 				
-				blk_split(blk);
+				blk_split(blk, tabinfo);
+
+				if (   (tss->topid & TSS_OP_RANGESERVER)
+				    && (!(tss->tstat & TSS_OP_RECOVERY))
+				    && (!(tabinfo->t_stat & TAB_NOLOG_MODEL)))
+				{
+					Assert(tss->topid & TSS_OP_INSTAB);
+					
+					tabinfo->t_insdel_old_ts_lo = 
+						bp->bsstab->bblk->bsstab_insdel_ts_lo;
+		
+					bp->bsstab->bblk->bsstab_insdel_ts_lo = 
+						mtts_increment(bp->bsstab->bblk->bsstab_insdel_ts_lo);
+
+					tabinfo->t_insdel_new_ts_lo = 
+						bp->bsstab->bblk->bsstab_insdel_ts_lo;
+		
+					log_build(&logrec, LOG_BLK_SPLIT, 
+							tabinfo->t_insdel_old_ts_lo, 
+							tabinfo->t_insdel_new_ts_lo,
+							tabinfo->t_sstab_name, 
+							tabinfo->t_sstab_name,
+							0, 0, 0, 0, 0, NULL, NULL);
+					
+					log_put(&logrec, NULL, 0);
+					
+					
+					bufpredirty(bp->bsstab);
+					
+					bufdirty(bp->bsstab);
+					
+					log_build(&logrec, LOG_END, 0, 0,
+							tabinfo->t_sstab_name,
+							NULL, 0, 0, 0, 0, 0, NULL, NULL);
+
+					log_put(&logrec, NULL, 0);
+
+					hkgc_wash_sstab(TRUE);
+				}
 			}
 			else
 			{
@@ -1003,7 +1180,8 @@ blk_check_sstab_space(TABINFO *tabinfo, BUF *bp, char *rp, int rlen,
 						break;
 					}
 
-					if (!(tss->tstat & TSS_OP_RECOVERY))
+					if (   (!(tss->tstat & TSS_OP_RECOVERY))
+					    && (!(tabinfo->t_stat & TAB_NOLOG_MODEL)))
 					{
 						hkgc_wash_sstab(TRUE);
 					}
@@ -1016,32 +1194,54 @@ blk_check_sstab_space(TABINFO *tabinfo, BUF *bp, char *rp, int rlen,
 				}
 			}
 		}
-			
 	}	
 
 	return rtn_stat;
-
-	
 }
 
 
 void
-blk_split(BLOCK *blk)
+blk_split(BLOCK *blk, TABINFO *tabinfo)
 {
-	BLOCK	*nextblk;
-	int	rowcnt;
-	int	i,j;
-	int	*thisofftab;
-	int	*nextofftab;
-	int	offset;
-	int	mvsize;
+	LOCALTSS(tss);
+	BLOCK		*nextblk;
+	int		rowcnt;
+	int		i,j;
+	int		*thisofftab;
+	int		*nextofftab;
+	int		offset;
+	int		mvsize;
+	BLOCK		*tmpblock;
+	IDXBLD		idxbld;
+	IDXUPD		idxupd;
+	char		rg_tab_dir[TABLE_NAME_MAX_LEN];
+
+
+	tmpblock = NULL;
+	
+	
+	BUF_GET_RESERVED(tmpblock);
+	
+	MEMCPY(tmpblock, blk, sizeof(BLOCK));
+	if (!blk_shuffle_data(tmpblock, blk))
+	{
+		MEMCPY(blk, tmpblock, sizeof(BLOCK));
+
+		Assert(0);
+		goto exit;
+	}
 
 	nextblk = (BLOCK *) ((char *)blk + BLOCKSIZE);
 	rowcnt = blk->bnextrno;
 
-	Assert((blk->bnextblkno!= -1) && (nextblk->bfreeoff == BLKHEADERSIZE)
+	Assert((blk->bnextblkno!= -1) && (nextblk->bnextrno == 0)
 		&& (rowcnt > 0));
 
+	if (nextblk->bfreeoff > BLKHEADERSIZE)
+	{
+		blk_compact(nextblk);
+	}
+	
 	
 	i = rowcnt / 2;
 	
@@ -1071,15 +1271,80 @@ blk_split(BLOCK *blk)
 
 	Assert((blk->bnextrno + nextblk->bnextrno) == rowcnt);
 
+	
+	if (   (tss->topid & TSS_OP_INSTAB) 
+	    && (tabinfo->t_has_index))
+	{
+			
+		MEMSET(rg_tab_dir, TABLE_NAME_MAX_LEN);
+		MEMCPY(rg_tab_dir, MT_RANGE_TABLE, STRLEN(MT_RANGE_TABLE));
+		str1_to_str2(rg_tab_dir, '/', tabinfo->t_tab_name);
+	
+		
+		idxbld.idx_tab_name = rg_tab_dir;
+
+		idxbld.idx_stat = 0;
+
+		idxbld.idx_root_sstab = tabinfo->t_tablet_id;
+
+		
+		idxupd.newblk = blk;
+
+		idxupd.oldblk = tmpblock;
+
+		idxupd.new_sstabid = tabinfo->t_sstab_id;
+
+		idxupd.old_sstabid = tabinfo->t_sstab_id;
+
+		idxupd.start_row = 0;			
+	
+		
+		Assert(blk->bfreeoff > BLKHEADERSIZE);
+
+		if (tabinfo->t_index_ts 
+			!= Range_infor->rg_meta_sysindex->idx_ver)
+		{
+			meta_load_sysindex(
+				(char *)Range_infor->rg_meta_sysindex);
+		}
+		
+		index_update(&idxbld, &idxupd, tabinfo, 
+				Range_infor->rg_meta_sysindex);
+
+
+		idxbld.idx_stat = 0;
+
+		
+		idxupd.newblk = nextblk;
+		
+		idxupd.start_row = blk->bnextrno;			
+	
+		
+		Assert(nextblk->bfreeoff > BLKHEADERSIZE);
+		
+		index_update(&idxbld, &idxupd, tabinfo, 
+				Range_infor->rg_meta_sysindex);	
+	
+	}
+
+exit:
+	BUF_RELEASE_RESERVED(tmpblock);
+
 	return;
 }
 
 
+
 int
-blk_backmov(BLOCK *blk)
+blk_backmov(BLOCK *blk, TABINFO *tabinfo)
 {
-	BLOCK	*nextblk;
-	BLOCK	*tmpblk;
+	LOCALTSS(tss);
+	BLOCK		*nextblk;
+	BLOCK		*destblk;
+	IDXBLD		idxbld;
+	IDXUPD		idxupd;
+	char		rg_tab_dir[TABLE_NAME_MAX_LEN];
+	
 
 	if (blk->bfreeoff == BLKHEADERSIZE)
 	{
@@ -1088,34 +1353,113 @@ blk_backmov(BLOCK *blk)
 
 	nextblk = blk;
 
+	
 	while (   (nextblk->bnextblkno!= -1) 
 	       && (nextblk->bfreeoff != BLKHEADERSIZE))
 	{		
 		nextblk = (BLOCK *) ((char *)nextblk + BLOCKSIZE);
 	}
 
+	
 	if (nextblk->bfreeoff != BLKHEADERSIZE)
 	{
 		return FALSE;
 	}
 
+	if (   (tss->topid & TSS_OP_RANGESERVER)
+	    && (!(tss->tstat & TSS_OP_RECOVERY))
+	    && (!(tabinfo->t_stat & TAB_NOLOG_MODEL))
+	    && (!(tabinfo->t_stat & TAB_INS_INDEX))
+	    && (tabinfo->t_has_index))
+	{		
+		Assert(tss->topid & TSS_OP_INSTAB);
+		
+		LOGREC		logrec;
+		
+		log_build(&logrec, LOG_BEGIN, 0, 0, tabinfo->t_sstab_name, 
+					NULL, 0, 0, 0, 0, 0, NULL, NULL);
+
+		log_put(&logrec, NULL, 0);					
+	}
+				
+
 	nextblk = (BLOCK *) ((char *)nextblk - BLOCKSIZE);
+
+	Assert(nextblk->bfreeoff > BLKHEADERSIZE);
+	
+	if ((tss->topid & TSS_OP_INSTAB) && (tabinfo->t_has_index))
+	{		
+		MEMSET(rg_tab_dir, TABLE_NAME_MAX_LEN);
+		MEMCPY(rg_tab_dir, MT_RANGE_TABLE, STRLEN(MT_RANGE_TABLE));
+		str1_to_str2(rg_tab_dir, '/', tabinfo->t_tab_name);
+	}
 
 	while ((nextblk > blk) || (nextblk == blk))
 	{
-		tmpblk = (BLOCK *) ((char *)nextblk+ BLOCKSIZE);
+		
+		destblk = (BLOCK *) ((char *)nextblk + BLOCKSIZE);
 
 		
-		Assert(   (tmpblk->bblkno != -1) 
-		       && (tmpblk->bfreeoff == BLKHEADERSIZE));
+		Assert(   (destblk->bblkno != -1)
+		       && (destblk->bfreeoff == BLKHEADERSIZE));
 
-
-		BLOCK_MOVE(tmpblk,nextblk);
 		
+		MEMCPY(destblk->bdata, nextblk->bdata, 
+					BLOCKSIZE - BLKHEADERSIZE - 4);
+		
+		destblk->bnextrno = nextblk->bnextrno;				
+		destblk->bfreeoff = nextblk->bfreeoff;
+		destblk->bminlen = nextblk->bminlen;
+
+		if (   (tss->topid & TSS_OP_INSTAB)
+		    && (tabinfo->t_has_index))
+		{			
+			
+			idxbld.idx_tab_name = rg_tab_dir;
+
+			idxbld.idx_stat = 0;
+
+			idxbld.idx_root_sstab = tabinfo->t_tablet_id;
+
+			idxupd.newblk = destblk;
+
+			idxupd.oldblk = nextblk;
+
+			idxupd.new_sstabid = tabinfo->t_sstab_id;
+
+			idxupd.old_sstabid = tabinfo->t_sstab_id;
+			
+			idxupd.start_row = 0;
+
+			
+			Assert(destblk->bfreeoff > BLKHEADERSIZE);
+
+			if (tabinfo->t_index_ts 
+				!= Range_infor->rg_meta_sysindex->idx_ver)
+			{
+				meta_load_sysindex(
+					(char *)Range_infor->rg_meta_sysindex);
+			}
+			
+			index_update(&idxbld, &idxupd, tabinfo,
+					Range_infor->rg_meta_sysindex);
+		}
+
+		MEMSET(nextblk->bdata, BLOCKSIZE - BLKHEADERSIZE - 4);
+		nextblk->bnextrno = 0;
+		nextblk->bfreeoff = BLKHEADERSIZE;
+		nextblk->bminlen = 0;
+
 		nextblk = (BLOCK *) ((char *)nextblk - BLOCKSIZE);
 	}
 
 	return TRUE;
+}
+
+int
+blk_move(TABINFO *tabinfo, BLOCK *srcblk, BLOCK *destblk)
+{
+	return 1;
 }
 
 int
@@ -1127,13 +1471,11 @@ blk_putrow()
 int
 blk_get_location_sstab(TABINFO *tabinfo, BUF *bp)
 {
-	LOCALTSS(tss);
 	char	*rp;
 	int	coloffset;
 	char	*key;
 	int	coltype;
 	int	keylen;
-	int	offset;
 	char	*key_in_blk;
 	int	keylen_in_blk;
 	int	result;
@@ -1161,7 +1503,6 @@ blk_get_location_sstab(TABINFO *tabinfo, BUF *bp)
 		}
 		
 		rp = ROW_GETPTR_FROM_OFFTAB(bp->bblk, 0);
-		offset = ROW_OFFSET_PTR(bp->bblk)[-(0)];
 
 		key_in_blk = row_locate_col(rp, coloffset, bp->bblk->bminlen, 
 					    &keylen_in_blk);
@@ -1170,6 +1511,7 @@ blk_get_location_sstab(TABINFO *tabinfo, BUF *bp)
 							keylen_in_blk);
 
 		
+#if 0
 		if (   (result == EQ) && (tabinfo->t_sinfo) 
 		    && (tabinfo->t_sinfo->sistate & (SI_DEL_DATA | SI_UPD_DATA)))
 		{
@@ -1177,16 +1519,24 @@ blk_get_location_sstab(TABINFO *tabinfo, BUF *bp)
 
 			break;
 		}
-
+#endif
 		
-		if ((result == LE) || (   (result == EQ) 
-				       && (tss->topid & TSS_OP_INSTAB)))
+		if (result == LE)
 		{
 			
 			if (bp->bblk->bblkno == 0)
 			{
 				blkidx = 0;
 			}
+			
+			break;
+		}
+		
+
+		
+		if (result == EQ)
+		{
+			blkidx = bp->bblk->bblkno;
 			
 			break;
 		}
@@ -1261,5 +1611,47 @@ blk_get_totrow_sstab(BUF *bp)
 	}
 
 	return totrow;
+}
+
+
+
+int
+blk_shuffle_data(BLOCK *srcblk, BLOCK *destblk)
+{
+	char	*rp;
+	int	rlen;
+	int	i;
+
+	
+	destblk->bfreeoff = BLKHEADERSIZE;
+	destblk->bnextrno = 0;
+	MEMSET(destblk->bdata, BLOCKSIZE - BLKHEADERSIZE - 4);
+
+	for (i = 0; i < srcblk->bnextrno; i++)
+	{
+		rp = ROW_GETPTR_FROM_OFFTAB(srcblk, i);
+		rlen = ROW_GET_LENGTH(rp, srcblk->bminlen);
+
+		if (!blk_appendrow(destblk, rp, rlen))
+		{
+			traceprint("Block resort hit error for the not enough space.\n");
+			return FALSE;
+		}
+	}
+
+	return TRUE;
+}
+
+
+int
+blk_compact(BLOCK *blk)
+{
+	Assert(blk->bnextrno == 0);
+
+	blk->bfreeoff = BLKHEADERSIZE;
+	blk->bnextrno = 0;
+	MEMSET(blk->bdata, BLOCKSIZE - BLKHEADERSIZE - 4);
+
+	return TRUE;
 }
 

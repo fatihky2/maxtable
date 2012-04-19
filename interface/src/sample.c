@@ -57,8 +57,8 @@ int main(int argc, char *argv[])
 			memset(resp, 0, 256);
 			memset(cmd , 0, 256);
 
-			sprintf(cmd, "create table test(id1 varchar, id2 varchar,id3 int)");
-			//sprintf(cmd, "create table lbs(id1 varchar, id2 varchar,id3 int)");
+			sprintf(cmd, "create table maxtab(id1 varchar, id2 varchar,id3 int, id4 varchar,id5 varchar,id6 varchar,id7 varchar,id8 varchar,id9 varchar)");
+		//	sprintf(cmd, "create table maxtab(id1 varchar, id2 varchar,id3 int)");
 			rtn_stat = mt_cli_open_execute(connection, cmd, &exec_ctx);
 
 			if (rtn_stat != CLI_SUCCESS)
@@ -81,7 +81,7 @@ exitcrt:
 			
 				
 			/* Insert 10000 data rows into table */
-			for(i = 0; i < 50000; i++)
+			for(i = 1; i < 5000; i++)
 			{
 #if 0
 				char	*c = "cccccccccccccccccccccccccccccccccccccccccccccccccccccc";
@@ -101,11 +101,11 @@ exitcrt:
 				char	*g = "gggggg";
 				char	*h = "hhhhhh";
  
-				sprintf(cmd, "insert into test(aaaa%d, bbbb%d, %d)", i,i,i);
+				sprintf(cmd, "insert into maxtab(aaaa%d, bbbb%d, %d, %s%d, %s%d, %s%d, %s%d, %s%d, %s%d)", i,i,i,c,i,d, i,e, i,f,i,g,i,h,i);
+//				 sprintf(cmd, "insert into maxtab(aaaa1653, bbbb%d, %d, %s%d, %s%d, %s%d, %d, %d, %d)", i,i,c,i,d, i,e, i,i,i,i);
 				
-//				sprintf(cmd, "insert into lbs(aaaa%d, bbbb%d, %d)", i,i,i);
+//				sprintf(cmd, "insert into maxtab(aaaa%d, bbbb%d, %d)", i,i,i);
 
-				//sprintf(cmd, "insert into gu(aaaa%d, bbbb%d)", i,i);
 				rtn_stat = mt_cli_open_execute(connection, cmd, &exec_ctx);
 
 				if (rtn_stat != CLI_SUCCESS)
@@ -131,9 +131,10 @@ exitins:
 		{	
 			memset(resp, 0, 256);
 			memset(cmd, 0, 256);
-			//sprintf(cmd, "selectwhere gu where id1(aaaa1, *) and id2(bbbb35, bbbb46)");
-			//sprintf(cmd, "selectwhere gu where id2(bbbb39, bbbb39) and id4(cccccc39, cccccc39)");
-			sprintf(cmd, "selectwhere gu where id2(bbbb5, bbbb50)");
+			//sprintf(cmd, "selectwhere maxtab where id1(aaaa1, *) and id2(bbbb35, bbbb46)");
+			//sprintf(cmd, "selectwhere maxtab where id2(bbbb39, bbbb39) and id4(cccccc39, cccccc39)");
+			sprintf(cmd, "selectwhere maxtab where id2(bbbb1, bbbb9999999)");
+			//sprintf(cmd, "selectwhere maxtab where id1(aaaa1, aaaa999999)");
 
 			
 			rtn_stat = mt_cli_open_execute(connection, cmd, &exec_ctx);
@@ -184,8 +185,9 @@ exitselwh:
 		{	
 			memset(resp, 0, 256);
 			memset(cmd, 0, 256);
-			sprintf(cmd, "selectcount gu where id1(aaaa38, aaaa47) and id2(bbbb35, bbbb46)");
-//			sprintf(cmd, "selectwhere gu where id2(bbbb3, bbbb8)");
+//			sprintf(cmd, "selectcount maxtab where id1(aaaa38, aaaa47) and id2(bbbb35, bbbb46)");
+//			sprintf(cmd, "selectcount maxtab where id1(aaaa3, aaaa8)");	
+			sprintf(cmd, "selectcount maxtab where id2(bbbb3, bbbb8)");
 
 			
 			rtn_stat = mt_cli_open_execute(connection, cmd, &exec_ctx);
@@ -224,9 +226,8 @@ exitselcnt:
 		{	
 			memset(resp, 0, 256);
 			memset(cmd, 0, 256);
-			sprintf(cmd, "selectsum (id3) gu where id1(aaaa38, aaaa47) and id2(bbbb39, bbbb40)");
-//			sprintf(cmd, "selectwhere gu where id2(bbbb3, bbbb8)");
-
+		//	sprintf(cmd, "selectsum (id3) maxtab where id1(aaaa38, aaaa47)");
+			sprintf(cmd, "selectsum (id3) maxtab where id2(bbbb38, bbbb47)");
 			
 			rtn_stat = mt_cli_open_execute(connection, cmd, &exec_ctx);
 
@@ -264,9 +265,7 @@ exitselsum:
 		{	
 			memset(resp, 0, 256);
 			memset(cmd, 0, 256);
-			sprintf(cmd, "create index idx1 on gu (id2)");
-//			sprintf(cmd, "selectwhere gu where id2(bbbb3, bbbb8)");
-
+			sprintf(cmd, "create index idx1 on maxtab (id2)");
 			
 			rtn_stat = mt_cli_open_execute(connection, cmd, &exec_ctx);
 
@@ -282,15 +281,42 @@ exitselsum:
 
 			t_exec_ctx = exec_ctx;
 
-			int	sum_colval = 0;
+			int	result = TRUE;
 			
 			for (i = 0; i < exec_ctx->rg_cnt; i++, t_exec_ctx++)
 			{
-				mt_cli_exec_builtin(t_exec_ctx);
+				if (!mt_cli_exec_builtin(t_exec_ctx))
+				{
+					result = FALSE;
+				}
 			}
 
-			printf(" The total value is %d\n", sum_colval);
+			mt_cli_result_meta(connection, exec_ctx, result);
+			
 exitcrtidx:
+			if (exec_ctx)
+			{
+				mt_cli_close_execute(exec_ctx);
+			}
+		}
+
+		if (match(argv[1], "dropindex"))
+		{	
+			memset(resp, 0, 256);
+			memset(cmd, 0, 256);
+			sprintf(cmd, "drop index idx1 on maxtab");
+			
+			rtn_stat = mt_cli_open_execute(connection, cmd, &exec_ctx);
+
+			if (rtn_stat != CLI_SUCCESS)
+			{
+				printf ("Error! \n");
+				goto exitdropindx;
+			}
+
+			printf("Client 1: %s\n", cmd);
+			
+exitdropindx:
 			if (exec_ctx)
 			{
 				mt_cli_close_execute(exec_ctx);
@@ -300,11 +326,11 @@ exitcrtidx:
 		if (match(argv[1], "select"))
 		{
 			/* Select datas from table */
-			for(i = 1; i < 10000; i++)
+			for(i = 200; i < 5000; i++)
 			{
 				memset(resp, 0, 256);
 				memset(cmd, 0, 256);
-				sprintf(cmd, "select gu(aaaa%d)", i);
+				sprintf(cmd, "select maxtab (aaaa%d)", i);
 
 				rtn_stat = mt_cli_open_execute(connection, cmd, &exec_ctx);
 
@@ -349,10 +375,10 @@ exitsel:
 		{
 			memset(resp, 0, 256);
 			memset(cmd, 0, 256);
-			//sprintf(cmd, "selectrange gu(aaaa45, aaaa46)");
-			//sprintf(cmd, "selectrange gu(*, aaaa46)");
-			//sprintf(cmd, "selectrange gu(aaaa45, *)");
-			sprintf(cmd, "selectrange gu(*, *)");
+			//sprintf(cmd, "selectrange maxtab (aaaa45, aaaa46)");
+			//sprintf(cmd, "selectrange maxtab (*, aaaa46)");
+			//sprintf(cmd, "selectrange maxtab (aaaa45, *)");
+			sprintf(cmd, "selectrange maxtab (*, *)");
 			rtn_stat = mt_cli_open_execute(connection, cmd, &exec_ctx);
 
 			if (rtn_stat != CLI_SUCCESS)
@@ -402,11 +428,11 @@ exitselrg:
 		{
 
 			/* Delete data in the table */
-			for(i = 10; i < 50; i++)
+			for(i = 6010; i < 7000; i++)
 			{
 				memset(resp, 0, 256);
 				memset(cmd, 0, 256);
-				sprintf(cmd, "delete gu(aaaa%d)", i);
+				sprintf(cmd, "delete maxtab (aaaa%d)", i);
 				rtn_stat = mt_cli_open_execute(connection, cmd, &exec_ctx);
 
 				if (rtn_stat != CLI_SUCCESS)
@@ -428,7 +454,7 @@ exitdel:
 		{
 			memset(resp, 0, 256);
 			memset(cmd, 0, 256);
-			sprintf(cmd, "drop gu");
+			sprintf(cmd, "drop table maxtab");
 			
 			rtn_stat = mt_cli_open_execute(connection, cmd, &exec_ctx);
 

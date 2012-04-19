@@ -1,22 +1,22 @@
 /*
-** netconn.h 2010-06-28 xueyingfei
-**
-** Copyright flying/xueyingfei.
+** Copyright (C) 2011 Xue Yingfei
 **
 ** This file is part of MaxTable.
 **
-** Licensed under the Apache License, Version 2.0
-** (the "License"); you may not use this file except in compliance with
-** the License. You may obtain a copy of the License at
+** Maxtable is free software: you can redistribute it and/or modify
+** it under the terms of the GNU General Public License as published by
+** the Free Software Foundation, either version 3 of the License, or
+** (at your option) any later version.
 **
-** http://www.apache.org/licenses/LICENSE-2.0
+** Maxtable is distributed in the hope that it will be useful,
+** but WITHOUT ANY WARRANTY; without even the implied warranty of
+** MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+** GNU General Public License for more details.
 **
-** Unless required by applicable law or agreed to in writing, software
-** distributed under the License is distributed on an "AS IS" BASIS,
-** WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
-** implied. See the License for the specific language governing
-** permissions and limitations under the License.
+** You should have received a copy of the GNU General Public License
+** along with Maxtable. If not, see <http://www.gnu.org/licenses/>.
 */
+
 #ifndef NETCONN_H_
 #define NETCONN_H_
 
@@ -29,7 +29,7 @@
 #define RPC_RESPONSE_MAGIC "rpcresp"
 
 /* Following is the special magic number. */
-#define	RPC_DROP_TABLE_MAGIC	"drop"
+#define	RPC_DROP_TABLE_MAGIC	"droptab"
 #define RPC_RG2MASTER_REPORT	"rg_rpt"
 #define RPC_RBD_MAGIC		"rebalan"
 #define RPC_SELECTRANGE_MAGIC	"sel_rg"
@@ -44,6 +44,9 @@
 #define RPC_MAPRED_GET_NEXT_VALUE "nextval"
 #define RPC_MAPRED_EXIT		"rg_exit"
 #define	RPC_CRT_INDEX_MAGIC	"crt_idx"
+#define	RPC_IDXROOT_SPLIT_MAGIC	"idxrspl"
+#define	RPC_CRTIDX_DONE_MAGIC	"idxcrtd"
+#define	RPC_DROPIDX_MAGIC	"dropidx"
 
 
 
@@ -102,17 +105,19 @@ typedef struct rpcresp
 }
 
 
-#define	RPC_REQ_NORMAL_OP	0x0001
-#define RPC_REQ_DROP_OP		0x0002
-#define RPC_REQ_REBALANCE_OP	0x0004
-#define RPC_REQ_SELECTRANGE_OP	0x0008
-#define RPC_REQ_M2RNOTIFY_OP	0x0010
-#define RPC_REQ_M2RHEARTBEAT_OP	0x0020
-#define	RPC_REQ_SELECWHERE_OP	0x0040
-#define	RPC_REQ_RECOVERY_RG_OP	0x0080
+#define	RPC_REQ_NORMAL_OP			0x0001
+#define RPC_REQ_DROPTAB_OP			0x0002
+#define RPC_REQ_REBALANCE_OP			0x0004
+#define RPC_REQ_SELECTRANGE_OP			0x0008
+#define RPC_REQ_M2RNOTIFY_OP			0x0010
+#define RPC_REQ_M2RHEARTBEAT_OP			0x0020
+#define	RPC_REQ_SELECWHERE_OP			0x0040
+#define	RPC_REQ_RECOVERY_RG_OP			0x0080
 #define RPC_REQ_MAPRED_GET_DATAPORT_OP 		0x0100
 #define RPC_REQ_MAPRED_GET_NEXT_VALUE_OP	0x0200
-#define	RPC_REQ_CRT_IDX_OP	0x0400
+#define	RPC_REQ_CRT_IDX_OP			0x0400
+#define	RPC_IDXROOT_SPLIT_OP			0x0800
+#define	RPC_REQ_DROPIDX_OP			0x1000			
 
 
 char *

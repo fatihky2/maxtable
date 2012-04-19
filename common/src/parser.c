@@ -1,22 +1,22 @@
 /*
-** parser.c 2010-08-11 xueyingfei
-**
-** Copyright flying/xueyingfei.
+** Copyright (C) 2011 Xue Yingfei
 **
 ** This file is part of MaxTable.
 **
-** Licensed under the Apache License, Version 2.0
-** (the "License"); you may not use this file except in compliance with
-** the License. You may obtain a copy of the License at
+** Maxtable is free software: you can redistribute it and/or modify
+** it under the terms of the GNU General Public License as published by
+** the Free Software Foundation, either version 3 of the License, or
+** (at your option) any later version.
 **
-** http://www.apache.org/licenses/LICENSE-2.0
+** Maxtable is distributed in the hope that it will be useful,
+** but WITHOUT ANY WARRANTY; without even the implied warranty of
+** MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+** GNU General Public License for more details.
 **
-** Unless required by applicable law or agreed to in writing, software
-** distributed under the License is distributed on an "AS IS" BASIS,
-** WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
-** implied. See the License for the specific language governing
-** permissions and limitations under the License.
+** You should have received a copy of the GNU General Public License
+** along with Maxtable. If not, see <http://www.gnu.org/licenses/>.
 */
+
 #include "master/metaserver.h"
 #include "rpcfmt.h"
 #include "parser.h"
@@ -248,6 +248,10 @@ parser_open(char *s_str)
 	    	rtn_stat = par_crt_idx_tab((s_str + s_idx), CRTINDEX);	        
 	        break;
 
+	    case DROPINDEX:
+	    	rtn_stat = par_dropremov_idx_tab((s_str + s_idx), DROPINDEX);
+	    	break;
+
 	    case SELECT:		
 		tss->topid |= TSS_OP_SELDELTAB;
 		rtn_stat = par_seldel_tab((s_str + s_idx), SELECT);
@@ -268,12 +272,16 @@ parser_open(char *s_str)
 	    	rtn_stat = par_addsstab(s_str + s_idx, ADDSSTAB);
 	    	break;
 		
-	    case DROP:
-	    	rtn_stat = par_dropremovrebalanmcc_tab(s_str + s_idx, DROP);
+	    case DROPTAB:
+	    	rtn_stat = par_dropremovrebalanmcc_tab(s_str + s_idx, DROPTAB);
 	    	break;
 		
-	    case REMOVE:
-	    	rtn_stat = par_dropremovrebalanmcc_tab(s_str + s_idx, REMOVE);
+	    case REMOVETAB:
+	    	rtn_stat = par_dropremovrebalanmcc_tab(s_str + s_idx, REMOVETAB);
+	    	break;
+
+	    case REMOVEINDEX:
+	    	rtn_stat = par_dropremov_idx_tab(s_str + s_idx, REMOVEINDEX);
 	    	break;
 		
 	    case MCCTABLE:
@@ -576,6 +584,8 @@ double_parse:
 	   || (!strncasecmp("insert", start, len))
 	   || (!strncasecmp("add", start, len))
 	   || (!strncasecmp("addsstab", start, len))
+	   || (!strncasecmp("drop", start, len))
+	   || (!strncasecmp("remove", start, len))
 	   || (!strncasecmp("mcc", start, len)))
 	{
 		start[len++] = ' ';
@@ -1199,9 +1209,9 @@ par_crt_idx_tab(char *s_str, int querytype)
 {
 	LOCALTSS(tss);
 	int		len;
-	char		tab_name[64];
+	char		idx_name[64];
 	int		cmd_len;
-	char		tab_name_len;
+	char		idx_name_len;
 	int		start;
 	int		end;
 	char		*cmd_str;
@@ -1230,28 +1240,28 @@ par_crt_idx_tab(char *s_str, int querytype)
 		goto exit;
 	}
 
-	MEMSET(tab_name, 64);
+	MEMSET(idx_name, 64);
 
 	
-	MEMCPY(tab_name, s_str, len - cmd_strlen);
+	MEMCPY(idx_name, s_str, len - cmd_strlen);
 	
-	str0n_trunc_0t(tab_name, len - cmd_strlen, &start, &end);
-	tab_name_len = end - start;
+	str0n_trunc_0t(idx_name, len - cmd_strlen, &start, &end);
+	idx_name_len = end - start;
 
-	if (tab_name_len < 1)
+	if (idx_name_len < 1)
 	{
 		traceprint("Index name not allowed with NULL.\n");
 		goto exit;
 	}
 	
-	if (!par_name_check(&(tab_name[start]), tab_name_len))
+	if (!par_name_check(&(idx_name[start]), idx_name_len))
 	{
 		goto exit;
 	}
 
 	
-	tss->tcmd_parser = par_bld_cmd(&(tab_name[start]), 
-					tab_name_len, querytype);
+	tss->tcmd_parser = par_bld_cmd(&(idx_name[start]), 
+					idx_name_len, querytype);
 
 	if (par_crtins_tab(s_str + len, querytype))
 	{
@@ -1267,6 +1277,118 @@ exit:
 	return parser_result;
 }
 
+
+
+
+
+int 
+par_dropremov_idx_tab(char *s_str, int querytype)
+{
+	LOCALTSS(tss);
+	int		len;
+	char		idx_name[64];
+	int		cmd_len;
+	char		idx_name_len;
+	int		start;
+	int		end;
+	char		*cmd_str;
+	int		cmd_strlen;
+	int		parser_result;
+	char		tab_name[64];
+	int		tab_name_len;
+	TREE		*command;
+
+	
+
+	if (s_str == NULL || (STRLEN(s_str) == 0))
+	{
+		return FALSE;
+	}
+
+	parser_result = FALSE;
+		
+	len = 0;
+	cmd_len = STRLEN(s_str);
+	cmd_str = "on\0";
+	cmd_strlen = STRLEN(cmd_str);
+	
+	len = str1nstr(s_str, cmd_str, cmd_len);
+
+	if (len < 0)
+	{
+		traceprint("Value is not allowed with NULL.\n");
+		goto exit;
+	}
+
+	MEMSET(idx_name, 64);
+
+	
+	MEMCPY(idx_name, s_str, len - cmd_strlen);
+	
+	str0n_trunc_0t(idx_name, len - cmd_strlen, &start, &end);
+	idx_name_len = end - start;
+
+	if (idx_name_len < 1)
+	{
+		traceprint("Index name not allowed with NULL.\n");
+		goto exit;
+	}
+	
+	if (!par_name_check(&(idx_name[start]), idx_name_len))
+	{
+		goto exit;
+	}
+
+	
+	tss->tcmd_parser = par_bld_cmd(&(idx_name[start]), 
+					idx_name_len, querytype);
+
+	
+	s_str += len;
+	
+	cmd_len = STRLEN(s_str);
+
+	MEMSET(tab_name, 64);
+
+					
+	MEMCPY(tab_name, s_str, cmd_len);
+
+	
+	str0n_trunc_0t(tab_name, cmd_len, &start, &end);
+	
+	tab_name_len = end - start;
+
+	if (tab_name_len < 1)
+	{
+		traceprint("Table name not allowed with NULL.\n");
+		return FALSE;
+	}
+
+	if (!par_name_check(&(tab_name[start]), tab_name_len))
+	{
+		return FALSE;
+	}
+
+	command = tss->tcmd_parser;
+
+	
+	while(command->right)
+	{
+		command = command->right;
+	}
+	
+	command->right = par_bld_cmd(&(tab_name[start]), 
+					tab_name_len, querytype);
+	
+	parser_result = TRUE;
+exit:	
+	if (!parser_result)
+	{
+		traceprint("drop index parser hit error, please type help for information.\n");
+	}
+
+	return parser_result;
+}
 
 int
 par_op_where(char *cmd, int len)

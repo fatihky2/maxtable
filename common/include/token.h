@@ -1,23 +1,21 @@
 /*
-** token.h 2010-12-17 xueyingfei
-**
-** Copyright flying/xueyingfei.
+** Copyright (C) 2011 Xue Yingfei
 **
 ** This file is part of MaxTable.
 **
-** Licensed under the Apache License, Version 2.0
-** (the "License"); you may not use this file except in compliance with
-** the License. You may obtain a copy of the License at
+** Maxtable is free software: you can redistribute it and/or modify
+** it under the terms of the GNU General Public License as published by
+** the Free Software Foundation, either version 3 of the License, or
+** (at your option) any later version.
 **
-** http://www.apache.org/licenses/LICENSE-2.0
+** Maxtable is distributed in the hope that it will be useful,
+** but WITHOUT ANY WARRANTY; without even the implied warranty of
+** MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+** GNU General Public License for more details.
 **
-** Unless required by applicable law or agreed to in writing, software
-** distributed under the License is distributed on an "AS IS" BASIS,
-** WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
-** implied. See the License for the specific language governing
-** permissions and limitations under the License.
+** You should have received a copy of the GNU General Public License
+** along with Maxtable. If not, see <http://www.gnu.org/licenses/>.
 */
-
 
 #ifndef TOKEN_H_
 #define TOKEN_H_
@@ -44,8 +42,8 @@ typedef struct tokens
 #define DELETE		5
 #define ADDSERVER	6
 #define ADDSSTAB	7	/* Add sstable row into tabletN. */
-#define DROP		8
-#define REMOVE		9	/* Remove the whole table file in the metadata server. */
+#define DROPTAB		8
+#define REMOVETAB	9	/* Remove the whole table file in the metadata server. */
 #define REBALANCE	10
 #define SELECTRANGE	11
 #define	MCCTABLE	12
@@ -54,9 +52,12 @@ typedef struct tokens
 #define SHARDING	15
 #define	SELECTCOUNT	16
 #define SELECTSUM	17
+#define	IDXROOTSPLIT	18
+#define	DROPINDEX	19
+#define	REMOVEINDEX	20
 	
 
-#define MAXSI_FIXED_TOKENS	17
+#define MAXSI_FIXED_TOKENS	20
 
 int
 token_validate(char *token);

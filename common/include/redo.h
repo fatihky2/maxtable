@@ -17,37 +17,10 @@
 ** along with Maxtable. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef	HKGC_H_
-#define HKGC_H_
+int
+redo_data_insdel(LOGREC *logrec, char *rp);
 
-struct buf;
-
-
-#define	HKGC_WORK_INTERVAL	20
-#define	HK_BATCHSIZE		16
-
-typedef struct hkgc_info
-{
-	int		hk_stat;
-	int		buf_num;
-	struct buf	*hk_dirty_buf[HK_BATCHSIZE];
-	
-	SPINLOCK	hk_sstabmap_mutex;	/* mutex for the sstabmap */
-	SIGNAL		hk_sstabmap_cond;
-	TAB_SSTAB_MAP	*hk_sstabmap;		/* sstabmap: just one item. */
-	
-} HKGC_INFO;
+int
+redo_index_insdel(LOGREC *logrec, char *rp);
 
 
-#define	HKGC_SSTAB_MAP_DIRTY	0x0001	/* Trigger for the sstab map writing. */
-#define HKGC_SSTAB_BUF_DIRTY	0x0002	/* This feature if it need to */
-
-
-void *
-hkgc_boot(void *opid);
-
-void
-hkgc_wash_sstab(int force);
-
-
-#endif

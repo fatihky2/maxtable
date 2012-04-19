@@ -1,23 +1,21 @@
 /*
-** metaserver.h 2010-06-15 xueyingfei
-**
-** Copyright flying/xueyingfei.
+** Copyright (C) 2011 Xue Yingfei
 **
 ** This file is part of MaxTable.
 **
-** Licensed under the Apache License, Version 2.0
-** (the "License"); you may not use this file except in compliance with
-** the License. You may obtain a copy of the License at
+** Maxtable is free software: you can redistribute it and/or modify
+** it under the terms of the GNU General Public License as published by
+** the Free Software Foundation, either version 3 of the License, or
+** (at your option) any later version.
 **
-** http://www.apache.org/licenses/LICENSE-2.0
+** Maxtable is distributed in the hope that it will be useful,
+** but WITHOUT ANY WARRANTY; without even the implied warranty of
+** MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+** GNU General Public License for more details.
 **
-** Unless required by applicable law or agreed to in writing, software
-** distributed under the License is distributed on an "AS IS" BASIS,
-** WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
-** implied. See the License for the specific language governing
-** permissions and limitations under the License.
+** You should have received a copy of the GNU General Public License
+** along with Maxtable. If not, see <http://www.gnu.org/licenses/>.
 */
-
 
 #ifndef METASERVER_H_
 #define METASERVER_H_
@@ -158,10 +156,31 @@ struct stat st;
 #endif
 
 
-typedef struct key_col
+/*
+Rid structure
+*/
+typedef struct rid
 {
-	int	col_offset;	/* the offset of key column */
-} KEYCOL;
+	int	sstable_id;	/* SStable number. */
+	int	block_id;	/* Block number. */
+	int	roffset;	/* Row offset in one block. */
+	int	pad;
+}RID;
+
+
+/*
+** sycolumn scheme:
+**             1.  each table has one syscolumn
+**             2. Clo_id (int) | Col_name (char 64) | Col_length (int)| Col_offset (int) |Col_type (int) 
+*/
+typedef struct col_info
+{
+        int     col_id;
+        char    col_name[64];
+        int     col_len;
+        int     col_offset;
+        int     col_type;
+} COLINFO;
 
 
 typedef struct table_hdr
@@ -185,10 +204,11 @@ typedef struct table_hdr
 	int	tab_stat;		/* the state of table */
 	int 	offset_c1;		/* the column of tablet name */
 	int 	offset_c2;		/* the column of key */
-	int	index_root;		/* The number of sstable for index root */
-	int	index_map;		/* This map will flag which column is 
-					** indexed.
+	int	index_ts;		/* The timestamp of index against the
+					** table, It must be keep consistency 
+					** with 'idx_ver' in sysindex.
 					*/
+	int	has_index;		/* Flag if table has one index. */
 } TABLEHDR;
 
 /*
@@ -204,15 +224,17 @@ typedef struct table_hdr
 
 
 
-/* Get the column beased on index. */
+/* Get the column beased on index and col_idx must start from '0'. */
 #define INDEX_MAP_GET_COLUMN_NUM(col_map, col_idx)	\
+	int	tmp_map = col_map;			\
+							\
 	do{						\
-		if (col_map & 0x01)			\
+		if (tmp_map & 0x01)			\
 		{					\
 			break;				\
 		}					\
 							\
-		col_map >>= 1;				\
+		tmp_map >>= 1;				\
 		col_idx++;				\
 							\
 		if (col_idx > COL_MAX_NUM)		\
@@ -220,43 +242,7 @@ typedef struct table_hdr
 			col_idx = -1;			\
 			break;				\
 		}					\
-	}while (col_map)				\
-
-
-/* Following definition is for the tab_stat. */
-#define	TAB_DROPPED	0x0001		/* This table has been dropped. */
-
-/* Each tablet has 256M data. */
-typedef struct tablet_hdr
-{
-	char	firstkey[256];
-	char    tblet_name[128];
-	int	tblet_sstab;		/* # of sstable*/
-	int	offset_c1;		/* sstable name */
-	int	offset_c2;		/* range addr */
-	int	offset_c3;		/* key */
-	int	tabletid;	
-}TABLETHDR;
-
-/*
-** sycolumn scheme:
-**             1.  each table has one syscolumn
-**             2. Clo_id (int) | Col_name (char 64) | Col_length (int)| Col_offset (int) |Col_type (int) 
-*/
-typedef struct col_info
-{
-        int     col_id;
-        char    col_name[64];
-        int     col_len;
-        int     col_offset;
-        int     col_type;
-} COLINFO;
-
-/* Each sstable has 64M data. */
-typedef struct sstable
-{
-	char    sstab_name[128];
-}SSTABLE;
+	}while (tmp_map)				\
 
 
 typedef struct rg_prof
@@ -283,10 +269,9 @@ typedef struct rg_prof
 #define RANGER_IS_SUSPECT	0x0008
 #define RANGER_RESTART		0x0010
 
-
 typedef union infor_hdr
 {
-	struct rg_prof	rg_info;
+	RANGE_PROF	rg_info;
 	char		magic[RPC_MAGIC_MAX_LEN];
 } INFOR_HDR;
 
@@ -334,6 +319,7 @@ typedef	struct svr_idx_file
 /* Following definition is for the stat. */
 #define	SVR_IS_BAD	0x0001
 
+
 /* This structure should be corresponding to the formate of metaserver returns. */
 typedef struct insert_meta
 {
@@ -346,7 +332,7 @@ typedef struct insert_meta
 	int		col_num;	/* # of column in the table */
 	int		varcol_num;	/* # of var-length column */
 	int		row_minlen;
-	int		pad;
+	int		tabletid;	/* The id of tablet to be inserted. */
 	
 } INSMETA;
 
@@ -354,6 +340,13 @@ typedef struct insert_meta
 #define	INS_META_1ST	0x0001		/* Falg if this insert is first row 
 					** in this sstable file.
 					*/
+typedef struct select_range
+{
+	INSMETA		left_range;
+	INSMETA		right_range;	
+} SELRANGE;
+
+
 /*
 ** These meta information will be stored to the disk.
 ** The tuple of data in the file sysindex.
@@ -368,12 +361,23 @@ typedef struct idxmeta
 	char	idxname[TABLE_NAME_MAX_LEN];
 }IDXMETA;
 
+/* Following definition is for the idx_stat. */
+#define	IDX_IN_CREATE	0x0001	/* Index is creating. */
+#define	IDX_IN_WORKING	0x0002	/* Index can be access. */
+#define	IDX_IN_DROP	0x0004	/* Index is in drop processing. */
+#define	IDX_IN_SUSPECT	0x0008	/* Index is in the suspect and needs to
+				** check further. 
+				*/
 
-typedef struct select_range
+
+typedef struct idx_root_split
 {
-	INSMETA		left_range;
-	INSMETA		right_range;	
-} SELRANGE;
+	int	idx_srcroot_id;
+	int	idx_destroot_id;
+	int	idx_tabid;
+	int	pad;
+	char	idx_tabname[TABLE_NAME_MAX_LEN];
+}IDX_ROOT_SPLIT;
 
 typedef struct select_where
 {
@@ -382,7 +386,7 @@ typedef struct select_where
 	int		rightnamelen;
 	char		lefttabletname[128];
 	char		righttabletname[128];
-	int		use_idxmeta;
+	int		use_idxmeta;		/* True if the query will use the index on this clumn. */
 	int		pad;
 	IDXMETA		idxmeta;
 }SELWHERE;
@@ -415,94 +419,6 @@ typedef struct insert_ranger
 	char		*new_sstab_key;
 }INSRG;
 
-typedef struct tab_info
-{
-	struct buf	*t_dnew;	/* ptr to next dirty buf */	 
-	struct buf	*t_dold;	/* ptr to last dirty buf */ 
-//	TABLEHDR	*t_tabhdr;
-	int		t_tabid;
-	char		*t_tab_name;	/* Table name */
-	int		t_tab_namelen;
-	int		t_key_colid;
-	int		t_key_coltype;
-	int		t_key_coloff;
-	struct tab_info	*t_nexttab;	/* Tabinfo link, insert header. */
-	TABLETHDR	*t_tablethdr;
-	COLINFO		*t_colinfo;
-	INSMETA		*t_insmeta;
-	SELRANGE	*t_selrg;
-	int		t_row_minlen;
-	int		t_stat;
-	int		t_sstab_id;	/* current sstable id */
-	char		*t_sstab_name;	/* current sstable name */
-	int		t_split_tabletid;
-	struct block_row_info 
-			*t_rowinfo;
-	struct srch_info	
-			*t_sinfo;
-	struct buf	*t_keptbuf;
-	struct buf	*t_resbuf;
-	INSRG		*t_insrg;
-	unsigned int	t_insdel_old_ts_lo;		
-	unsigned int    t_insdel_new_ts_lo;
-	char		*t_cur_rowp;	/* Ptr to the working row. */
-	int		t_cur_rowlen;
-} TABINFO;
-
-/* Following is for the t_stat field of tab_info*/
-#define TAB_META_SYSTAB		0x00000001
-#define TAB_SCHM_SRCH		0x00000002	/* We need just to get the right
-						** and exist row in the 
-						** tabletscheme table.
-						*/
-#define TAB_CRT_NEW_FILE	0x00000004
-#define	TAB_SRCH_DATA		0x00000008	/* Search data in the ranger
-						** server.
-						*/
-#define TAB_SSTAB_SPLIT		0x00000010	/* We need to submit the sstab
-						** name to Master if it's true.
-						*/  
-#define TAB_SSTAB_1ST_ROW_CHG	0x00000020
-#define TAB_KEPT_BUF_VALID	0x00000040	/* If it's true, the t_keptbuf 
-						** is valid.
-						*/
-#define TAB_INS_DATA		0x00000080
-#define TAB_SCHM_INS		0x00000100	/* Insert data into tablet or 
-						** tabletscheme. 
-						*/
-#define TAB_GET_RES_SSTAB	0x00000200	/* True if we want to get the 
-						** reserved sstable while
-						** sstable hit split case.
-						*/
-#define TAB_TABLET_SPLIT	0x00000400
-#define TAB_TABLET_CRT_NEW	0x00000800	/* Raise the # of tablet in the
-						** tablet header to count.
-						*/
-#define TAB_TABLET_KEYROW_CHG	0x00001000	/* True and  the 1st row of 1st
-						** tablet must be changed. 
-						*/
-#define TAB_DEL_DATA		0x00002000	/* True if we is processing a
-						** delete case.
-						*/
-#define	TAB_RETRY_LOOKUP	0x00004000	/* Retry to lookup the metadata. */
-#define	TAB_DO_SPLIT		0x00008000
-#define TAB_RESERV_BUF		0x00010000
-#define TAB_INS_SPLITING_SSTAB	0x00020000
-#define	TAB_LOG_SKIP_LOG	0x00040000	/* Skip it for recovery. */
-#define	TAB_SCHM_UPDATE		0x00080000	/* Update for the tablet or
-						** tabletschme.
-						*/
-#define	TAB_DO_INDEX		0x00100000	/* Table is processing in the 
-						** index related work, such
-						** as the building index, delete
-						** index, insert index.
-						*/
-#define	TAB_INS_INDEX		0x00200000	/* Insert index row. */
-#define	TAB_SRCH_RANGE		0x00400000	/* Range query*/
-
-
-#define TAB_IS_SYSTAB(tabinfo)	(tabinfo->t_stat & TAB_META_SYSTAB)
-
 
 #define META_CONF_PATH_MAX_LEN   64
 
@@ -511,26 +427,6 @@ typedef struct tab_info
 
 /* Temp solution is to support the index on one column. */
 #define	IDX_MAX_NUM	(TAB_MAX_NUM * COL_MAX_NUM)
-
-
-#define MAX_RANGER_NUM	1024
-#define HB_DATA_SIZE	128
-
-typedef struct hb_data
-{
-	int	hb_stat;
-	char	recv_data[HB_DATA_SIZE];
-}HB_DATA;
-
-/* Place holder: following definition is for the hb_stat. */
-#define	HB_IS_OFF	0x0000		/* heartbeat is down. */
-#define	HB_IS_ON	0x0001		/* heartbeat setup. */
-
-#define HB_RANGER_IS_ON(hb_data)	((hb_data)->hb_stat & HB_IS_ON)
-
-#define HB_SET_RANGER_ON(hb_data)	((hb_data)->hb_stat = (((hb_data)->hb_stat & ~HB_IS_OFF) | HB_IS_ON))
-
-#define HB_SET_RANGER_OFF(hb_data)	((hb_data)->hb_stat = (((hb_data)->hb_stat & ~HB_IS_ON) | HB_IS_OFF))
 
 /* In-memory structure. */
 typedef struct meta_systable
@@ -563,24 +459,13 @@ typedef struct meta_sysindex
 {
 	char		idx_magic[8];
 	int		idx_num;	/* The total number of index in system. */
-	int		pad;
+	int		idx_ver;	/* Index version that it will keep the 
+					** consistency between the metaserver
+					** and ranger server.
+					*/
 	IDXMETA		idx_meta[IDX_MAX_NUM];	
 }META_SYSINDEX;
 
-typedef struct master_infor
-{
-	char		conf_path[META_CONF_PATH_MAX_LEN];
-	int		port;
-	int		last_tabid;
-	META_SYSTABLE	*meta_systab;
-	META_SYSOBJECT	*meta_sysobj;
-	META_SYSCOLUMN	*meta_syscol;	
-	META_SYSINDEX	*meta_sysindex;
-	LOCKATTR 	mutexattr;
-	SPINLOCK	rglist_spinlock;	
-	SVR_IDX_FILE	rg_list;
-	HB_DATA		heart_beat_data[MAX_RANGER_NUM];
-}MASTER_INFOR;
 
 /* 
 ** minlen is needed in the insert case and this value will be saved into disk. 

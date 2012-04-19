@@ -1,23 +1,24 @@
 /*
-** b_search.c 2010-10-08 xueyingfei
-**
-** Copyright flying/xueyingfei.
+** Copyright (C) 2011 Xue Yingfei
 **
 ** This file is part of MaxTable.
 **
-** Licensed under the Apache License, Version 2.0
-** (the "License"); you may not use this file except in compliance with
-** the License. You may obtain a copy of the License at
+** Maxtable is free software: you can redistribute it and/or modify
+** it under the terms of the GNU General Public License as published by
+** the Free Software Foundation, either version 3 of the License, or
+** (at your option) any later version.
 **
-** http://www.apache.org/licenses/LICENSE-2.0
+** Maxtable is distributed in the hope that it will be useful,
+** but WITHOUT ANY WARRANTY; without even the implied warranty of
+** MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+** GNU General Public License for more details.
 **
-** Unless required by applicable law or agreed to in writing, software
-** distributed under the License is distributed on an "AS IS" BASIS,
-** WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
-** implied. See the License for the specific language governing
-** permissions and limitations under the License.
+** You should have received a copy of the GNU General Public License
+** along with Maxtable. If not, see <http://www.gnu.org/licenses/>.
 */
+
 #include "master/metaserver.h"
+#include "tabinfo.h"
 #include "utils.h"
 #include "row.h"
 #include "buffer.h"
@@ -54,14 +55,10 @@ b_srch_block(TABINFO *tabinfo, BUF *bp, B_SRCHINFO *srchinfo)
 nextrow:
 	
 	srchinfo->brow = ROW_GETPTR_FROM_OFFTAB(bp->bblk, srchinfo->brownum);
-	srchinfo->boffset = ROW_OFFSET_PTR(bp->bblk)[-((int)(srchinfo->brownum))];
+//	srchinfo->boffset = ROW_OFFSET_PTR(bp->bblk)[-((int)(srchinfo->brownum))];
 
 	if ((tss->topid & TSS_OP_RANGESERVER) && (ROW_IS_DELETED(srchinfo->brow)))
 	{	
-				
-		Assert(   (bp->bblk->bblkno == 0) 
-		       && (srchinfo->boffset == BLKHEADERSIZE));
-
 		
 		if (   (tabinfo->t_sinfo->sistate & SI_INS_DATA) 
 		    || (tabinfo->t_stat & TAB_SRCH_RANGE))
@@ -117,10 +114,6 @@ nextrow:
 				    && (srchinfo->brownum == 0) 
 			    	    && (bp->bblk->bblkno == 0))
 				{
-					Assert(   (srchinfo->boffset)
-					       == (ROW_OFFSET_PTR(bp->bblk)[-(srchinfo->brownum)]));
-					//Assert(last_offset == *offset);
-					
 					tabinfo->t_stat |= TAB_TABLET_KEYROW_CHG;
 				}
 
@@ -128,7 +121,6 @@ nextrow:
 				if (srchinfo->brownum > 0)
 				{
 					(srchinfo->brownum)--;
-					srchinfo->boffset = ROW_OFFSET_PTR(bp->bblk)[-(srchinfo->brownum)];
 				}
 			}
 
@@ -157,15 +149,6 @@ do_gr_case:
 				(srchinfo->brownum)++;
 				
 				
-				if (srchinfo->brownum == srchinfo->btotrows)
-    				{
-    					break;
-    				}
-
-				
-				srchinfo->boffset += ROW_GET_LENGTH(srchinfo->brow, bp->bblk->bminlen);
-
-				Assert(srchinfo->boffset == ROW_OFFSET_PTR(bp->bblk)[-(srchinfo->brownum)]);			
 	    		}
 	    	}
 		else
