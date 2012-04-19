@@ -1,23 +1,21 @@
 /*
-** log.h 2011-10-27 xueyingfei
-**
-** Copyright Transoft Corp.
+** Copyright (C) 2011 Xue Yingfei
 **
 ** This file is part of MaxTable.
 **
-** Licensed under the Apache License, Version 2.0
-** (the "License"); you may not use this file except in compliance with
-** the License. You may obtain a copy of the License at
+** Maxtable is free software: you can redistribute it and/or modify
+** it under the terms of the GNU General Public License as published by
+** the Free Software Foundation, either version 3 of the License, or
+** (at your option) any later version.
 **
-** http://www.apache.org/licenses/LICENSE-2.0
+** Maxtable is distributed in the hope that it will be useful,
+** but WITHOUT ANY WARRANTY; without even the implied warranty of
+** MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+** GNU General Public License for more details.
 **
-** Unless required by applicable law or agreed to in writing, software
-** distributed under the License is distributed on an "AS IS" BASIS,
-** WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
-** implied. See the License for the specific language governing
-** permissions and limitations under the License.
+** You should have received a copy of the GNU General Public License
+** along with Maxtable. If not, see <http://www.gnu.org/licenses/>.
 */
-
 
 #ifndef LOG_H_
 #define LOG_H_
@@ -41,38 +39,128 @@
 
 
 #define	LOG_INVALID		0
-#define	LOG_BEGIN		1
+#define	LOG_BEGIN		1	
 #define LOG_END			2
-#define	LOG_DO_SPLIT		3
-#define LOG_INSERT		4
-#define LOG_DELETE		5
+#define	LOG_DATA_SSTAB_SPLIT	3
+#define LOG_DATA_INSERT		4
+#define LOG_DATA_DELETE		5
 #define CHECKPOINT_BEGIN	6
 #define CHECKPOINT_COMMIT	7
 #define	LOG_SKIP		8
+#define	LOG_UPDRID		9
+#define	LOG_BLK_SPLIT		10	
+#define	LOG_INDEX_SSTAB_SPLIT	11
+#define	LOG_INDEX_INSERT	12
+#define	LOG_INDEX_DELETE	13
 
 
 #define	LOG_MAGIC_LEN		8
 #define	MT_LOG			"MT_LOG"
 #define	INSDEL_LOG_MAGIC	"INSDEL"
-#define	CHKPOINT_LOG_MAGIC	"CHKPNT"
+#define	CHKPOINT_BEGLOG_MAGIC	"CHKPTBE"
+#define	CHKPOINT_COMMLOG_MAGIC	"CHKPTEN"
+#define	LOG_BEGIN_MAGIC		"LOGBEG"
+#define	LOG_END_MAGIC		"LOGEND"
+#define	SSTAB_SPLIT_MAGIC	"SSTABSP"
+#define	UPDRID_MAGIC		"UPDRID"
+#define	BLOCK_SPLIT_MAGIC	"BLKSPLI"
+#define	INDEX_INSDEL_MAGIC	"IDXINDE"
 
 
-typedef struct logrec
+typedef struct loghdr
 {
 	char		logmagic[LOG_MAGIC_LEN];
-	int		opid;
+	int		opid;		
 	int		status;
-	unsigned int	oldts;
+	int		loglen;
+	int		pad;
+	char		log_test_magic[8];
+}LOGHDR;
+
+
+typedef struct loginsdel
+{
+	LOGHDR		loghdr;
+
+	unsigned int	oldts;		
 	unsigned int	newts;
 	int		minrowlen;
 	int		tabid;
 	int		sstabid;
-	char		tablename[TABLET_NAME_MAX_LEN];
+	int		blockid;
+	int		rnum;
+	int		status;
+	char		sstabname[SSTABLE_NAME_MAX_LEN];
+
+}LOGINSDEL;
+
+
+#define	LOGINSDEL_RID_UPD	0x0001
+
+
+typedef struct logchkpt
+{
+	LOGHDR		loghdr;
+}LOGCHKPT;
+
+
+typedef struct logbegin
+{
+	LOGHDR		loghdr;
+	int		begincase;
+	int		pad;
+}LOGBEGIN;
+
+
+#define	LOGBEG_INDEX_CASE	0x0001	
+
+
+typedef struct logend
+{
+	LOGHDR		loghdr;
+}LOGEND;
+
+
+typedef struct logsplit
+{
+	LOGHDR		loghdr;
+
 	char		oldsstabname[SSTABLE_NAME_MAX_LEN];
 	char		newsstabname[SSTABLE_NAME_MAX_LEN];
-	int		rowend_off;
-	int		loglen;
-}LOGREC;
+}LOGSPLIT;
+
+
+typedef struct logupdrid
+{
+	LOGHDR		loghdr;
+
+	unsigned int	oldts;		
+	unsigned int	newts;
+	int		minrowlen;
+	int		sstabid;
+	int		blockid;
+	int		rnum;
+	int		idx_id;
+	int		pad;
+	char		sstabname[SSTABLE_NAME_MAX_LEN];
+	RID		oldrid;
+	RID		newrid;
+
+}LOGUPDRID;
+
+
+typedef union logrec
+{
+	LOGINSDEL	loginsdel;
+	LOGCHKPT	logchkpt;
+	LOGBEGIN	logbeg;
+	LOGEND		logend;
+	LOGSPLIT	logsplit;
+	LOGUPDRID	logupdrid;
+	
+} LOGREC;
+
+
 
 
 #define	CHECKPOINT_BIT_BEGIN	0x0001
@@ -93,32 +181,22 @@ typedef struct logfile
 
 
 void
-log_build(LOGREC *logrec, int logopid, unsigned int oldts, unsigned int newts, char *oldsstab, 
-		char *newsstab, int minrowlen, int tabid, int sstabid);
+log_build(LOGREC *logrec, int logopid, unsigned int oldts, unsigned int newts,
+		char *oldsstab, char *newsstab, int minrowlen, int tabid,
+		int sstabid, int blockid, int rnum, char *oldrid, char *newrid);
 
-int
-log_insert_sstab_split(char	 *logfile_dir, LOGREC *logrec, int logtype);
-
-int
-log_delete(LOGFILE *logfilebuf, int logtype);
-
-int
-log_undo_sstab_split(char *logfile_dir, char *backup_dir, int logtype, char *rgip, int rgport);
-
-int
-log_get_sstab_split_logfile(char *rglogfile, char *rgip, int rgport);
 
 int
 log_get_rgbackup(char *rgbackup, char *rgip, int rgport);
 
 int
-log_insert_insdel(LOGREC *logrec, char *rp, int rlen);
+log_put(LOGREC *logrec, char *rp, int rlen);
 
 int
-log_get_latest_rginsedelfile(char *rginsdellogfile, char *rg_ip, int port);
+log_get_latest_rglogfile(char *rginsdellogfile, char *rg_ip, int port);
 
 int
-log_redo_insdel(char *insdellogfile, int scan_first);
+log_recovery(char *insdellogfile, char *rg_ip, int rg_port);
 
 int
 log_recov_rg(char *rgip, int rgport);

@@ -1,22 +1,22 @@
 /*
-** cache.c 2010-11-25 xueyingfei
-**
-** Copyright flying/xueyingfei.
+** Copyright (C) 2011 Xue Yingfei
 **
 ** This file is part of MaxTable.
 **
-** Licensed under the Apache License, Version 2.0
-** (the "License"); you may not use this file except in compliance with
-** the License. You may obtain a copy of the License at
+** Maxtable is free software: you can redistribute it and/or modify
+** it under the terms of the GNU General Public License as published by
+** the Free Software Foundation, either version 3 of the License, or
+** (at your option) any later version.
 **
-** http://www.apache.org/licenses/LICENSE-2.0
+** Maxtable is distributed in the hope that it will be useful,
+** but WITHOUT ANY WARRANTY; without even the implied warranty of
+** MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+** GNU General Public License for more details.
 **
-** Unless required by applicable law or agreed to in writing, software
-** distributed under the License is distributed on an "AS IS" BASIS,
-** WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
-** implied. See the License for the specific language governing
-** permissions and limitations under the License.
+** You should have received a copy of the GNU General Public License
+** along with Maxtable. If not, see <http://www.gnu.org/licenses/>.
 */
+
 #include "master/metaserver.h"
 #include "buffer.h"
 #include "rpcfmt.h"
@@ -45,7 +45,7 @@ ca_init_buf(BUF *bp, BLOCK *blk, BUF *sstab)
 //	bp->bsstabnew = bp->bsstabold = NULL;
 }
 
-static void
+void
 ca_init_blk(BLOCK *blk, int blkno, int sstabid, int bp_cnt)
 {
 	MEMSET(blk, BLOCKSIZE);
@@ -273,3 +273,38 @@ ca_prt_bp()
 
 	return;
 }
+
+void
+ca_prt_cache()
+{
+	BUF	*tempbp;
+	BUF	*bp;
+	int	i,j;
+
+	
+	tempbp = Kernel->ke_buflru;
+
+	traceprint("Header of Kernel->ke_buflru (dummy buffer) 0x%x\n", tempbp);
+
+	i = j = 0;
+	bp = tempbp->bsstabnew;
+	
+	while((i < BLOCK_MAX_COUNT) && bp && (bp != tempbp))
+	{	
+		j++;
+		traceprint("SSTABLE # :  %d\n", j);
+		traceprint("Header of SSTABLE : 0x%x\n", bp);
+		traceprint("bp->bkeep : 0x%x\n", bp->bkeep);
+		traceprint("bp->bstat : 0x%x\n", bp->bstat);
+		traceprint("bp->bsstabnew : 0x%x\n", bp->bsstabnew);
+		traceprint("bp->bsstabold : 0x%x\n", bp->bsstabold);
+		traceprint("bp->bblk : 0x%x\n", bp->bblk);
+		
+		
+		i += BLK_CNT_IN_SSTABLE;
+		bp = bp->bsstabnew;
+	}
+
+	return;
+}
+

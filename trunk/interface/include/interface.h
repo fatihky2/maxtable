@@ -1,21 +1,20 @@
 /*
-** interface.h 2011-07-05 xueyingfei
-**
-** Copyright flying/xueyingfei.
+** Copyright (C) 2011 Xue Yingfei
 **
 ** This file is part of MaxTable.
 **
-** Licensed under the Apache License, Version 2.0
-** (the "License"); you may not use this file except in compliance with
-** the License. You may obtain a copy of the License at
+** Maxtable is free software: you can redistribute it and/or modify
+** it under the terms of the GNU General Public License as published by
+** the Free Software Foundation, either version 3 of the License, or
+** (at your option) any later version.
 **
-** http://www.apache.org/licenses/LICENSE-2.0
+** Maxtable is distributed in the hope that it will be useful,
+** but WITHOUT ANY WARRANTY; without even the implied warranty of
+** MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+** GNU General Public License for more details.
 **
-** Unless required by applicable law or agreed to in writing, software
-** distributed under the License is distributed on an "AS IS" BASIS,
-** WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
-** implied. See the License for the specific language governing
-** permissions and limitations under the License.
+** You should have received a copy of the GNU General Public License
+** along with Maxtable. If not, see <http://www.gnu.org/licenses/>.
 */
 
 #ifndef	__INTERFACE_H
@@ -246,6 +245,23 @@ mt_cli_get_colvalue(MT_CLI_EXEC_CONTEX *exec_ctx, char *rowbuf, int col_idx, int
 extern int
 mt_cli_exec_builtin(MT_CLI_EXEC_CONTEX *exec_ctx);
 
+/*
+** Send the result of create index to the meta server and receive its response.
+**
+** Parameters:
+**	connection	- (IN) the context of net connection.
+**	exec_ctx		- (IN) the execution context.
+** 
+** Returns:
+**	True if success, or false.
+** 
+** Side Effects
+**	None
+**
+*/
+extern int
+mt_cli_result_meta(CONN * connection, MT_CLI_EXEC_CONTEX *exec_ctx, int result);
+
 
 typedef struct _mt_split
 {
@@ -317,6 +333,5 @@ mt_mapred_get_currentvalue(MT_READER * reader, char * row, int col_idx, int * va
 
 extern char *
 mt_mapred_reorg_value(MT_READER * reader, char * row, int row_len, int * new_row_len);
-
 #endif
 

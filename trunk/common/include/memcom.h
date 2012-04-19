@@ -1,23 +1,21 @@
 /*
-** memcom.h 2010-07-17 xueyingfei
-**
-** Copyright flying/xueyingfei.
+** Copyright (C) 2011 Xue Yingfei
 **
 ** This file is part of MaxTable.
 **
-** Licensed under the Apache License, Version 2.0
-** (the "License"); you may not use this file except in compliance with
-** the License. You may obtain a copy of the License at
+** Maxtable is free software: you can redistribute it and/or modify
+** it under the terms of the GNU General Public License as published by
+** the Free Software Foundation, either version 3 of the License, or
+** (at your option) any later version.
 **
-** http://www.apache.org/licenses/LICENSE-2.0
+** Maxtable is distributed in the hope that it will be useful,
+** but WITHOUT ANY WARRANTY; without even the implied warranty of
+** MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+** GNU General Public License for more details.
 **
-** Unless required by applicable law or agreed to in writing, software
-** distributed under the License is distributed on an "AS IS" BASIS,
-** WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
-** implied. See the License for the specific language governing
-** permissions and limitations under the License.
+** You should have received a copy of the GNU General Public License
+** along with Maxtable. If not, see <http://www.gnu.org/licenses/>.
 */
-
 
 #ifndef MEMCOM_H_
 #define MEMCOM_H_
@@ -41,6 +39,7 @@ extern "C" {
 #define	ALIGNDATATYPE	long
 
 struct buf;
+struct block;
 struct hkgc_info;
 
 
@@ -175,6 +174,13 @@ typedef struct memfrag
 	  (((_type) == MEMPOOL_FRAG) ? Kernel->ke_fragpool_list : \
 	   (((_type) == MEMPOOL_STACK) ? Kernel->ke_fragpool_list : NULL))))
 
+#define	BUF_RESV_MAX		2
+typedef struct buf_reserve
+{
+	int		bufidx;
+	int		pad;
+	void		*bufresv[BUF_RESV_MAX];	
+}BUF_RESERVE;
 
 typedef struct kernel
 {
@@ -191,6 +197,8 @@ typedef struct kernel
 	SPINLOCK	ke_buf_spinlock;
 	SPINLOCK	ke_msg_obj_lock;
 	SPINLOCK	ke_mem_frag_lock;
+	SPINLOCK	ke_hkgc_spinlock;
+	BUF_RESERVE	ke_bufresv;	
 	struct buf	*ke_buflru;			
 	struct buf	**ke_bufhash;		
 	struct buf	*ke_bufwash;		
@@ -200,6 +208,8 @@ typedef struct kernel
 #define	BUF_SPIN	(Kernel->ke_buf_spinlock)
 #define MSG_OBJ_SPIN	(Kernel->ke_msg_obj_lock)
 #define	MEM_FRAG_SPIN	(Kernel->ke_mem_frag_lock)
+#define	HKGC_SPIN	(Kernel->ke_hkgc_spinlock)
+
 
 
 

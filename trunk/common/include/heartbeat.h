@@ -17,37 +17,28 @@
 ** along with Maxtable. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef	HKGC_H_
-#define HKGC_H_
-
-struct buf;
+#ifndef	HEARTBEAT_H_
+#define HEARTBEAT_H_
 
 
-#define	HKGC_WORK_INTERVAL	20
-#define	HK_BATCHSIZE		16
+#define MAX_RANGER_NUM	1024
 
-typedef struct hkgc_info
+#define HB_DATA_SIZE	128
+
+typedef struct hb_data
 {
-	int		hk_stat;
-	int		buf_num;
-	struct buf	*hk_dirty_buf[HK_BATCHSIZE];
-	
-	SPINLOCK	hk_sstabmap_mutex;	/* mutex for the sstabmap */
-	SIGNAL		hk_sstabmap_cond;
-	TAB_SSTAB_MAP	*hk_sstabmap;		/* sstabmap: just one item. */
-	
-} HKGC_INFO;
+	int	hb_stat;
+	char	recv_data[HB_DATA_SIZE];
+}HB_DATA;
 
+/* Place holder: following definition is for the hb_stat. */
+#define	HB_IS_OFF	0x0000		/* heartbeat is down. */
+#define	HB_IS_ON	0x0001		/* heartbeat setup. */
 
-#define	HKGC_SSTAB_MAP_DIRTY	0x0001	/* Trigger for the sstab map writing. */
-#define HKGC_SSTAB_BUF_DIRTY	0x0002	/* This feature if it need to */
+#define HB_RANGER_IS_ON(hb_data)	((hb_data)->hb_stat & HB_IS_ON)
 
+#define HB_SET_RANGER_ON(hb_data)	((hb_data)->hb_stat = (((hb_data)->hb_stat & ~HB_IS_OFF) | HB_IS_ON))
 
-void *
-hkgc_boot(void *opid);
-
-void
-hkgc_wash_sstab(int force);
-
+#define HB_SET_RANGER_OFF(hb_data)	((hb_data)->hb_stat = (((hb_data)->hb_stat & ~HB_IS_ON) | HB_IS_OFF))
 
 #endif

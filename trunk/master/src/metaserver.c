@@ -1,28 +1,27 @@
 /*
-** metaserver.c 2010-06-15 xueyingfei
-**
-** Copyright flying/xueyingfei.
+** Copyright (C) 2011 Xue Yingfei
 **
 ** This file is part of MaxTable.
 **
-** Licensed under the Apache License, Version 2.0
-** (the "License"); you may not use this file except in compliance with
-** the License. You may obtain a copy of the License at
+** Maxtable is free software: you can redistribute it and/or modify
+** it under the terms of the GNU General Public License as published by
+** the Free Software Foundation, either version 3 of the License, or
+** (at your option) any later version.
 **
-** http://www.apache.org/licenses/LICENSE-2.0
+** Maxtable is distributed in the hope that it will be useful,
+** but WITHOUT ANY WARRANTY; without even the implied warranty of
+** MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+** GNU General Public License for more details.
 **
-** Unless required by applicable law or agreed to in writing, software
-** distributed under the License is distributed on an "AS IS" BASIS,
-** WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
-** implied. See the License for the specific language governing
-** permissions and limitations under the License.
+** You should have received a copy of the GNU General Public License
+** along with Maxtable. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include <dirent.h>
 #include "global.h"
 #include "utils.h"
 #include "list.h"
 #include "master/metaserver.h"
+#include "tabinfo.h"
 #include "rpcfmt.h"
 #include "parser.h"
 #include "ranger/rangeserver.h"
@@ -42,7 +41,6 @@
 #include "tablet.h"
 #include "trace.h"
 #include "session.h"
-#include "tabinfo.h"
 #include "sstab.h"
 #include "rebalancer.h"
 #include "thread.h"
@@ -52,6 +50,8 @@
 #include "interface.h"
 #include "index.h"
 #include "qryoptimizer.h"
+#include "heartbeat.h"
+#include "masterinfo.h"
 
 
 extern	TSS	*Tss;
@@ -77,6 +77,7 @@ TAB_SSTAB_MAP *tab_sstabmap;
 
 #define SSTAB_MAP_GET_SPLIT_TS(i)		(sstab_map[i].split_ts)
 #define SSTAB_MAP_SET_SPLIT_TS(i, split_ts)	(sstab_map[i].split_ts = (unsigned int)split_ts)
+
 
 
 
@@ -124,7 +125,7 @@ static void
 meta_save_rginfo();
 
 static char *
-meta_checkdata(TREE *command);
+meta_checktable(TREE *command);
 
 static char *
 meta_checkranger(TREE *command);
@@ -147,6 +148,17 @@ meta_crt_rgstate_file(RANGE_PROF *rg_prof, char *rgip, int rgport);
 static int
 meta__recovery_addsstab(char * rgip,int rgport);
 
+static TABLEHDR *
+meta_get_sysobj_by_tabid(int tabid);
+
+static int
+meta_check_validation();
+
+static int
+meta_clean4crtidx(char * req_buf);
+
+static int
+meta__recovery_crtidx();
 
 
 void
@@ -347,15 +359,7 @@ meta_server_setup(char *conf_path)
 	}
 	else
 	{		
-		MEMSET(rang_server, 256);
-		MEMCPY(rang_server, MT_META_INDEX, STRLEN(MT_META_INDEX));
-		str1_to_str2(rang_server, '/', "sysindex");
-
-		OPEN(fd, rang_server, (O_RDONLY));
-		
-		READ(fd, Master_infor->meta_sysindex, sizeof(META_SYSINDEX));
-	
-		CLOSE(fd);
+		meta_load_sysindex((char *)Master_infor->meta_sysindex);
 	}
 
 	if (STAT(LOG_FILE_DIR, &st) != 0)
@@ -865,6 +869,7 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 	int		rg_suspect;
 	int		tabidx;
 	int		tabhdr_update;
+	int 		tabletid;
 
 
 	Assert(command);
@@ -907,6 +912,12 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 		goto exit;
 	}
 
+	if (!meta_check_validation())
+	{
+		traceprint("Meta on this table is not valid.\n");
+		goto exit;
+	}
+
 	keycol = par_get_colval_by_colid(command, tab_hdr->tab_key_colid, 
 					&keycolen);
 
@@ -946,8 +957,6 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 		MEMSET(tabletname, TABLE_NAME_MAX_LEN);
 		MEMCPY(tabletname, name, STRLEN(name));
 		
-		int tabletid;
-
 		tabletid = *(int *)row_locate_col(tabletschm_rp, 
 						TABLETSCHM_TABLETID_COLOFF_INROW,
 						ROW_MINLEN_IN_TABLETSCHM, 
@@ -1174,7 +1183,7 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 				tablet_schm_ins_row(tab_hdr->tab_id, TABLETSCHM_ID, 
 							tab_tabletschm_dir, 
 							tabletschm_newrp,
-							tab_hdr->tab_tablet);
+							tab_hdr->tab_tablet, 0);
 
 				tabinfo->t_stat &= ~TAB_TABLET_KEYROW_CHG;
 				
@@ -1256,7 +1265,9 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 		
 		tablet_crt(tab_hdr, tab_dir, rg_addr, sstab_rp, 
 				tablet_min_rlen, rg_port);
-		
+
+		/* Set the tablet id for the 1st insert. */
+		tabletid = 1; 
 		(tab_hdr->tab_tablet)++;
 		(tab_hdr->tab_sstab)++;
 
@@ -1342,6 +1353,8 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 	*(int *)(col_buf + col_buf_idx) = tab_hdr->tab_row_minlen;
 	col_buf_idx += sizeof(int);
 
+	/* Index root id. */
+	*(int *)(col_buf + col_buf_idx) = tabletid;
 	col_buf_idx += sizeof(int);
 
 	/* Put the table header into this buffer. */
@@ -1749,6 +1762,13 @@ meta_seldeltab(TREE *command, TABINFO *tabinfo)
 		goto exit;
 	}
 
+	if (   (command->sym.command.querytype != SELECT) 
+	    && (!meta_check_validation()))
+	{
+		traceprint("Meta on this table is not valid.\n");
+		goto exit;
+	}
+
 	sstab_map = sstab_map_get(tab_hdr->tab_id, tab_dir, &tab_sstabmap);
 
 	Assert(sstab_map != NULL);
@@ -1921,6 +1941,8 @@ meta_seldeltab(TREE *command, TABINFO *tabinfo)
 	*(int *)(col_buf + col_buf_idx) = tab_hdr->tab_row_minlen;
 	col_buf_idx += sizeof(int);
 
+	/* Index root id. */
+	*(int *)(col_buf + col_buf_idx) = tabletid;
 	col_buf_idx += sizeof(int);
 
 	/* Put the table header into this buffer. */
@@ -2174,14 +2196,14 @@ meta_selrangetab(TREE *command, TABINFO *tabinfo)
 				rp = tablet_get_1st_or_last_row(tab_hdr->tab_id,
 								tabletid, 
 								tab_meta_dir,
-								TRUE);
+								TRUE, TRUE);
 			}
 			else
 			{
 				rp = tablet_get_1st_or_last_row(tab_hdr->tab_id, 
 								tabletid, 
 								tab_meta_dir, 
-								FALSE);
+								FALSE, TRUE);
 			}
 		}
 		else
@@ -2374,6 +2396,12 @@ meta_selwheretab(TREE *command, TABINFO *tabinfo)
 		goto exit;
 	}
 
+	if (!meta_check_validation())
+	{
+		traceprint("Meta on this table is not valid.\n");
+		goto exit;
+	}
+
 	char	*range_leftkey;
 	int	leftkeylen;
 	char	*range_rightkey;
@@ -2416,7 +2444,11 @@ meta_selwheretab(TREE *command, TABINFO *tabinfo)
 			range_rightkey = "*\0";
 			leftkeylen = 1;
 			rightkeylen= 1;
-								
+
+			/*
+			** Query optimizer and check if table has one index 
+			** against the column to be query. 
+			*/
 			colmap = qryopt_get_colmap_by_cmd(command, 
 							(COLINFO *)col_buf,
 							tab_hdr->tab_col);
@@ -2584,12 +2616,16 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 	char		*rg_addr;
 	int		rpc_status;
 	int		tabidx;
+	int		resp_buf_len;
+	char		*resp_buf;
 
 
 	Assert(command);
 
 	rtn_stat = FALSE;
 	rpc_status = 0;
+	resp_buf_len = 0;
+	resp_buf = NULL;
 	tab_name = command->sym.command.tabname;
 	tab_name_len = command->sym.command.tabname_len;
 
@@ -2764,7 +2800,50 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 	*/
 	if (tablet_ins_row(tab_hdr, tab_hdr->tab_id, tabletid, tab_meta_dir, 
 			   sstab_rp, ROW_MINLEN_IN_TABLET))
-	{		
+	{
+		if (index_root_crt_empty(tab_hdr->tab_id, tab_name,
+					tab_hdr->tab_tablet - 1,
+					tabletid,					
+					Master_infor->meta_sysindex))
+		{
+			int	buf_idx;
+			IDX_ROOT_SPLIT	idx_root_split;
+			
+			/* Get the meta data for the column. */
+			resp_buf_len = sizeof(INSMETA) + sizeof(IDX_ROOT_SPLIT);
+			
+			resp_buf = MEMALLOCHEAP(resp_buf_len);
+			MEMSET(resp_buf, resp_buf_len);
+
+			/* Fill the INSERT_META with the information. */
+			buf_idx = 0;
+
+			/* ranger address. */
+			MEMCPY((resp_buf + buf_idx), rg_addr, STRLEN(rg_addr));
+			buf_idx += RANGE_ADDR_MAX_LEN;
+
+			/* ranger port. */
+			*(int *)(resp_buf + buf_idx) = rg_port;
+			buf_idx += sizeof(int);
+
+			/* ranger state. */
+			*(int *)(resp_buf + buf_idx) = RANGER_IS_ONLINE;
+			buf_idx += sizeof(int);
+
+			idx_root_split.idx_srcroot_id = tabletid;
+			idx_root_split.idx_destroot_id = tab_hdr->tab_tablet - 1;
+			idx_root_split.idx_tabid = tab_hdr->tab_id;
+
+			MEMSET(idx_root_split.idx_tabname, TABLE_NAME_MAX_LEN);
+
+			MEMCPY(idx_root_split.idx_tabname, tab_name, 
+							STRLEN(tab_name));
+
+			MEMCPY((resp_buf + sizeof(INSMETA)), &idx_root_split, 
+						sizeof(IDX_ROOT_SPLIT));
+			
+		}
+		
 		ri_rgstat_putdata(tss->tcur_rgprof->rg_statefile, ri_sstab,
 					RG_SSTABLE_DELETED, NULL);
 
@@ -2793,7 +2872,7 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 			traceprint("Failed to remove the backup director for the tablet split.\n");
 		}
 
-		meta_save_rginfo();
+		meta_save_rginfo();		
 	}
 
 	ri_rgstat_deldata(tss->tcur_rgprof->rg_statefile, ri_sstab);
@@ -2815,12 +2894,17 @@ exit:
 	if (rtn_stat)
 	{
 		rpc_status |= RPC_SUCCESS;
-		resp = conn_build_resp_byte(rpc_status, 0, NULL);
+		resp = conn_build_resp_byte(rpc_status, resp_buf_len, resp_buf);
 	}
 	else
 	{
 		rpc_status |= RPC_FAIL;
 		resp = conn_build_resp_byte(rpc_status, 0, NULL);
+	}
+
+	if (resp_buf != NULL)
+	{
+		MEMFREEHEAP(resp_buf);
 	}
 
 	return resp;
@@ -3776,7 +3860,7 @@ meta_crtidx(TREE *command)
 
 	if (meta_num != -1)
 	{
-		traceprint("The index (%s) was exist on the table (%s)", idx_name, tab_name);
+		traceprint("The index (%s) has been exist on the table (%s)", idx_name, tab_name);
 		goto exit;
 	}
 
@@ -3793,7 +3877,13 @@ meta_crtidx(TREE *command)
 	index_ins_meta(&idxmeta, Master_infor->meta_sysindex);
 
 	meta_save_sysindex((char *)(Master_infor->meta_sysindex));
-	
+
+	tab_hdr->has_index = TRUE;
+
+	/* Index time stamp on the table*/
+	tab_hdr->index_ts = Master_infor->meta_sysindex->idx_ver;
+
+	meta_save_sysobj(tab_dir, (char *)tab_hdr);
 	
 	rtn_stat = TRUE;
 
@@ -3870,6 +3960,243 @@ exit:
 
 
 char *
+meta_dropidx(TREE *command)
+{
+	char		*tab_name;
+	int		tab_name_len;
+	char		*idx_name;
+	int		idx_name_len;
+	char		tab_dir[256];
+	int		rtn_stat;
+	TABLEHDR	*tab_hdr;
+	char 		*resp;
+	int		tabidx;
+	int		rpc_status;
+	char		*resp_buf;
+	int		resp_buf_len;
+	int		resp_buf_idx;
+
+
+	Assert(command);
+	
+	rtn_stat	= FALSE;
+	resp		= NULL;
+	rpc_status	= 0;
+	resp_buf	= NULL;
+	resp_buf_len	= 0;
+	resp_buf_idx	= 0;
+
+	/* Index name*/
+	idx_name = command->sym.command.tabname;
+	idx_name_len = command->sym.command.tabname_len;
+
+	/* Table name locate at the sub-command ON. */
+	tab_name = (command->right)->sym.command.tabname;
+	tab_name_len = (command->right)->sym.command.tabname_len;
+
+	/* Create the file named table name. */
+	MEMSET(tab_dir, 256);
+	MEMCPY(tab_dir, MT_META_TABLE, STRLEN(MT_META_TABLE));
+	str1_to_str2(tab_dir, '/', tab_name);
+
+	if ((tabidx = meta_table_is_exist(tab_dir)) == -1)
+	{
+		traceprint("Table %s is not exist!\n", tab_name);
+
+		rpc_status |= RPC_TABLE_NOT_EXIST;
+		goto exit;
+	}
+
+	tab_hdr = &(Master_infor->meta_sysobj->sysobject[tabidx]);
+
+	if (tab_hdr->tab_stat & TAB_DROPPED)
+	{
+		traceprint("This table has been dropped.\n");
+		rpc_status |= RPC_TABLE_NOT_EXIST;
+		goto exit;
+	}
+
+	int	meta_num;
+	
+	meta_num = index_get_meta_by_idxname(tab_hdr->tab_id, idx_name, 
+				Master_infor->meta_sysindex);
+
+	if (meta_num == -1)
+	{
+		traceprint("The index (%s) is not exist on the table (%s)", idx_name, tab_name);
+		goto exit;
+	}
+
+	IDXMETA *idx_meta = Master_infor->meta_sysindex->idx_meta;
+
+	idx_meta[meta_num].idx_stat &= ~IDX_IN_WORKING;
+	idx_meta[meta_num].idx_stat |= IDX_IN_DROP;
+
+	meta_save_sysindex((char *)(Master_infor->meta_sysindex));
+
+	RANGE_PROF	*rg_prof;
+	
+	if(Master_infor->rg_list.nextrno > 0)
+	{
+		/* 
+		** TODO: just return the first ranger server. 
+		** We should return the address of all the ranger server.
+		*/
+		rg_prof = meta_get_rg();
+
+		if (!rg_prof)
+		{
+			traceprint("Ranger server is un-available for insert\n");
+			goto exit;
+		}
+
+		Assert(rg_prof->rg_stat & RANGER_IS_ONLINE);
+			
+		if (!(rg_prof->rg_stat & RANGER_IS_ONLINE))
+		{
+			traceprint("Ranger server %s is off-line\n", rg_prof->rg_addr);
+			goto exit;
+		}
+	}
+	else
+	{
+		Assert(0);
+
+		traceprint("No ranger server is avlable\n");
+		ex_raise(EX_ANY);
+	}
+
+	/* Send the ranger server address to the client. */
+	resp_buf_len = RANGE_ADDR_MAX_LEN + sizeof(int);
+	
+	resp_buf = MEMALLOCHEAP(resp_buf_len);
+	MEMSET(resp_buf, resp_buf_len);
+
+	resp_buf_idx = 0;
+		
+	MEMCPY((resp_buf + resp_buf_idx), rg_prof->rg_addr, 
+					STRLEN(rg_prof->rg_addr));
+	resp_buf_idx += RANGE_ADDR_MAX_LEN;
+
+	*(int *)(resp_buf + resp_buf_idx) = rg_prof->rg_port;
+	resp_buf_idx += sizeof(int);
+
+	rtn_stat = TRUE;
+
+exit:
+	if (rtn_stat)
+	{
+		rpc_status |= RPC_SUCCESS;
+		resp = conn_build_resp_byte(rpc_status, resp_buf_idx, resp_buf);
+	}
+	else
+	{
+		rpc_status |= RPC_FAIL;
+		resp = conn_build_resp_byte(rpc_status, 0, NULL);
+	}
+
+	if (resp_buf != NULL)
+	{
+		MEMFREEHEAP(resp_buf);
+	}
+
+	
+	return resp;
+}
+
+
+char *
+meta_removeidx(TREE *command)
+{
+	char		*tab_name;
+	int		tab_name_len;
+	char		*idx_name;
+	int		idx_name_len;
+	char		tab_dir[256];
+	int		rtn_stat;
+	TABLEHDR	*tab_hdr;
+	char 		*resp;
+	int		tabidx;
+	int		rpc_status;
+	int		resp_buf_len;
+	int		resp_buf_idx;
+
+
+	Assert(command);
+	
+	rtn_stat	= FALSE;
+	resp		= NULL;
+	rpc_status	= 0;
+	resp_buf_len	= 0;
+	resp_buf_idx	= 0;
+
+	/* Index name*/
+	idx_name = command->sym.command.tabname;
+	idx_name_len = command->sym.command.tabname_len;
+
+	/* Table name locate at the sub-command ON. */
+	tab_name = (command->right)->sym.command.tabname;
+	tab_name_len = (command->right)->sym.command.tabname_len;
+
+	/* Create the file named table name. */
+	MEMSET(tab_dir, 256);
+	MEMCPY(tab_dir, MT_META_TABLE, STRLEN(MT_META_TABLE));
+	str1_to_str2(tab_dir, '/', tab_name);
+
+	if ((tabidx = meta_table_is_exist(tab_dir)) == -1)
+	{
+		traceprint("Table %s is not exist!\n", tab_name);
+
+		rpc_status |= RPC_TABLE_NOT_EXIST;
+		goto exit;
+	}
+
+	tab_hdr = &(Master_infor->meta_sysobj->sysobject[tabidx]);
+
+	if (tab_hdr->tab_stat & TAB_DROPPED)
+	{
+		traceprint("This table has been dropped.\n");
+		rpc_status |= RPC_TABLE_NOT_EXIST;
+		goto exit;
+	}
+
+	if (!index_del_meta(tab_hdr->tab_id, idx_name, 
+					Master_infor->meta_sysindex))
+	{
+		/* Error information has been raised. */
+		goto exit;
+	}
+
+	if (!index_tab_has_index(Master_infor->meta_sysindex, tab_hdr->tab_id))
+	{
+		tab_hdr->has_index = FALSE;
+	}
+
+	meta_save_sysindex((char *)(Master_infor->meta_sysindex));
+
+	/* Index time stamp on the table*/
+	tab_hdr->index_ts = Master_infor->meta_sysindex->idx_ver;
+
+	meta_save_sysobj(tab_dir, (char *)tab_hdr);
+	
+	rtn_stat = TRUE;
+
+exit:
+	if (rtn_stat)
+	{
+		rpc_status |= RPC_SUCCESS;
+		resp = conn_build_resp_byte(rpc_status, 0, NULL);
+	}
+	else
+	{
+		rpc_status |= RPC_FAIL;
+		resp = conn_build_resp_byte(rpc_status, 0, NULL);
+	}
+
+	return resp;
+}
+
+char *
 meta_handler(char *req_buf, int fd)
 {
 	LOCALTSS(tss);
@@ -3897,6 +4224,13 @@ meta_handler(char *req_buf, int fd)
 	if (meta_failover_rg(req_buf))
 	{		
 		
+		resp = conn_build_resp_byte(RPC_SUCCESS, 0, NULL);
+
+		return resp;
+	}
+
+	if (meta_clean4crtidx(req_buf))
+	{
 		resp = conn_build_resp_byte(RPC_SUCCESS, 0, NULL);
 
 		return resp;
@@ -4036,16 +4370,24 @@ parse_again:
 	    	resp = meta_addsstab(command, tabinfo);
 	    	break;
 		
-	    case DROP:
+	    case DROPTAB:
 	    	resp = meta_droptab(command);
 	    	break;
 		
-	    case REMOVE:
+	    case REMOVETAB:
 	    	resp = meta_removtab(command);
+	    	break;
+
+	    case DROPINDEX:
+	    	resp = meta_dropidx(command);
+	    	break;
+		
+	    case REMOVEINDEX:
+	    	resp = meta_removeidx(command);
 	    	break;
 		
 	    case MCCTABLE:
-	    	resp = meta_checkdata(command);
+	    	resp = meta_checktable(command);
 		break;
 		
 	    case MCCRANGER:
@@ -4829,6 +5171,97 @@ meta_failover_rg(char * req_buf)
 	return TRUE;
 }
 
+static int
+meta_clean4crtidx(char * req_buf)
+{
+	int		meta_num;
+	IDXMETA		*idxmeta;
+	int		result;
+	TABLEHDR	*tab_hdr;
+	char		tab_dir[TABLE_NAME_MAX_LEN];
+
+	
+	if (strncasecmp(RPC_CRTIDX_DONE_MAGIC, req_buf, 
+					STRLEN(RPC_FAILOVER)) != 0)
+	{
+		return FALSE;
+	}
+
+
+	result = *(int *)(req_buf + RPC_MAGIC_MAX_LEN);
+
+	idxmeta = (IDXMETA *)(req_buf + RPC_MAGIC_MAX_LEN + sizeof(int));
+
+
+	meta_num = index_get_meta_by_idxname(idxmeta->idx_tabid, 
+					     idxmeta->idxname, 
+					     Master_infor->meta_sysindex);
+
+	if (meta_num == -1)
+	{
+		traceprint("The index (%s) is not exist.", idxmeta->idxname);
+		return TRUE;
+	}
+
+	tab_hdr = meta_get_sysobj_by_tabid(idxmeta->idx_tabid);
+	
+	if (!result)
+	{
+		index_del_meta(idxmeta->idx_tabid, idxmeta->idxname,
+				Master_infor->meta_sysindex);
+
+		if (Master_infor->meta_sysindex->idx_num == 0)
+		{
+			tab_hdr->has_index = FALSE;
+		}
+	}
+	else
+	{
+		Master_infor->meta_sysindex->idx_meta[meta_num].idx_stat
+							= IDX_IN_WORKING;
+	}
+	
+	/* Index time stamp on the table*/
+	tab_hdr->index_ts = Master_infor->meta_sysindex->idx_ver;
+
+	MEMSET(tab_dir, TABLE_NAME_MAX_LEN);
+	MEMCPY(tab_dir, MT_META_TABLE, STRLEN(MT_META_TABLE));
+	str1_to_str2(tab_dir, '/', tab_hdr->tab_name);
+
+	meta_save_sysindex((char *)(Master_infor->meta_sysindex));
+	meta_save_sysobj(tab_dir, (char *)tab_hdr);
+	
+	return TRUE;
+}
+
+
+static int
+meta_check_validation()
+{	
+	IDXMETA		*idx_meta;
+	int		meta_num;
+	META_SYSINDEX	*meta_sysidx;
+
+
+	/* Index checking. */
+	meta_sysidx = Master_infor->meta_sysindex;
+	
+	idx_meta = meta_sysidx->idx_meta;
+	
+	for(meta_num = 0; meta_num < meta_sysidx->idx_num; meta_num++)
+	{
+		if (   (idx_meta->idx_stat & IDX_IN_CREATE)
+		    || (idx_meta->idx_stat & IDX_IN_DROP))
+		{
+			return FALSE;
+		}
+		
+		idx_meta++;
+	}
+
+	return TRUE;
+}
+
 
 /*
 ** Recovery is a deamon thread for the data recovery. it monitors the list of
@@ -4930,6 +5363,13 @@ again:
 		if (!meta__recovery_addsstab(rg_prof->rg_addr, rg_prof->rg_port))
 		{
 			traceprint("Recovery for the Add SStable is failed.\n");
+			V_SPINLOCK(Master_infor->rglist_spinlock);
+			goto again;
+		}
+
+		if (!meta__recovery_crtidx())
+		{
+			traceprint("Recovery for the CREATE INDEX is failed.\n");
 			V_SPINLOCK(Master_infor->rglist_spinlock);
 			goto again;
 		}
@@ -5113,6 +5553,79 @@ exit:
 
 	return rtn_state;
 }
+
+
+static int
+meta__recovery_crtidx()
+{
+	int		meta_num;
+	IDXMETA		*idx_meta;
+	char		tab_meta_dir[TABLE_NAME_MAX_LEN];
+	TABLEHDR	*tab_hdr;
+	
+	
+	idx_meta =  Master_infor->meta_sysindex->idx_meta;
+		
+	for(meta_num = 0; meta_num <  Master_infor->meta_sysindex->idx_num; 
+								meta_num++)
+	{
+		if (idx_meta->idx_stat & IDX_IN_CREATE)
+		{
+			tab_hdr = meta_get_sysobj_by_tabid(idx_meta->idx_tabid);
+			
+			MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
+			MEMCPY(tab_meta_dir, MT_RANGE_TABLE, STRLEN(MT_RANGE_TABLE));
+			str1_to_str2(tab_meta_dir, '/', tab_hdr->tab_name);	
+			str1_to_str2(tab_meta_dir, '/', idx_meta->idxname);
+			
+#ifdef MT_KFS_BACKEND
+
+			RMDIR(status, tab_meta_dir);
+			if(!status)
+#else
+
+			char	cmd_str[TABLE_NAME_MAX_LEN];
+			MEMSET(cmd_str, TABLE_NAME_MAX_LEN);
+			
+			sprintf(cmd_str, "rm -rf %s", tab_meta_dir);
+			
+			if (system(cmd_str) != 0)
+#endif
+			{
+				traceprint("remove directory (%s) is failed.\n", cmd_str);
+			}
+
+
+	
+			
+			index_del_meta(idx_meta->idx_tabid, idx_meta->idxname,
+					Master_infor->meta_sysindex);
+
+			if (Master_infor->meta_sysindex->idx_num == 0)
+			{
+				tab_hdr->has_index = FALSE;
+			}
+		
+		
+			/* Index time stamp on the table*/
+			tab_hdr->index_ts = Master_infor->meta_sysindex->idx_ver;
+
+			MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
+			MEMCPY(tab_meta_dir, MT_META_TABLE, STRLEN(MT_META_TABLE));
+			str1_to_str2(tab_meta_dir, '/', tab_hdr->tab_name);
+
+			meta_save_sysindex((char *)(Master_infor->meta_sysindex));
+			meta_save_sysobj(tab_meta_dir, (char *)tab_hdr);
+	
+		
+		}
+
+		idx_meta++;
+	}
+
+	return TRUE;
+}
+
 
 int
 meta_ranger_is_online(char *rg_ip, int rg_port)
@@ -5377,20 +5890,20 @@ meta_check_tabletschme(char *tabdir, int tabid)
 
 
 static char *
-meta_checkdata(TREE *command)
+meta_checktable(TREE *command)
 {
 	char		*tab_name;
 	int		tab_name_len;
 	char		tab_dir[TABLE_NAME_MAX_LEN];
 	char		tab_meta_dir[TABLE_NAME_MAX_LEN];
 	char   		*col_buf;
-	int		fd1;
 	int		rtn_stat;
-	TABLEHDR	tab_hdr;
+	TABLEHDR	*tab_hdr;
 	int		sstab_rlen;
 	int		sstab_idx;
 	char		*resp;
-
+	int		tabidx;
+	int		rpc_status;
 
 
 	Assert(command);
@@ -5399,65 +5912,58 @@ meta_checkdata(TREE *command)
 	col_buf= NULL;
 	sstab_rlen = 0;
 	sstab_idx = 0;
+	rpc_status = 0;
 	tab_name = command->sym.command.tabname;
 	tab_name_len = command->sym.command.tabname_len;
 
 	MEMSET(tab_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_dir, MT_META_TABLE, STRLEN(MT_META_TABLE));
-
 	
 	str1_to_str2(tab_dir, '/', tab_name);
-
 	
 	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
 
-	if (!(STAT(tab_dir, &st) == 0))
+	if ((tabidx = meta_table_is_exist(tab_dir)) == -1)
 	{
-		traceprint("Table %s is not exist.\n", tab_name);
-		goto exit;
-	}
-	
-	str1_to_str2(tab_meta_dir, '/', "sysobjects");
+		traceprint("Table %s is not exist!\n", tab_name);
 
-	OPEN(fd1, tab_meta_dir, (O_RDONLY));
-	
-	if (fd1 < 0)
-	{
-		traceprint("Table is not exist! \n");
+		rpc_status |= RPC_TABLE_NOT_EXIST;
 		goto exit;
 	}
 
-	
-	READ(fd1, &tab_hdr, sizeof(TABLEHDR));	
 
-	CLOSE(fd1);
+	tab_hdr = &(Master_infor->meta_sysobj->sysobject[tabidx]);
 
-	if (tab_hdr.tab_tablet == 0)
+	if (tab_hdr->tab_tablet == 0)
 	{
 		traceprint("Table %s has no data.\n", tab_name);
 		goto exit;
 	}
 
-	if (tab_hdr.tab_stat & TAB_DROPPED)
+	if (tab_hdr->tab_stat & TAB_DROPPED)
 	{
 		traceprint("This table has been dropped.\n");
+		rpc_status |= RPC_TABLE_NOT_EXIST;
 		goto exit;
 	}
 
-	meta_check_tabletschme(tab_dir, tab_hdr.tab_id);
+	index_tab_check_index(Master_infor->meta_sysindex, tab_hdr->tab_id);
+
+	meta_check_tabletschme(tab_dir, tab_hdr->tab_id);
 	
 	rtn_stat = TRUE;
 
 exit:
 	if (rtn_stat)
 	{
-		
-		resp = conn_build_resp_byte(RPC_SUCCESS, 0, NULL);
+		rpc_status |= RPC_SUCCESS;
+		resp = conn_build_resp_byte(rpc_status, 0, NULL);
 	}
 	else
 	{
-		resp = conn_build_resp_byte(RPC_FAIL, 0, NULL);
+		rpc_status |= RPC_FAIL;
+		resp = conn_build_resp_byte(rpc_status, 0, NULL);
 	}
 
 	return resp;
@@ -5644,6 +6150,27 @@ meta_load_sysmeta()
 	}
 
 	return TRUE;
+}
+
+
+static TABLEHDR *
+meta_get_sysobj_by_tabid(int tabid)
+{
+	int		i;
+	TABLEHDR	*tab_hdr;
+
+
+	for (i = 0; i < Master_infor->meta_systab->tabnum; i++)
+	{
+		tab_hdr = &(Master_infor->meta_sysobj->sysobject[i]);
+
+		if (tab_hdr->tab_id == tabid)
+		{
+			return tab_hdr;
+		}	
+	}
+	
+	return NULL;
 }
 
 char *

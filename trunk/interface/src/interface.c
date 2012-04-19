@@ -1,21 +1,20 @@
 /*
-** interface.c 2011-07-05 xueyingfei
-**
-** Copyright flying/xueyingfei.
+** Copyright (C) 2011 Xue Yingfei
 **
 ** This file is part of MaxTable.
 **
-** Licensed under the Apache License, Version 2.0
-** (the "License"); you may not use this file except in compliance with
-** the License. You may obtain a copy of the License at
+** Maxtable is free software: you can redistribute it and/or modify
+** it under the terms of the GNU General Public License as published by
+** the Free Software Foundation, either version 3 of the License, or
+** (at your option) any later version.
 **
-** http://www.apache.org/licenses/LICENSE-2.0
+** Maxtable is distributed in the hope that it will be useful,
+** but WITHOUT ANY WARRANTY; without even the implied warranty of
+** MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+** GNU General Public License for more details.
 **
-** Unless required by applicable law or agreed to in writing, software
-** distributed under the License is distributed on an "AS IS" BASIS,
-** WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
-** implied. See the License for the specific language governing
-** permissions and limitations under the License.
+** You should have received a copy of the GNU General Public License
+** along with Maxtable. If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "global.h"
@@ -262,6 +261,7 @@ mt_cli_exec_crtseldel(CONN * connection, char * cmd, MT_CLI_EXEC_CONTEX **exec_c
 						** meta server fail to response.
 						*/
 	MT_CLI_EXEC_CONTEX	*t_exec_ctx;
+	int		idx_root_split;
 
 
 	/* Initialization. */
@@ -272,6 +272,7 @@ mt_cli_exec_crtseldel(CONN * connection, char * cmd, MT_CLI_EXEC_CONTEX **exec_c
 	meta_retry = 0;
 	resp = NULL;
 	rg_resp = NULL;
+	idx_root_split = FALSE;
 
 	/* Aquire the query type. */
 	querytype = ((TREE *)(tss->tcmd_parser))->sym.command.querytype;
@@ -364,13 +365,15 @@ retry:
 		goto finish;
 
 	}
+
+rg_again:
 	
 	/* 
 	** Here we have got the right response and the meta data from the meta 
 	** server and then fire the query in the ranger server.
 	*/
 	if(   (querytype == INSERT) || (querytype == SELECT) 
-	   || (querytype == DELETE) )
+	   || (querytype == DELETE) || idx_root_split)
 	{
 		/* Ptr to the meta data information from the meta server. */
 		INSMETA		*resp_ins;
@@ -437,7 +440,7 @@ retry:
 			{
 				perror("error in create connection with rg server: ");
 
-				MEMFREEHEAP(rg_connection);
+//				MEMFREEHEAP(rg_connection);
 				rtn_stat = CLI_FAIL;
 				goto finish;
 
@@ -458,8 +461,14 @@ retry:
 		** Serilize the require data into the require buffer and send it
 		** to ranger server.
 		*/
-		MEMCPY(resp->result, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
-				
+		if (idx_root_split)
+		{
+			MEMCPY(resp->result, RPC_IDXROOT_SPLIT_MAGIC, RPC_MAGIC_MAX_LEN);
+		}
+		else
+		{
+			MEMCPY(resp->result, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
+		}		
 		MEMSET(send_rg_buf, LINE_BUF_SIZE);
 		MEMCPY(send_rg_buf, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
 				
@@ -544,6 +553,10 @@ retry:
 			}
 		}
 
+		if (idx_root_split)
+		{
+			goto finish;
+		}
 
 		/* Check if this insertion hit the sstable split issue. */
 		if((querytype == INSERT) && (rg_resp->result_length))
@@ -641,6 +654,20 @@ retry:
 
 			MEMFREEHEAP(new_buf);
 
+			if (sstab_split_resp->result_length != 0)
+			{
+				idx_root_split = TRUE;
+
+				conn_destroy_resp(resp);
+				
+				resp = sstab_split_resp;
+
+				sstab_split_resp = NULL;
+
+				sstab_split = FALSE;
+				
+				goto rg_again;	
+			}
 		}
 	}
 
@@ -692,6 +719,7 @@ mt_cli_exec_drop_tab(CONN * connection, char * cmd, MT_CLI_EXEC_CONTEX **exec_ct
 						** to ranger server. 
 						*/
 	char		tab_name[64];		/* Table name. */
+	char		idx_name[64];		/* Index name. */
 	int		send_buf_size;		/* Buffer size. */
 	RPCRESP		*resp;			/* Ptr to the response from the
 						** meta server.
@@ -725,10 +753,28 @@ mt_cli_exec_drop_tab(CONN * connection, char * cmd, MT_CLI_EXEC_CONTEX **exec_ct
 
 	/* Aquire the query type. */
 	querytype = ((TREE *)(tss->tcmd_parser))->sym.command.querytype;
-	MEMSET(tab_name, 64);
-	MEMCPY(tab_name, ((TREE *)(tss->tcmd_parser))->sym.command.tabname,
-	((TREE *)(tss->tcmd_parser))->sym.command.tabname_len);
 
+	if (querytype == DROPTAB)
+	{
+		MEMSET(tab_name, 64);
+		MEMCPY(tab_name, ((TREE *)(tss->tcmd_parser))->sym.command.tabname,
+		((TREE *)(tss->tcmd_parser))->sym.command.tabname_len);
+	}
+	else
+	{
+		Assert(querytype == DROPINDEX);
+		
+		/* Index name*/
+		MEMSET(idx_name, 64);
+		MEMCPY(idx_name, ((TREE *)(tss->tcmd_parser))->sym.command.tabname,
+		((TREE *)(tss->tcmd_parser))->sym.command.tabname_len);
+
+		/* Table name locate at the sub-command ON. */
+		MEMSET(tab_name, 64);
+		MEMCPY(tab_name, (((TREE *)(tss->tcmd_parser))->right)->sym.command.tabname,
+		(((TREE *)(tss->tcmd_parser))->right)->sym.command.tabname_len);
+	}
+	
 	*exec_ctx = (MT_CLI_EXEC_CONTEX *)MEMALLOCHEAP(sizeof(MT_CLI_EXEC_CONTEX));
 	MEMSET(*exec_ctx, sizeof(MT_CLI_EXEC_CONTEX));
 
@@ -865,7 +911,7 @@ retry:
 		{
 			perror("error in create connection with rg server: ");
 
-			MEMFREEHEAP(rg_connection);
+//			MEMFREEHEAP(rg_connection);
 			rtn_stat = CLI_FAIL;
 			goto finish;
 
@@ -886,10 +932,19 @@ retry:
 	** Serilize the require data into the require buffer and send it
 	** to ranger server.
 	*/
-	
-	/* Put the DROP's magic into the buffer. */
-	MEMCPY(resp->result, RPC_DROP_TABLE_MAGIC, RPC_MAGIC_MAX_LEN);
-	
+
+	if (querytype == DROPTAB)
+	{
+		/* Put the DROP's magic into the buffer. */
+		MEMCPY(resp->result, RPC_DROP_TABLE_MAGIC, RPC_MAGIC_MAX_LEN);
+	}
+	else
+	{
+		Assert(querytype == DROPINDEX);
+		
+		/* Put the DROP's magic into the buffer. */
+		MEMCPY(resp->result, RPC_DROPIDX_MAGIC, RPC_MAGIC_MAX_LEN);	
+	}
 	
 	MEMSET(send_rg_buf, LINE_BUF_SIZE);
 	MEMCPY(send_rg_buf, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
@@ -968,17 +1023,37 @@ retry:
 	** server and remove the meta  infor. 
 	*/
 	Assert(rg_resp->result_length);
+
+	char	*new_buf;
+	int	new_size;
+
+	if (querytype == DROPTAB)
+	{
+		char *cli_remove_tab = "remove table ";				    
+
+		/* The command likes "remove table tab_name". */
+		new_size = TABLE_NAME_MAX_LEN + STRLEN(cli_remove_tab);
+		new_buf = MEMALLOCHEAP(new_size);				    
+
+		MEMSET(new_buf, new_size);
+
+		sprintf(new_buf, "remove table %s", tab_name);
+	}
+	else
+	{
+		Assert(querytype == DROPINDEX);
+
+		char *cli_remove_index = "remove index ";				    
+
+		/* The command likes "remove index idx_name on tab_name". */
+		new_size = TABLE_NAME_MAX_LEN + STRLEN(cli_remove_index);
+		new_buf = MEMALLOCHEAP(new_size);				    
+
+		MEMSET(new_buf, new_size);
+
+		sprintf(new_buf, "remove index %s on %s", idx_name, tab_name);
+	}
 	
-	char *cli_remove_tab = "remove ";				    
-
-	/* The command likes "remove tab_name". */
-	int new_size = TABLE_NAME_MAX_LEN + STRLEN(cli_remove_tab);
-	char *new_buf = MEMALLOCHEAP(new_size);				    
-
-	MEMSET(new_buf, new_size);
-
-	sprintf(new_buf, "remove %s", tab_name);
-
 	MEMSET(send_buf, LINE_BUF_SIZE);
 	MEMCPY(send_buf, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
 	MEMCPY(send_buf + RPC_MAGIC_MAX_LEN, new_buf, new_size);
@@ -1031,7 +1106,7 @@ finish:
 	
 	if (remove_tab_hit)
 	{
-		Assert(querytype == DROP);
+		Assert((querytype == DROPTAB) || (querytype == DROPINDEX));
 		conn_destroy_resp(remove_tab_resp);
 	}
 	
@@ -1415,6 +1490,119 @@ finish:
 	/* Save the meta data infor into the execution context. */
 	*meta_resp = (char *)resp;
 	parser_close();
+
+	return rtn_stat;
+}
+
+
+
+
+/*
+** Send the result of create index to the meta server and receive its response.
+**
+** Parameters:
+**	connection	- (IN) the context of net connection.
+**	exec_ctx		- (IN) the execution context.
+** 
+** Returns:
+**	True if success, or false.
+** 
+** Side Effects
+**	None
+**
+*/
+int
+mt_cli_result_meta(CONN * connection, MT_CLI_EXEC_CONTEX *exec_ctx, int result)
+{
+	char		send_buf[LINE_BUF_SIZE];/* Buffer for the data sending. */
+	RPCRESP		*resp;			/* Ptr to the response information. */
+	int		rtn_stat;		/* Return state. */
+	int		meta_retry;		/* The # of retrying to meta. */
+	int		idx;
+	IDXMETA		*idxmeta;
+
+
+	/* initialization. */
+	rtn_stat = CLI_SUCCESS;
+	meta_retry = 0;
+	idx = 0;
+
+retry:
+
+	MEMSET(send_buf, LINE_BUF_SIZE);
+
+	switch (exec_ctx->querytype)
+	{
+	    case CRTINDEX:		
+		idxmeta = (IDXMETA *)(((RPCRESP *)(exec_ctx->meta_resp))->result);
+		
+		PUT_TO_BUFFER(send_buf, idx, RPC_REQUEST_MAGIC, 
+						RPC_MAGIC_MAX_LEN);
+		PUT_TO_BUFFER(send_buf, idx, RPC_CRTIDX_DONE_MAGIC, 
+						RPC_MAGIC_MAX_LEN);
+		PUT_TO_BUFFER(send_buf, idx, &result, sizeof(int));
+		PUT_TO_BUFFER(send_buf, idx, idxmeta, sizeof(IDXMETA));
+		
+	    	break;
+		
+	    default:
+	    	break;
+	}
+	
+	/* Send the requirment to the meta server. */
+	tcp_put_data(connection->connection_fd, send_buf, idx);
+
+	/* Get the meta data information from the meta server. */
+	resp = conn_recv_resp(connection->connection_fd);
+
+	
+	if (resp != NULL)
+	{
+		if (resp->status_code & RPC_RETRY)
+		{
+			traceprint("\n Waiting for the retry the meta server\n");
+			
+			if(meta_retry)
+			{
+				rtn_stat = CLI_RPC_FAIL;
+				goto finish;
+			}
+
+			sleep(5);
+			
+			meta_retry++;
+
+			conn_destroy_resp(resp);
+			resp = NULL;
+
+			goto retry;
+		}
+		else if(!(resp->status_code & RPC_SUCCESS))
+		{
+			if (resp->status_code & ( RPC_TAB_HAS_NO_DATA 
+						| RPC_TABLE_NOT_EXIST))
+			{
+				traceprint("Table has no data OR this table is not exist.\n");
+			}
+			else
+			{
+				traceprint("\n ERROR in response \n");
+			}
+
+			rtn_stat = CLI_FAIL;
+			goto finish;
+		}
+	}
+	
+	if (resp == NULL)
+	{
+		traceprint("\n ERROR in response \n");
+		rtn_stat = CLI_FAIL;
+		goto finish;
+
+	}
+	
+finish:
 
 	return rtn_stat;
 }
@@ -2271,8 +2459,8 @@ mt_cli_open_execute(CONN *connection, char *cmd, MT_CLI_EXEC_CONTEX **exec_ctx)
 	    	rtn_stat = par_selrange_tab((cmd + s_idx), SELECTRANGE);
 	    	break;
 		
-	    case DROP:
-	    	rtn_stat = par_dropremovrebalanmcc_tab(cmd + s_idx, DROP);
+	    case DROPTAB:
+	    	rtn_stat = par_dropremovrebalanmcc_tab(cmd + s_idx, DROPTAB);
 	    	break;
 		
 	    case SELECTWHERE:
@@ -2290,6 +2478,10 @@ mt_cli_open_execute(CONN *connection, char *cmd, MT_CLI_EXEC_CONTEX **exec_ctx)
 	    case CRTINDEX:
 	    	rtn_stat = par_crt_idx_tab(cmd + s_idx, CRTINDEX);
 		break;
+
+	    case DROPINDEX:
+	    	rtn_stat = par_dropremov_idx_tab(cmd + s_idx, DROPINDEX);
+	    	break;
 
 	    default:
 	    	rtn_stat = FALSE;
@@ -2314,7 +2506,8 @@ mt_cli_open_execute(CONN *connection, char *cmd, MT_CLI_EXEC_CONTEX **exec_ctx)
 		rtn_stat = mt_cli_exec_crtseldel(connection, cmd, exec_ctx);
 		break;
 
-	    case DROP:
+	    case DROPINDEX:
+	    case DROPTAB:
 	    	rtn_stat = mt_cli_exec_drop_tab(connection, cmd, exec_ctx);
     		break;
 		
@@ -2426,7 +2619,7 @@ mt_cli_prt_help(char *cmd)
 		printf("SELECT DATA.....select table_name (col1_value)\n");
 		printf("SELECT RANGE....selectrange table_name (col1_value1, col1_value2)\n");
 		printf("DELETE DATA.....delete table_name (col1_value)\n");
-		printf("DROP TABLE......drop table_name\n");
+		printf("DROP TABLE......drop table table_name\n");
 
 		return TRUE;
 	}
@@ -2888,7 +3081,6 @@ char * mt_mapred_reorg_value(MT_READER * reader, char * row, int row_len, int * 
                 index += 4;
                 memcpy(index, value, value_len);
                 index += value_len;
-
         }
 
         *new_row_len = index - new_row;

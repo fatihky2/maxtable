@@ -37,9 +37,6 @@ typedef struct mt_entries
 
 #define	KFS_LOG_FILE_SIZE	(4 * 1024 * 1024)
 
-//#define	BLOCKSIZE		(64 * 1024)		
-//#define BLOCKSIZE		(512)
-
 
 #define	BLK_CNT_IN_SSTABLE	64
 #define	SSTABLE_SIZE		(BLK_CNT_IN_SSTABLE * BLOCKSIZE)

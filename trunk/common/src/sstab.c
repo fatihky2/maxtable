@@ -1,26 +1,29 @@
 /*
-** sstab.c 2011-07-25 xueyingfei
-**
-** Copyright flying/xueyingfei..
+** Copyright (C) 2011 Xue Yingfei
 **
 ** This file is part of MaxTable.
 **
-** Licensed under the Apache License, Version 2.0
-** (the "License"); you may not use this file except in compliance with
-** the License. You may obtain a copy of the License at
+** Maxtable is free software: you can redistribute it and/or modify
+** it under the terms of the GNU General Public License as published by
+** the Free Software Foundation, either version 3 of the License, or
+** (at your option) any later version.
 **
-** http://www.apache.org/licenses/LICENSE-2.0
+** Maxtable is distributed in the hope that it will be useful,
+** but WITHOUT ANY WARRANTY; without even the implied warranty of
+** MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+** GNU General Public License for more details.
 **
-** Unless required by applicable law or agreed to in writing, software
-** distributed under the License is distributed on an "AS IS" BASIS,
-** WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
-** implied. See the License for the specific language governing
-** permissions and limitations under the License.
+** You should have received a copy of the GNU General Public License
+** along with Maxtable. If not, see <http://www.gnu.org/licenses/>.
 */
+
 #include "master/metaserver.h"
+#include "tabinfo.h"
 #include "strings.h"
 #include "buffer.h"
 #include "rpcfmt.h"
+#include "parser.h"
+#include "ranger/rangeserver.h"
 #include "block.h"
 #include "cache.h"
 #include "memcom.h"
@@ -29,15 +32,23 @@
 #include "row.h"
 #include "utils.h"
 #include <time.h>
+#include "metadata.h"
 #include "tabinfo.h"
 #include "file_op.h"
 #include "timestamp.h"
 #include "log.h"
 #include "hkgc.h"
 #include "rginfo.h"
+#include "index.h"
 
 
 extern	TSS	*Tss;
+extern	RANGEINFO *Range_infor;
+
+
+int	sstab_split_cnt;
+int	sstabsplit_idx_upd_cnt;
+
 
 #define	SSTAB_NAMEIDX_MASK	(2^32 - 1)
 
@@ -117,7 +128,7 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 	BUF		*destbuf;
 	TABINFO 	*tabinfo;
 	BLOCK		*nextblk;
-	BLOCK		*blk;
+	BLOCK		*destblk;
 	char		*key;
 	int		keylen;
 	int		ins_nxtsstab;
@@ -125,18 +136,39 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 	int		sstab_keylen;
 	int		i;
 	BLK_ROWINFO	blk_rowinfo;
+	IDXBLD		idxbld;
+	IDXUPD		idxupd;	
+	char		rg_tab_dir[TABLE_NAME_MAX_LEN];
+	LOGREC		*logrec;
 
 
 	
 	ins_nxtsstab = (srcbp->bblk->bblkno > ((BLK_CNT_IN_SSTABLE / 2) - 1))
 			? TRUE : FALSE;
 
+	destbuf = NULL;
 	nextblk = srcbp->bsstab->bblk;
+	logrec = NULL;
 
 	
 	while (nextblk->bnextblkno < ((BLK_CNT_IN_SSTABLE / 2) + 1))
 	{		
 		nextblk = (BLOCK *) ((char *)nextblk + BLOCKSIZE);
+	}
+
+	
+
+	if (!(srctabinfo->t_stat & TAB_NOLOG_MODEL))
+	{
+	 	logrec = MEMALLOCHEAP(sizeof(LOGREC));
+		
+		log_build(logrec, LOG_BEGIN, 0, 0, srctabinfo->t_sstab_name, 
+				NULL, 0, 0, 0, 0, 0, NULL, NULL);
+
+		
+		logrec->logbeg.begincase = (srctabinfo->t_stat & TAB_INS_INDEX)
+					   ? LOGBEG_INDEX_CASE : 0;
+		log_put(logrec, NULL, 0);
 	}
 
 	
@@ -151,33 +183,113 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 	
 	srctabinfo->t_stat &= ~TAB_GET_RES_SSTAB;
 	
-	blk = destbuf->bblk;
+	destblk = destbuf->bblk;
 		
-	blk_init(blk);
+	blk_init(destblk);
 
+	if ((tss->topid & TSS_OP_INSTAB) && (srctabinfo->t_has_index))
+	{		
+		MEMSET(rg_tab_dir, TABLE_NAME_MAX_LEN);
+		MEMCPY(rg_tab_dir, MT_RANGE_TABLE, STRLEN(MT_RANGE_TABLE));
+		str1_to_str2(rg_tab_dir, '/', srctabinfo->t_tab_name);
+	}
+
+	bufpredirty(srcbp->bsstab);
+	bufpredirty(destbuf->bsstab);
+	
+		
 	
 	while(nextblk->bblkno != -1)
 	{
 		Assert(nextblk->bfreeoff > BLKHEADERSIZE);
 		
-		BLOCK_MOVE(blk,nextblk);
+		
+		MEMCPY(destblk->bdata, nextblk->bdata, 
+					BLOCKSIZE - BLKHEADERSIZE - 4);
+		if (srcbp->bsstab->bsstabid == 7)
+		{
+			sstab_split_cnt++;
+		}
+		destblk->bnextrno = nextblk->bnextrno;				
+		destblk->bfreeoff = nextblk->bfreeoff;
+		destblk->bminlen = nextblk->bminlen;
 
+		if (   (tss->topid & TSS_OP_INSTAB)
+		    && (srctabinfo->t_has_index))
+		{				
+			
+			idxbld.idx_tab_name = rg_tab_dir;
+
+			idxbld.idx_stat = 0;
+
+			idxbld.idx_root_sstab = srctabinfo->t_tablet_id;
+
+			idxupd.newblk = destblk;
+
+			idxupd.oldblk = nextblk;
+
+			idxupd.new_sstabid = destbuf->bsstab->bsstabid;
+
+			idxupd.old_sstabid = srcbp->bsstab->bsstabid;
+
+			idxupd.start_row = 0;
+
+			Assert(!(srctabinfo->t_stat & TAB_INS_INDEX));
+
+			Assert(idxupd.new_sstabid != idxupd.old_sstabid);
+
+			
+			Assert(destblk->bfreeoff > BLKHEADERSIZE);
+
+			if (srctabinfo->t_index_ts 
+				!= Range_infor->rg_meta_sysindex->idx_ver)
+			{
+				meta_load_sysindex(
+					(char *)Range_infor->rg_meta_sysindex);
+			}
+			if (srcbp->bsstab->bsstabid == 7)
+			{
+				sstabsplit_idx_upd_cnt++;
+			}
+//			Assert(sstab_split_cnt == sstabsplit_idx_upd_cnt);
+			
+			index_update(&idxbld, &idxupd, srctabinfo, 
+					Range_infor->rg_meta_sysindex);	
+		}
+
+		MEMSET(nextblk->bdata, BLOCKSIZE - BLKHEADERSIZE - 4);
+		nextblk->bnextrno = 0;
+		nextblk->bfreeoff = BLKHEADERSIZE;
+		nextblk->bminlen = 0;				
+		
 		if (nextblk->bnextblkno == -1)
 		{
 			break;
 		}
 		
 		nextblk = (BLOCK *) ((char *)nextblk + BLOCKSIZE);
-		blk = (BLOCK *) ((char *)blk + BLOCKSIZE);
+		destblk = (BLOCK *) ((char *)destblk + BLOCKSIZE);
 	}
 
-
+				
 	MEMSET(destbuf->bsstab_name, 256);
 
 //	sstab_namebyname(srctabinfo->t_sstab_name, destbuf->bsstab_name);
 	sstab_namebyid(srctabinfo->t_sstab_name, destbuf->bsstab_name, 
 				srctabinfo->t_insmeta->res_sstab_id);
 
+	destbuf->bsstab->bblk->bnextsstabnum = srcbp->bsstab->bblk->bnextsstabnum;
+	destbuf->bsstab->bblk->bprevsstabnum = srcbp->bsstab->bblk->bsstabnum;
+	srcbp->bsstab->bblk->bnextsstabnum = srctabinfo->t_insmeta->res_sstab_id;
+	destbuf->bsstab->bblk->bsstabnum = srctabinfo->t_insmeta->res_sstab_id;
+
+	
+	srctabinfo->t_insmeta->ts_low = mtts_increment(srctabinfo->t_insmeta->ts_low);
+	srcbp->bsstab->bblk->bsstab_split_ts_lo = srctabinfo->t_insmeta->ts_low;
+	
+	bufdirty(srcbp->bsstab);
+	bufdirty(destbuf->bsstab);
+	
 	tabinfo = MEMALLOCHEAP(sizeof(TABINFO));
 	MEMSET(tabinfo, sizeof(TABINFO));
 
@@ -191,29 +303,80 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 
 	tabinfo_push(tabinfo);
 
-	LOGREC logrec;
-
-	log_build(&logrec, LOG_BEGIN, 0, 0, srctabinfo->t_sstab_name, 
-							NULL, 0, 0, 0);
-
-	log_insert_sstab_split(tss->rglogfile, &logrec, SPLIT_LOG);
-
 	TABINFO_INIT(tabinfo, destbuf->bsstab_name, srctabinfo->t_tab_name,
-			srctabinfo->t_tab_namelen, tabinfo->t_sinfo, 
-			srcbp->bsstab->bblk->bminlen, 
-			TAB_KEPT_BUF_VALID | TAB_DO_SPLIT,
-			srctabinfo->t_tabid, 
-			srctabinfo->t_insmeta->res_sstab_id);
+				srctabinfo->t_tab_namelen, tabinfo->t_sinfo, 
+				srcbp->bsstab->bblk->bminlen, 
+				TAB_KEPT_BUF_VALID | TAB_DO_SPLIT,
+				srctabinfo->t_tabid, 
+				srctabinfo->t_insmeta->res_sstab_id);
 
 	
-	destbuf->bsstab->bblk->bnextsstabnum = srcbp->bsstab->bblk->bnextsstabnum;
-	destbuf->bsstab->bblk->bprevsstabnum = srcbp->bsstab->bblk->bsstabnum;
-	srcbp->bsstab->bblk->bnextsstabnum = srctabinfo->t_insmeta->res_sstab_id;
-	destbuf->bsstab->bblk->bsstabnum = srctabinfo->t_insmeta->res_sstab_id;
+	srctabinfo->t_stat |= TAB_SSTAB_SPLIT;
+
+	srctabinfo->t_insrg = (INSRG *)MEMALLOCHEAP(sizeof(INSRG));
+	MEMSET(srctabinfo->t_insrg, sizeof(INSRG));
 
 	
-	srctabinfo->t_insmeta->ts_low = mtts_increment(srctabinfo->t_insmeta->ts_low);
-	srcbp->bsstab->bblk->bsstab_split_ts_lo = srctabinfo->t_insmeta->ts_low;
+	sstab_key = row_locate_col(destbuf->bblk->bdata, -1, 
+					destbuf->bblk->bminlen, &sstab_keylen);
+
+	srctabinfo->t_insrg->new_keylen = sstab_keylen;
+	srctabinfo->t_insrg->new_sstab_key = (char *)MEMALLOCHEAP(sstab_keylen);
+	MEMSET(srctabinfo->t_insrg->new_sstab_key, sstab_keylen);
+
+
+	int	sstab_len = STRLEN(destbuf->bsstab_name);
+	i = strmnstr(destbuf->bsstab_name, "/", sstab_len);
+	
+	MEMCPY(srctabinfo->t_insrg->new_sstab_name, destbuf->bsstab_name + i, 
+		STRLEN(destbuf->bsstab_name + i));
+	MEMCPY(srctabinfo->t_insrg->new_sstab_key, sstab_key, sstab_keylen);
+
+	if (!(srctabinfo->t_stat & TAB_NOLOG_MODEL))
+	{
+		Assert(logrec);
+		
+		log_build(logrec , (srctabinfo->t_stat & TAB_INS_INDEX) 
+				  ? LOG_INDEX_SSTAB_SPLIT : LOG_DATA_SSTAB_SPLIT, 
+				srcbp->bsstab->bblk->bsstab_split_ts_lo, 0,
+				srctabinfo->t_sstab_name, destbuf->bsstab_name,
+				0, 0, 0, 0, 0, NULL, NULL);
+		
+		log_put(logrec, NULL, 0);
+	}
+
+	if (!(srctabinfo->t_stat & TAB_INS_INDEX))
+	{
+		SSTAB_SPLIT_INFO	split_info;
+
+		SSTAB_SPLIT_INFO_INIT(&split_info, 0, srctabinfo->t_tab_name,
+					srctabinfo->t_tab_namelen, 
+					destbuf->bsstab_name,
+					srctabinfo->t_sstab_id,
+					srcbp->bsstab->bblk->bsstab_split_ts_lo,
+					srctabinfo->t_insmeta->res_sstab_id,
+					sstab_keylen, sstab_key);
+
+		
+		ri_rgstat_putdata(tss->rgstatefile, destbuf->bsstab_name, 0, &split_info);
+	}
+	
+	if (!(srctabinfo->t_stat & TAB_NOLOG_MODEL))
+	{
+		Assert(logrec);
+		
+		log_build(logrec, LOG_END, 0, 0, srctabinfo->t_sstab_name,
+					NULL, 0, 0, 0, 0, 0, NULL, NULL);
+
+		log_put(logrec, NULL, 0);
+
+		if (!(srctabinfo->t_stat & TAB_INS_INDEX))
+		{
+			hkgc_wash_sstab(TRUE);
+		}
+	}
+
+       	
 	
 	if (ins_nxtsstab)
 	{
@@ -228,58 +391,35 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 				srctabinfo->t_key_coltype, srctabinfo->t_key_coloff);
 
 		
-		tabinfo->t_stat |= TAB_LOG_SKIP_LOG;
+		tabinfo->t_stat |=  (srctabinfo->t_stat & TAB_NOLOG_MODEL) 
+				  ? TAB_NOLOG_MODEL : 0;
+		tabinfo->t_has_index = srctabinfo->t_has_index;
+		tabinfo->t_colinfo = srctabinfo->t_colinfo;
+		tabinfo->t_tablet_id = srctabinfo->t_tablet_id;
+		tabinfo->t_index_ts = srctabinfo->t_index_ts;
 		blkins(tabinfo, rp);
+
+		MEMCPY(&(srctabinfo->t_currid), &(tabinfo->t_currid), sizeof(RID));		
 	}
 	else
 	{
 		
-		bufpredirty(destbuf);
-		bufdirty(destbuf);
+		bufpredirty(destbuf->bsstab);
+		bufdirty(destbuf->bsstab);
 	}
-
-	
-	srctabinfo->t_stat |= TAB_SSTAB_SPLIT;
-
-	srctabinfo->t_insrg = (INSRG *)MEMALLOCHEAP(sizeof(INSRG));
-	MEMSET(srctabinfo->t_insrg, sizeof(INSRG));
-
-	
-	sstab_key = row_locate_col(destbuf->bblk->bdata, -1, destbuf->bblk->bminlen,
-				   &sstab_keylen);
-
-	srctabinfo->t_insrg->new_keylen = sstab_keylen;
-	srctabinfo->t_insrg->new_sstab_key = (char *)MEMALLOCHEAP(sstab_keylen);
-	MEMSET(srctabinfo->t_insrg->new_sstab_key, sstab_keylen);
-
-
-	int	sstab_len = STRLEN(destbuf->bsstab_name);
-	i = strmnstr(destbuf->bsstab_name, "/", sstab_len);
-	
-	MEMCPY(srctabinfo->t_insrg->new_sstab_name, destbuf->bsstab_name + i, 
-		STRLEN(destbuf->bsstab_name + i));
-	MEMCPY(srctabinfo->t_insrg->new_sstab_key, sstab_key, sstab_keylen);
-	
-
-	log_build(&logrec, LOG_DO_SPLIT, srcbp->bsstab->bblk->bsstab_split_ts_lo, 0,
-			srctabinfo->t_sstab_name, destbuf->bsstab_name, 0, 0, 0);
-	
-	log_insert_sstab_split(tss->rglogfile, &logrec, SPLIT_LOG);
-
-	SSTAB_SPLIT_INFO	split_info;
-
-	SSTAB_SPLIT_INFO_INIT(&split_info, 0, srctabinfo->t_tab_name,
-				srctabinfo->t_tab_namelen, destbuf->bsstab_name,
-				srctabinfo->t_sstab_id,
-				srcbp->bsstab->bblk->bsstab_split_ts_lo,
-				srctabinfo->t_insmeta->res_sstab_id,
-				sstab_keylen, sstab_key);
-
-	ri_rgstat_putdata(tss->rgstatefile, destbuf->bsstab_name, 0, &split_info);
+		
+	if (destbuf)
+	{
+		bufunkeep(destbuf->bsstab);
+	}
 
 	session_close(tabinfo);
 	
-
+	if (logrec)
+	{
+		MEMFREEHEAP(logrec);
+	}
+	
 	if (tabinfo)
 	{
 		if (tabinfo->t_sinfo)

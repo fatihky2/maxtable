@@ -1,22 +1,22 @@
 /*
-** block.h 2010-10-08 xueyingfei
-**
-** Copyright flying/xueyingfei.
+** Copyright (C) 2011 Xue Yingfei
 **
 ** This file is part of MaxTable.
 **
-** Licensed under the Apache License, Version 2.0
-** (the "License"); you may not use this file except in compliance with
-** the License. You may obtain a copy of the License at
+** Maxtable is free software: you can redistribute it and/or modify
+** it under the terms of the GNU General Public License as published by
+** the Free Software Foundation, either version 3 of the License, or
+** (at your option) any later version.
 **
-** http://www.apache.org/licenses/LICENSE-2.0
+** Maxtable is distributed in the hope that it will be useful,
+** but WITHOUT ANY WARRANTY; without even the implied warranty of
+** MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+** GNU General Public License for more details.
 **
-** Unless required by applicable law or agreed to in writing, software
-** distributed under the License is distributed on an "AS IS" BASIS,
-** WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
-** implied. See the License for the specific language governing
-** permissions and limitations under the License.
+** You should have received a copy of the GNU General Public License
+** along with Maxtable. If not, see <http://www.gnu.org/licenses/>.
 */
+
 #ifndef BLOCK_H_
 #define BLOCK_H_
 
@@ -50,6 +50,8 @@
 
 #define	BLOCKMASK		(~(BLOCKSIZE - 1))
 
+
+#define	BLOCK_EMPTY_ROWID	-1
 
 typedef	struct block
 {
@@ -88,6 +90,7 @@ typedef	struct block
 #define	BLK_TABLET_SCHM		0x0001	
 #define BLK_SSTAB_SPLIT		0x0002	
 #define	BLK_INDEX_ROOT		0x0004	
+#define	BLK_CRT_EMPTY		0x0008	
 
 
 #define	ROW_OFFSET_ENTRYSIZE	sizeof(int)
@@ -108,7 +111,7 @@ typedef	struct block
 typedef struct block_row_info
 {
 	int	rlen;
-	int	roffset;
+	int	rnum;
 	int	rblknum;
 	int	rsstabid;
 }BLK_ROWINFO;
@@ -153,7 +156,7 @@ do {											\
 											\
 		(nextblk)->bnextrno = 0;						\
 		(nextblk)->bfreeoff = BLKHEADERSIZE;					\
-		(nextblk)->bminlen = 0;							\
+		(nextblk)->bminlen = (blk)->bminlen;							\
 }while(0)
 
 
@@ -176,17 +179,17 @@ int
 blkins(struct tab_info *tabinfo, char *rp);
 
 int
-blkdel(TABINFO *tabinfo);
+blkdel(struct tab_info *tabinfo);
 
 int
-blk_check_sstab_space(TABINFO *tabinfo, BUF *bp, char *rp, int rlen,
-						int ins_offset);
+blk_check_sstab_space(struct tab_info *tabinfo, BUF *bp, char *rp, int rlen,
+						int ins_rnum);
 
 void
-blk_split(BLOCK *blk);
+blk_split(BLOCK *blk, struct tab_info *tabinfo);
 
 int
-blk_backmov(BLOCK *blk);
+blk_backmov(BLOCK *blk, struct tab_info *tabinfo);
 
 void
 blk_init(BLOCK *blk);
@@ -198,10 +201,16 @@ int
 blk_appendrow(BLOCK *blk, char *rp, int rlen);
 
 int
-blkupdate(TABINFO *tabinfo, char *newrp);
+blkupdate(struct tab_info *tabinfo, char *newrp);
 
 int
 blk_get_totrow_sstab(BUF *bp);
+
+int
+blk_shuffle_data(BLOCK *srcblk, BLOCK *destblk);
+
+int
+blk_compact(BLOCK *blk);
 
 
 #endif
