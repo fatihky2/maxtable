@@ -65,7 +65,7 @@ create index idx1 on maxtab (id2)
 }}}
   * drop index against table
 {{{
-drop index idx1 pn maxtab
+drop index idx1 on maxtab
 }}}
   * delete data
 {{{
