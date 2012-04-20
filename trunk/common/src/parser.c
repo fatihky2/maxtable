@@ -1128,7 +1128,12 @@ par_selwherecnt_tab(char *s_str, int querytype)
 		
 		str0n_trunc_0t(colname, len - 1, &start, &end);
 		colnamelen = end - start;
-		char	*tmpcolname = &(colname[start]);
+		char	tmpcolname[32];
+
+		
+		Assert (colnamelen < 32);
+		MEMSET(tmpcolname, 32);
+		MEMCPY(tmpcolname,  &(colname[start]), colnamelen);
 
 		if (colnamelen < 1)
 		{

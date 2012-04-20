@@ -505,7 +505,7 @@ log_get_latest_rglogfile(char *rginsdellogfile, char *rg_ip, int port)
 		}
 		else if (slen1 == slen2)
 		{
-			if (strcmp(mt_entries.tabname[i], rginsdellogfile))
+			if (strcmp(mt_entries.tabname[i], rginsdellogfile) > 0)
 			{
 				MEMCPY(rginsdellogfile, mt_entries.tabname[i], slen1);
 			}
@@ -536,7 +536,7 @@ log_get_latest_rglogfile(char *rginsdellogfile, char *rg_ip, int port)
 		}
 		else if (slen1 == slen2)
 		{
-			if (strcmp(ent->d_name, rginsdellogfile))
+			if (strcmp(ent->d_name, rginsdellogfile) > 0)
 			{
 				MEMCPY(rginsdellogfile, ent->d_name, slen1);
 			}
@@ -655,6 +655,8 @@ pre_logfile:
 
 	}
 
+	
+
 	if (!status)
 	{
 		if (log_recov.buf_idxmax == LOG_BUF_RESERV_MAX)
@@ -663,7 +665,12 @@ pre_logfile:
 			Assert(0);
 		}
 
-		log_recov.buf_idxcur++;
+		if ((hit_empty_file) && (log_recov.buf_idxcur == 0))
+		{
+			traceprint("No log will be recovery.\n");
+			status = TRUE;
+			goto exit;
+		}
 		
 		int idxpos = str1nstr(logfilename, "/log\0", STRLEN(logfilename));
 	
@@ -680,20 +687,18 @@ pre_logfile:
 			sprintf(prelogfile + idxpos, "%d", logfilenum);
 
 			logfilename = prelogfile;
+
+			log_recov.buf_idxcur++;
+		
+			goto pre_logfile;
 		}
 		else
 		{
-			if (hit_empty_file)
-			{
-				traceprint("No log will be recovery.\n");
-				status = TRUE;
-				goto exit;
-			}
 			
-			Assert(0);
+			Assert (logfilenum == 0);
+
+			status = TRUE;
 		}
-		
-		goto pre_logfile;
 	}
 
 	log_recov.redo_start_buf = log_recov.buf_idxcur;
