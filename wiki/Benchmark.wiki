@@ -58,6 +58,12 @@ create table maxtab(id1 varchar, id2 varchar,id3 int, id4 varchar,id5 varchar,
   The total row # is 333334
   time cost(s): 55.726135
 
+9. insert into table with one secondary index and one cluster index
+Client 1: insert into maxtab(aaaa2001, bbbb2001, 2001, cccccc2001, dddddd2001, eeeeee2001, ffffff2001, gggggg2001, hhhhhh2001)
+....
+Client 1: insert into maxtab(aaaa5001998, bbbb5001998, 5001998, cccccc5001998, dddddd5001998, eeeeee5001998, ffffff5001998, gggggg5001998, hhhhhh5001998)
+Client 1: insert into maxtab(aaaa5001999, bbbb5001999, 5001999, cccccc5001999, dddddd5001999, eeeeee5001999, ffffff5001999, gggggg5001999, hhhhhh5001999)
+time cost: 46435.878906
 }}}
 
 
