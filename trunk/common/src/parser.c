@@ -306,8 +306,17 @@ parser_open(char *s_str)
 	    	rtn_stat = par_selwherecnt_tab(s_str + s_idx, SELECTWHERE);
 		break;
 
+	    case DELETEWHERE:
+	    	rtn_stat = par_selwherecnt_tab(s_str + s_idx, DELETEWHERE);
+	    	break;
+
 	    case SELECTCOUNT:
 	    	rtn_stat = par_selwherecnt_tab(s_str + s_idx, SELECTCOUNT);
+		break;
+
+	    case UPDATE:
+	    	tss->topid |= TSS_OP_UPDATE;
+	    	rtn_stat = par_selwherecnt_tab(s_str + s_idx, UPDATE);
 		break;
 
 	    case SELECTSUM:
@@ -586,7 +595,8 @@ double_parse:
 	   || (!strncasecmp("addsstab", start, len))
 	   || (!strncasecmp("drop", start, len))
 	   || (!strncasecmp("remove", start, len))
-	   || (!strncasecmp("mcc", start, len)))
+	   || (!strncasecmp("mcc", start, len))
+	   || (!strncasecmp("update", start, len)))
 	{
 		start[len++] = ' ';
 		goto double_parse;
@@ -997,6 +1007,7 @@ par_selwherecnt_tab(char *s_str, int querytype)
 	int		parser_result;
 	char		*coldata;
 	int		coldatalen;
+	TREE		*upd_cmd;
 	
 
 	if (s_str == NULL || (STRLEN(s_str) == 0))
@@ -1004,7 +1015,7 @@ par_selwherecnt_tab(char *s_str, int querytype)
 		return FALSE;
 	}
 
-	
+	upd_cmd = NULL;
 	parser_result = FALSE;
 	
 
@@ -1037,6 +1048,94 @@ par_selwherecnt_tab(char *s_str, int querytype)
 
 		coldata = col_info + start;
 		coldatalen = end - start;
+	}
+	
+	else if (querytype == UPDATE)
+	{
+		while (TRUE)
+		{
+			
+			len = 0;
+
+			cmd_len = STRLEN(s_str);
+
+			
+			len = str01str(s_str, "(\0", cmd_len);
+
+			if (len == -1)
+			{
+				traceprint("Value is not allowed with NULL.\n");
+				return FALSE;
+			}
+
+			str0n_trunc_0t(s_str, len + 1, &start, &end);
+			
+
+			MEMSET(colname, 64);
+
+			MEMCPY(colname, &s_str[start], end - start);
+
+			
+			len += 2;
+
+			start = len;
+
+			s_str += start;
+			
+			col_info = s_str;
+
+			len =  str1nstr(col_info, ")\0", cmd_len - start);
+
+			s_str += len;
+			
+			if (len < 2)
+			{
+				traceprint("Value is not allowed with NULL.\n");
+				goto exit;
+			}
+
+			str0n_trunc_0t(col_info, len - 1, &start, &end);
+
+			coldata = col_info + start;
+			coldatalen = end - start;
+			
+			if (upd_cmd == NULL)
+			{
+				
+				upd_cmd = par_bld_resdom(colname, NULL, -1, 0);
+
+				
+				upd_cmd->right = par_bld_const(coldata, 
+								(end - start),
+							INVALID_TYPE, NULL, 0);
+			}
+			else
+			{
+				command = upd_cmd;
+
+				while(command->left)
+				{
+					command = command->left;
+				}
+				
+				
+				command->left = par_bld_resdom(colname, NULL,
+							-1, 0);
+
+				
+				command->left->right = par_bld_const(coldata, 
+							(end - start),
+							INVALID_TYPE, NULL, 0);
+			}
+			
+						
+			str0n_trunc_0t(s_str, len + 1, &start, &end);
+
+			if (s_str[start] != ',')
+			{
+				break;
+			}			
+		}
 	}
 
 	len = 0;
@@ -1090,7 +1189,14 @@ par_selwherecnt_tab(char *s_str, int querytype)
 		MEMCPY(colname, coldata, coldatalen);
 		
 		
-		command->left = par_bld_resdom(colname, NULL, 1, RESDOM_SELECTSUM_COL);
+		command->left = par_bld_resdom(colname, NULL, 1,
+					RESDOM_SELECTSUM_COL);
+	}
+	else if (querytype == UPDATE)
+	{
+		Assert((tss->tcmd_parser) && (tss->tcmd_parser->left == NULL));
+		
+		tss->tcmd_parser->left = upd_cmd;
 	}
 
 	while (cmd_len)
@@ -1729,7 +1835,8 @@ par_col_info4where(char *cmd, int cmd_len, int querytype, char *colname)
 
 
 	Assert(   (querytype == SELECTWHERE) || (querytype == SELECTCOUNT)
-	       || (querytype == SELECTSUM));
+	       || (querytype == SELECTSUM) || (querytype == DELETEWHERE)
+	       || (querytype == UPDATE));
 	
 	rightdata = NULL;
 	leftdata = NULL;
@@ -1820,6 +1927,7 @@ par_fill_colinfo(int colnum, COLINFO* col_buf, TREE *command)
 				if (!par_chk_fill_resdom(command, colnum,
 							col_buf))
 				{
+					
 					return FALSE;
 				}
 			}			
@@ -2094,5 +2202,31 @@ par_process_andplan(ORANDPLAN *cmd, char *rp, int minrowlen)
 	}
 
 	return rtn_stat;
+}
+
+int
+par_fill_resd(TREE *command, COLINFO *colinfor, int totcol)
+{
+	COLINFO		*col_info;
+	int		colid;
+
+	while(command)
+	{
+		if (PAR_NODE_IS_RESDOM(command->type))
+		{
+			colid = command->sym.resdom.colid;
+			col_info = meta_get_colinfor(colid, NULL, totcol, colinfor);
+
+			Assert(col_info);
+
+			command->sym.resdom.coloffset = col_info->col_offset;
+			command->sym.resdom.coltype = col_info->col_type;
+		}
+
+		command = command->left;
+	}
+
+	return TRUE;
+
 }
 

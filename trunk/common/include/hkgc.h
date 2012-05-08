@@ -49,5 +49,9 @@ hkgc_boot(void *opid);
 void
 hkgc_wash_sstab(int force);
 
+void
+hk_prt_bufinfo();
+
+
 
 #endif

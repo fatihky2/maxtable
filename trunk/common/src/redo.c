@@ -148,7 +148,8 @@ redo_data_insdel(LOGREC *logrec, char *rp)
 			
 		tabinfo->t_sinfo->sistate &= ~SI_INS_DATA;
 	}
-	else if (((LOGHDR *)logrec)->opid == LOG_DATA_DELETE)
+	else if (   (((LOGHDR *)logrec)->opid == LOG_DATA_DELETE) 
+		 && (!(((LOGHDR *)logrec)->status & LOG_NOT_REDO)))
 	{		
 		tabinfo->t_sinfo->sistate |= SI_DEL_DATA;
 		
@@ -317,7 +318,11 @@ redo_index_insdel(LOGREC *logrec, char *rp)
 	
 		if (upd_in_place)
 		{
-			index_addrid(bp->bblk, rnum, (RID *)rp);
+			index_addrid(bp->bblk, rnum, (RID *)rp,
+				IDXBLK_RIDARRAY_FAKE_COLOFF_INROW,
+				INDEXBLK_RIDNUM_COLOFF_INROW,
+				ROW_MINLEN_IN_INDEXBLK);
+			
 		}
 		else
 		{

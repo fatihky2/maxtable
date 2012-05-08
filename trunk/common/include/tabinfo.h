@@ -147,6 +147,10 @@ typedef struct tab_info
 #define	TAB_SRCH_RANGE		0x00400000	/* Range query*/
 #define	TAB_NOLOG_MODEL		0x00800000	/* No log model. */
 #define	TAB_DEL_INDEX		0x01000000	/* Delete index row. */
+#define	TAB_RID_UPDATE		0x02000000	/* RID update case. */
+#define	TAB_SKIP_SSTAB_REGIEST	0x04000000	/* Skip this sstable to register
+						** to its parent node.
+						*/	
 
 
 #define TAB_IS_SYSTAB(tabinfo)	(tabinfo->t_stat & TAB_META_SYSTAB)

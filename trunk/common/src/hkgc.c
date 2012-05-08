@@ -38,6 +38,7 @@ hkgc_wash_sstab(int force)
 {
 	int		i;
 	BUF		*sstab;
+	BUF		*washlink;
 	HKGC_INFO	*hk_info;
 	LOGREC		logrec;
 
@@ -50,23 +51,40 @@ hkgc_wash_sstab(int force)
 	P_SPINLOCK(HKGC_SPIN);
 	
 	hk_info = (HKGC_INFO *)(Kernel->hk_info);
+
+	washlink = Kernel->ke_bufwash->bdnew;
 	
 	for (i = 0; i < HK_BATCHSIZE; i++)
 	{
-		sstab = Kernel->ke_bufwash->bdnew;
+		sstab = washlink;
 
 		if (sstab == Kernel->ke_bufwash)
 		{
 			break;
 		}
 
-		(hk_info->buf_num)++;
+		if (sstab->bkeep == 0)
+		{
+			(hk_info->buf_num)++;
 
-		hk_info->hk_dirty_buf[i] = sstab;
+			hk_info->hk_dirty_buf[i] = sstab;
 
-		sstab->bstat |= (BUF_IN_HKWASH | BUF_WRITING);
+			sstab->bstat |= (BUF_IN_HKWASH | BUF_WRITING);
 
-		DIRTYUNLINK(sstab);
+			washlink = sstab->bdnew;
+			
+			DIRTYUNLINK(sstab);
+		}
+		else
+		{
+			Assert(sstab->bkeep);
+
+			traceprint("Buf(0x%x) still has been kept.\n", (char *)sstab);
+
+			i--;
+
+			washlink = sstab->bdnew;
+		}
 	}
 
 	if (hk_info->buf_num)
@@ -240,4 +258,19 @@ hkgc_boot(void *opid)
 	return NULL;
 }
 
+void
+hk_prt_bufinfo()
+{
+	int		i;
+	HKGC_INFO	*hk_info;
+
+	
+	hk_info = (HKGC_INFO *)(Kernel->hk_info);
+
+	for (i = 0; i < hk_info->buf_num; i++)
+	{
+		traceprint("hk_info->hk_dirty_buf[%d] = 0x%x", i, (char *)(hk_info->hk_dirty_buf[i]));
+	}
+
+}
 

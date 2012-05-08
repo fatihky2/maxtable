@@ -41,7 +41,9 @@ TOKENS  MT_Tokens[] =
 	{SELECTCOUNT,	"selectcount"},
 	{SELECTSUM,	"selectsum"},
 	{DROPINDEX,	"drop index"},
-	{REMOVEINDEX,	"remove index"}
+	{REMOVEINDEX,	"remove index"},
+	{DELETEWHERE,	"deletewhere"},
+	{UPDATE,	"update set"}
 };
 
 int

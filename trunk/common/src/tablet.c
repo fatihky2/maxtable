@@ -96,7 +96,8 @@ tablet_crt(TABLEHDR *tablehdr, char *tabledir, char *rg_addr, char *rp, int minl
 	char *temprp = (char *)MEMALLOCHEAP(rlen);
 	
 	
-	tablet_schm_bld_row(temprp, rlen, tablehdr->tab_tablet, tablet_name, rg_addr, keycol, keycolen, port);
+	tablet_schm_bld_row(temprp, rlen, tablehdr->tab_tablet, tablet_name, 
+				rg_addr, keycol, keycolen, port);
 	
 	tablet_schm_ins_row(tablehdr->tab_id, TABLETSCHM_ID, tab_meta_dir, temprp, 0, 0);
 
@@ -522,7 +523,6 @@ tablet_schm_bld_row(char *rp, int rlen, int tabletid, char *tabletname,
 	
 	row_build_hdr((rp + rowidx), 0, 0, 1);
 
-	
 	rowidx += sizeof(ROWFMT);
 
 		
@@ -544,9 +544,8 @@ tablet_schm_bld_row(char *rp, int rlen, int tabletid, char *tabletname,
 	PUT_TO_BUFFER(rp, rowidx, keycol, keycolen);
 
 	
-	
 	*(int *)(rp + rowidx) = rowidx - keycolen;
-
+	
 	rowidx += COLOFFSETENTRYSIZE;
 	
 	Assert(rowidx == rlen);
@@ -619,7 +618,8 @@ tablet_schm_ins_row(int tabid, int sstabid, char *systab, char *row,
 	minrowlen = ROW_MINLEN_IN_TABLETSCHM;
 
 	
-	key = row_locate_col(row, -1, minrowlen, &keylen);
+	key = row_locate_col(row, TABLETSCHM_KEY_FAKE_COLOFF_INROW, minrowlen,
+				&keylen);
 
 	flag |= tabletnum ? TAB_SCHM_INS : TAB_CRT_NEW_FILE;
 	
@@ -644,12 +644,10 @@ tablet_schm_ins_row(int tabid, int sstabid, char *systab, char *row,
 
 
 void
-tablet_schm_del_row(int tabid, int sstabid, char *systab, char *row)
+tablet_schm_del_row(int tabid, int sstabid, char *systab, char *key, int keylen)
 {
 	TABINFO		*tabinfo;
 	int		minrowlen;
-	char		*key;
-	int		keylen;
 	BLK_ROWINFO	blk_rowinfo;
 	
 	
@@ -668,9 +666,6 @@ tablet_schm_del_row(int tabid, int sstabid, char *systab, char *row)
 
 	minrowlen = ROW_MINLEN_IN_TABLETSCHM;
 
-	
-	key = row_locate_col(row, -1, minrowlen, &keylen);
-	
 	TABINFO_INIT(tabinfo, systab, NULL, 0, tabinfo->t_sinfo, minrowlen, TAB_SRCH_DATA,
 		     tabid, sstabid);
 	SRCH_INFO_INIT(tabinfo->t_sinfo, key, keylen, TABLETSCHM_KEY_COLID_INROW,

@@ -1246,7 +1246,9 @@ mt_cli_rgsel_ranger(CONN * connection, char * cmd, MT_CLI_EXEC_CONTEX *exec_ctx,
 	if (   (rg_connection == NULL) 
 	    || (   (exec_ctx->querytype != SELECTCOUNT) 
 	        && (exec_ctx->querytype != SELECTSUM)
+	        && (exec_ctx->querytype != DELETEWHERE)
 	        && (exec_ctx->querytype != CRTINDEX)
+	        && (exec_ctx->querytype != UPDATE)
 		&& (!mt_cli_rgsel_is_bigdata(rg_connection, &bigdataport))))
 	{
 		rtn_state = FALSE;
@@ -1256,7 +1258,9 @@ mt_cli_rgsel_ranger(CONN * connection, char * cmd, MT_CLI_EXEC_CONTEX *exec_ctx,
 	/* The result from SELECTCOUNT doesn't need to be sent by the bigdata port. */
 	if (   (exec_ctx->querytype == SELECTCOUNT)
 	    || (exec_ctx->querytype == SELECTSUM)
-	    || (exec_ctx->querytype == CRTINDEX))
+	    || (exec_ctx->querytype == DELETEWHERE)
+	    || (exec_ctx->querytype == CRTINDEX)
+	    || (exec_ctx->querytype == UPDATE))
 	{
 		rtn_state = TRUE;
 		exec_ctx->rg_conn = rg_connection;
@@ -1929,7 +1933,9 @@ mt_cli_read_range(MT_CLI_EXEC_CONTEX *exec_ctx)
 
 	if (   (exec_ctx->querytype == SELECTCOUNT)
 	    || (exec_ctx->querytype == SELECTSUM)
-	    || (exec_ctx->querytype == CRTINDEX))
+	    || (exec_ctx->querytype == CRTINDEX)
+	    || (exec_ctx->querytype == DELETEWHERE)
+	    || (exec_ctx->querytype == UPDATE))
 	{
 		sockfd = exec_ctx->rg_conn->connection_fd;
 	}
@@ -1949,7 +1955,9 @@ retry:
 		
 		if (   (exec_ctx->querytype == SELECTCOUNT)
 		    || (exec_ctx->querytype == SELECTSUM)
-		    || (exec_ctx->querytype == CRTINDEX))
+		    || (exec_ctx->querytype == DELETEWHERE)
+		    || (exec_ctx->querytype == CRTINDEX)
+		    || (exec_ctx->querytype == UPDATE))
 		{
 			exec_ctx->rg_conn->status = CLOSED;
 		}
@@ -2253,6 +2261,26 @@ mt_cli_exec_builtin(MT_CLI_EXEC_CONTEX *exec_ctx)
 		
 		break;
 		
+	    case DELETEWHERE:
+
+		if (!mt_cli_read_range(exec_ctx))
+		{
+			exec_ctx->status |= CLICTX_RANGER_IS_UNCONNECT;
+			rtn_stat = FALSE;
+		}
+		
+		break;
+
+	    case UPDATE:
+
+		if (!mt_cli_read_range(exec_ctx))
+		{
+			exec_ctx->status |= CLICTX_RANGER_IS_UNCONNECT;
+			rtn_stat = FALSE;
+		}
+		
+		break;
+		
 	    case CRTINDEX:
 	    	if (!mt_cli_read_range(exec_ctx))
 		{
@@ -2467,6 +2495,15 @@ mt_cli_open_execute(CONN *connection, char *cmd, MT_CLI_EXEC_CONTEX **exec_ctx)
 	    	rtn_stat = par_selwherecnt_tab(cmd + s_idx, SELECTWHERE);
 		break;
 
+	    case DELETEWHERE:
+	    	rtn_stat = par_selwherecnt_tab(cmd + s_idx, DELETEWHERE);
+		break;
+
+	    case UPDATE:
+	    	tss->topid |= TSS_OP_UPDATE;
+	    	rtn_stat = par_selwherecnt_tab(cmd + s_idx, UPDATE);
+		break;
+
 	    case SELECTCOUNT:
 	    	rtn_stat = par_selwherecnt_tab(cmd + s_idx, SELECTCOUNT);
 		break;
@@ -2516,6 +2553,8 @@ mt_cli_open_execute(CONN *connection, char *cmd, MT_CLI_EXEC_CONTEX **exec_ctx)
 	    case SELECTCOUNT:
 	    case SELECTSUM:
 	    case CRTINDEX:
+	    case DELETEWHERE:
+	    case UPDATE:
 	    	rtn_stat = mt_cli_exec_selrang(connection, cmd, exec_ctx, querytype);
 	    	
 		break;

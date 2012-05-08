@@ -550,7 +550,7 @@ conn_chk_reqmagic(char *str)
 	{
 		return RPC_REQ_CRT_IDX_OP;
 	}
-	else if (!strncasecmp(RPC_IDXROOT_SPLIT_MAGIC, str, STRLEN(RPC_CRT_INDEX_MAGIC)))
+	else if (!strncasecmp(RPC_IDXROOT_SPLIT_MAGIC, str, STRLEN(RPC_IDXROOT_SPLIT_MAGIC)))
 	{
 		return RPC_IDXROOT_SPLIT_OP;
 	}

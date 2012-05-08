@@ -29,6 +29,7 @@
 #include "dskio.h"
 #include "spinlock.h"
 #include "tss.h"
+#include "hkgc.h"
 
 
 extern KERNEL	*Kernel;
@@ -77,11 +78,12 @@ bufread(BUF *bp)
 void
 bufwait(BUF *bp)
 {
+#if 0
 	while (SSTABLE_STATE(bp) & BUF_WRITING)
 	{
 		sleep(2);
 	}
-
+#endif
 
 	if (SSTABLE_STATE(bp) & BUF_IOERR)
 	{
@@ -94,6 +96,7 @@ bufwait(BUF *bp)
 BUF *
 bufgrab(TABINFO *tabinfo)
 {
+	LOCALTSS(tss);
 	BUF	*bp;
 	int	bp_res_cnt;
 	BUF	*tmpbp;
@@ -135,12 +138,19 @@ retry:
 	}
 
 	bufwait(bp);
-		
+
+	
 	if (SSTABLE_STATE(bp) & BUF_DIRTY)
 	{
-		
-		DIRTYUNLINK(bp);
-		bufwrite(bp);
+		if (tss->topid & TSS_OP_RANGESERVER)
+		{
+			hkgc_wash_sstab(TRUE);
+		}
+		else
+		{
+			DIRTYUNLINK(bp);
+			bufwrite(bp);
+		}
 	}
 	
 	bufkeep(bp);
@@ -450,8 +460,9 @@ bufpredirty(BUF *bp)
 void
 bufdirty(BUF *bp)
 {	
-	Assert(SSTABLE_STATE(bp) & BUF_DIRTY);
-	
+	Assert(   (SSTABLE_STATE(bp) & BUF_DIRTY) 
+	       && (SSTABLE_STATE(bp) & BUF_KEPT));
+
 //	P_SPINLOCK(BUF_SPIN);
 
 	if (   (SSTABLE_STATE(bp) & BUF_DIRTY) 
@@ -525,6 +536,9 @@ buffree(BUF *bp)
 	
 	SSTABLE_STATE(bp) &= ~(BUF_NOTHASHED | BUF_DESTROY | BUF_DIRTY 
 				| BUF_IOERR | BUF_KEPT);
+
+	bp->bkeep = 0;
+	
 	return;
 }
 

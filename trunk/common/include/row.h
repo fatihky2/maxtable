@@ -29,14 +29,18 @@ typedef struct rowfmt
 }ROWFMT;
 
 
-#define	ROW_DELETED	0x0001			
-
+#define	ROW_DELETED		0x0001		
+#define	ROW_OVERFLOW		0x0002		
+#define	ROW_HAS_OVERFLOW	0x0004		
 
 
 #define	ROW_SET_STATUS(rp, flag)	((((ROWFMT *)(rp))->status) |= flag)
 #define	ROW_GET_STATUS(rp)	((int) ((ROWFMT *)(rp))->status)
 
 #define ROW_IS_DELETED(rp)	(ROW_GET_STATUS(rp) & ROW_DELETED)
+#define	ROW_IS_OVERFLOW(rp)	(ROW_GET_STATUS(rp) & ROW_OVERFLOW)
+#define	ROW_WITH_OVERFLOW(rp)	(ROW_GET_STATUS(rp) & ROW_HAS_OVERFLOW)
+
 
 
 #define GETINT(p)	(*(int *) (p))
@@ -129,5 +133,10 @@ row_col_compare(int coltype, char *colval1, int colen1, char *colval2, int colen
 
 void
 row_prt_offtab(int *offtab, int n);
+
+void
+row_rebld_row(char *oldrp, char *newrp, int newrlen, COLINFO *colinfo,
+				int colnum, int minrlen);
+
 
 #endif
