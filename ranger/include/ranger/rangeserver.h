@@ -54,6 +54,7 @@ typedef struct sstab_scancontext
 	ORANDPLAN	*andplan;
 	char		*sstab;		/* Ptr to the data in block. */
 	RANGE_QUERYCTX	*rgsel;
+	char		*tabdir;	/* Full path of table dir. */
 	int		rowcnt;		/* For the selectcount. */
 	int		sum_colval;	/* For the selectsum. */
 	int		querytype;
@@ -92,13 +93,21 @@ typedef struct tablet_scancontext
 					** its value is '1' generally. 
 					*/
 	int		tabid;		/* Table id. */
+	int		tabletid;	/* Tablet id. */
+	int		totcol;		/* The # of column in the data table. */
 	int		connfd;		/* Socket id of connection to the 
 					** bigdata port.
 					*/
 	int		rowcnt;		/* For the selectcount. */
 	int		sum_colval;	/* For the selectsum (col). */
 	int		sum_coloff;	/* For the selectsum (col). */
-	int		pad;
+	int		has_index;	/* For the deletewhere, flag if it 
+					** needs to update the index.
+					*/
+	COLINFO		*colinfo;	/* For the deletewhere, because the 
+					** index update need it to find the 
+					** right data column for the index key.
+					*/
 }TABLET_SCANCTX;
 
 #define	SCANCTX_HIT_END		0x0001

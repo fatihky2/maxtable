@@ -299,6 +299,10 @@ ca_prt_cache()
 		traceprint("bp->bsstabnew : 0x%x\n", bp->bsstabnew);
 		traceprint("bp->bsstabold : 0x%x\n", bp->bsstabold);
 		traceprint("bp->bblk : 0x%x\n", bp->bblk);
+		traceprint("bp->bsstab : %d\n", bp->bsstab);
+		traceprint("bp->bblk->bsstabnum : 0x%x\n", bp->bblk->bsstabnum);
+		traceprint("bp->bblk->bprevsstabnum : 0x%x\n", bp->bblk->bprevsstabnum);
+		traceprint("bp->bblk->bnextsstabnum : 0x%x\n", bp->bblk->bnextsstabnum);
 		
 		
 		i += BLK_CNT_IN_SSTABLE;
@@ -307,4 +311,71 @@ ca_prt_cache()
 
 	return;
 }
+
+void
+ca_prt_dirty()
+{
+	BUF	*tempbp;
+	BUF	*bp;
+	int	i,j;
+	
+	tempbp = Kernel->ke_bufwash;
+
+	traceprint("Header of Kernel->ke_bufwash (dummy buffer) 0x%x\n", tempbp);
+
+	i = j = 0;
+	bp = tempbp->bdnew;
+	
+	while((i < BLOCK_MAX_COUNT) && bp && (bp != tempbp))
+	{	
+		j++;
+		traceprint("SSTABLE # :  %d\n", j);
+		traceprint("Header of SSTABLE : 0x%x\n", bp);
+		traceprint("bp->bkeep : 0x%x\n", bp->bkeep);
+		traceprint("bp->bstat : 0x%x\n", bp->bstat);
+		traceprint("bp->bdnew : 0x%x\n", bp->bdnew);
+		traceprint("bp->bdold : 0x%x\n", bp->bdold);
+		traceprint("bp->bblk : 0x%x\n", bp->bblk);
+		
+		
+		i += BLK_CNT_IN_SSTABLE;
+		bp = bp->bdnew;
+	}
+
+	return;
+}
+
+void
+ca_prt_hash()
+{
+	BUF	**hashptr;	
+	BUF	*bp;
+	int	i;
+	
+	hashptr = Kernel->ke_bufhash;
+
+	traceprint("Header of Kernel->ke_bufhash 0x%x\n", hashptr);
+
+	i = 0;
+		
+	while(i < (BUFHASHSIZE - 1))
+	{	
+		for (bp = *(hashptr + i); bp; bp = bp->bhash)
+		{
+			traceprint("Hash Index # :  %d\n", i);
+			traceprint("Header of SSTABLE : 0x%x\n", bp);
+			traceprint("bp->bkeep : 0x%x\n", bp->bkeep);
+			traceprint("bp->bstat : 0x%x\n", bp->bstat);
+			traceprint("bp->bhash : 0x%x\n", bp->bhash);
+			traceprint("bp->bblk : 0x%x\n", bp->bblk);
+			
+		}
+
+		i++;
+	}
+
+	return;
+}
+
+
 

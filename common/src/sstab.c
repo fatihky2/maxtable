@@ -46,10 +46,6 @@ extern	TSS	*Tss;
 extern	RANGEINFO *Range_infor;
 
 
-int	sstab_split_cnt;
-int	sstabsplit_idx_upd_cnt;
-
-
 #define	SSTAB_NAMEIDX_MASK	(2^32 - 1)
 
 #define SSTAB_NAMEIDX(sstab, tabid)	(((tabid ^ (tabid << 8))^ (sstab ^ (sstab<<4))) & SSTAB_NAMEIDX_MASK)
@@ -122,7 +118,7 @@ sstab_namebyid(char *old_sstab, char *new_sstab, int new_sstab_id)
 
 
 void
-sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
+sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp, int data_insert_needed)
 {
 	LOCALTSS(tss);
 	BUF		*destbuf;
@@ -206,10 +202,7 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 		
 		MEMCPY(destblk->bdata, nextblk->bdata, 
 					BLOCKSIZE - BLKHEADERSIZE - 4);
-		if (srcbp->bsstab->bsstabid == 7)
-		{
-			sstab_split_cnt++;
-		}
+
 		destblk->bnextrno = nextblk->bnextrno;				
 		destblk->bfreeoff = nextblk->bfreeoff;
 		destblk->bminlen = nextblk->bminlen;
@@ -247,11 +240,6 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 				meta_load_sysindex(
 					(char *)Range_infor->rg_meta_sysindex);
 			}
-			if (srcbp->bsstab->bsstabid == 7)
-			{
-				sstabsplit_idx_upd_cnt++;
-			}
-//			Assert(sstab_split_cnt == sstabsplit_idx_upd_cnt);
 			
 			index_update(&idxbld, &idxupd, srctabinfo, 
 					Range_infor->rg_meta_sysindex);	
@@ -313,6 +301,15 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 	
 	srctabinfo->t_stat |= TAB_SSTAB_SPLIT;
 
+	if (ROW_IS_OVERFLOW(destbuf->bblk->bdata))
+	{
+		Assert(srctabinfo->t_stat & TAB_INS_INDEX);
+		
+		srctabinfo->t_stat |=TAB_SKIP_SSTAB_REGIEST;
+		
+		destbuf->bsstab->bblk->bstat |= BLK_OVERFLOW_SSTAB;		
+	}
+
 	srctabinfo->t_insrg = (INSRG *)MEMALLOCHEAP(sizeof(INSRG));
 	MEMSET(srctabinfo->t_insrg, sizeof(INSRG));
 
@@ -360,6 +357,11 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 		
 		ri_rgstat_putdata(tss->rgstatefile, destbuf->bsstab_name, 0, &split_info);
 	}
+
+	if (destbuf)
+	{
+		bufunkeep(destbuf->bsstab);
+	}
 	
 	if (!(srctabinfo->t_stat & TAB_NOLOG_MODEL))
 	{
@@ -374,12 +376,10 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 		{
 			hkgc_wash_sstab(TRUE);
 		}
-	}
-
-       	
+	}	
 	
-	if (ins_nxtsstab)
-	{
+	if (data_insert_needed && ins_nxtsstab)
+	{		
 		
 		tabinfo->t_keptbuf = destbuf;
 		
@@ -401,6 +401,7 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 
 		MEMCPY(&(srctabinfo->t_currid), &(tabinfo->t_currid), sizeof(RID));		
 	}
+#if 0
 	else
 	{
 		
@@ -408,10 +409,7 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 		bufdirty(destbuf->bsstab);
 	}
 		
-	if (destbuf)
-	{
-		bufunkeep(destbuf->bsstab);
-	}
+#endif
 
 	session_close(tabinfo);
 	

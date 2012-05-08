@@ -57,7 +57,8 @@ nextrow:
 	srchinfo->brow = ROW_GETPTR_FROM_OFFTAB(bp->bblk, srchinfo->brownum);
 //	srchinfo->boffset = ROW_OFFSET_PTR(bp->bblk)[-((int)(srchinfo->brownum))];
 
-	if ((tss->topid & TSS_OP_RANGESERVER) && (ROW_IS_DELETED(srchinfo->brow)))
+	if (   (tss->topid & TSS_OP_RANGESERVER) 
+	    && (ROW_IS_DELETED(srchinfo->brow)))
 	{	
 		
 		if (   (tabinfo->t_sinfo->sistate & SI_INS_DATA) 
@@ -67,7 +68,8 @@ nextrow:
 			goto do_gr_case;
 		}
 		
-		else if (tabinfo->t_stat & (TAB_SRCH_DATA | TAB_DEL_DATA))
+		else if (tabinfo->t_stat & (  TAB_SRCH_DATA | TAB_DEL_DATA
+					    | TAB_DEL_INDEX))
 		{				
 			result = LE;
 

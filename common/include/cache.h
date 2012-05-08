@@ -48,4 +48,12 @@ ca_init_blk(BLOCK *blk, int blkno, int sstabid, int bp_cnt);
 void
 ca_prt_cache();
 
+void
+ca_prt_dirty();
+
+void
+ca_prt_hash();
+
+
+
 #endif

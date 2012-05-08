@@ -73,6 +73,8 @@ build_file_name(char	*filehdr, char *filename, int fileno);
 
 #define BACKMOVE1(s, d, l)	backmove1((s), (d), l)
 
+#define	FWDMOVE(s, d, l)	memcpy((void *)(d), (const void *)(s), (size_t)(l)) 
+
 unsigned long
 hashstring(char *bytes, int nbytes, int seed);
 

@@ -77,6 +77,9 @@ typedef struct loghdr
 	char		log_test_magic[8];
 }LOGHDR;
 
+#define	LOG_NOT_REDO	0x0001		
+#define	LOG_NOT_UNDO	0x0002		
+
 
 typedef struct loginsdel
 {

@@ -114,6 +114,7 @@ typedef struct tssobj
 #define		TSS_OP_CRTINDEX		0x0100
 #define		TSS_OP_INDEX_CASE	0x0200
 #define		TSS_OP_IDXROOT_SPLIT	0x0400
+#define		TSS_OP_UPDATE		0x0800
 
 TSS *
 tss_alloc(void);

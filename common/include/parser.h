@@ -205,4 +205,7 @@ par_process_orplan(ORANDPLAN *cmd, char *rp, int minrowlen);
 int
 par_process_andplan(ORANDPLAN *cmd, char *rp, int minrowlen);
 
+int
+par_fill_resd(TREE *command, COLINFO *colinfor, int totcol);
+
 #endif

@@ -52,12 +52,13 @@ typedef struct tokens
 #define SHARDING	15
 #define	SELECTCOUNT	16
 #define SELECTSUM	17
-#define	IDXROOTSPLIT	18
-#define	DROPINDEX	19
-#define	REMOVEINDEX	20
+#define	DROPINDEX	18
+#define	REMOVEINDEX	19
+#define	DELETEWHERE	20
+#define	UPDATE		21
 	
 
-#define MAXSI_FIXED_TOKENS	20
+#define MAXSI_FIXED_TOKENS	21
 
 int
 token_validate(char *token);

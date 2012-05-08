@@ -53,6 +53,7 @@
 #include "interface.h"
 #include "ranger/rangeserver.h"
 #include "index.h"
+#include "timestamp.h"
 
 
 extern TSS	*Tss;
@@ -63,10 +64,6 @@ extern	int	Kfsport;
 
 extern	RG_LOGINFO	*Rg_loginfo;
 extern	RANGEINFO	*Range_infor;
-
-extern int	sstab_split_cnt;
-extern int	sstabsplit_idx_upd_cnt;
-
 
 
 pthread_mutex_t port_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -83,9 +80,6 @@ typedef struct _mapred_arg
 	int	pad;
 }mapred_arg;
 
-
-static int
-rg_fill_resd(TREE *command, COLINFO *colinfor, int totcol);
 
 static void 
 rg_regist();
@@ -139,7 +133,7 @@ static int
 rg_count_data_tablet(TABLET_SCANCTX *scanctx);
 
 static int
-rg_count_data_sstable(SSTAB_SCANCTX *scanctx);
+rg_count_data_sstable(SSTAB_SCANCTX *scanctx, TABINFO *tabinfo, BUF *bp, int totcol);
 
 static char *
 rg_mapred_setup(char * req_buf);
@@ -437,7 +431,7 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 	col_num = ins_meta->col_num;
 	col_off_idx = COL_OFFTAB_MAX_SIZE;
 
-	rg_fill_resd(command, col_info, col_num);
+	par_fill_resd(command, col_info, col_num);
 
 	while(col_num)
 	{
@@ -1708,7 +1702,7 @@ rg_selwheretab(TREE *command, SELWHERE *selwhere, TABLEHDR *tab_hdr, COLINFO *co
 		goto exit;
 	}
 		
-	if (querytype == SELECTWHERE)
+	if ((querytype == SELECTWHERE) || (querytype == DELETEWHERE))
 	{
 		if (!par_fill_colinfo(tab_hdr->tab_col, colinfo, command))
 		{
@@ -1846,22 +1840,21 @@ rg_selwheretab(TREE *command, SELWHERE *selwhere, TABLEHDR *tab_hdr, COLINFO *co
 				{
 					Assert(querytype == SELECTWHERE);
 
-					int		tablet_id;
-
 					tablet_scanctx->tabdir = rg_tab_dir;
 					tablet_scanctx->tabid = tab_hdr->tab_id;
 					tablet_scanctx->rminlen = 
 							tab_hdr->tab_row_minlen;
 
 					/* The id of tablet based on index. */
-					tablet_id = *(int *)row_locate_col(rp, 
+					tablet_scanctx->tabletid = 
+						*(int *)row_locate_col(rp, 
 						TABLETSCHM_TABLETID_COLOFF_INROW, 
 						ROW_MINLEN_IN_TABLETSCHM, &ign);
 
 					index_range_sstab_scan(tablet_scanctx,
 							&(selwhere->idxmeta),
 							tab_name, tab_name_len,
-							tablet_id);
+							tablet_scanctx->tabletid);
 
 					goto next_tablet;
 				}
@@ -2080,7 +2073,8 @@ exit:
 
 /* Clone from rg_selwheretab(). */
 char *
-rg_selcounttab(TREE *command, SELWHERE *selwhere, TABLEHDR *tab_hdr, COLINFO *colinfo, int fd)
+rg_selcountsum_delupd_tab(TREE *command, SELWHERE *selwhere, TABLEHDR *tab_hdr,
+				COLINFO *colinfo, int fd)
 {
 	char		*tab_name;
 	int		tab_name_len;
@@ -2111,7 +2105,8 @@ rg_selcounttab(TREE *command, SELWHERE *selwhere, TABLEHDR *tab_hdr, COLINFO *co
 	rowcnt		= 0;
 	sum_value	= 0;
 
-	Assert((querytype == SELECTSUM) || (querytype == SELECTCOUNT));
+	Assert(   (querytype == SELECTSUM) || (querytype == SELECTCOUNT)
+	       || (querytype == DELETEWHERE) || (querytype == UPDATE));
 
 	MEMSET(tab_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_dir, MT_META_TABLE, STRLEN(MT_META_TABLE));
@@ -2204,7 +2199,11 @@ rg_selcounttab(TREE *command, SELWHERE *selwhere, TABLEHDR *tab_hdr, COLINFO *co
 	/* For selectrange. */
 		
 	/* Initialization. */
-	par_fill_colinfo(tab_hdr->tab_col, colinfo, command);
+	if (!par_fill_colinfo(tab_hdr->tab_col, colinfo, command))
+	{
+		/* Error infor has been printed in the par_fill_colinfo(). */
+		goto exit;
+	}
 
 	tablet_scanctx = (TABLET_SCANCTX *)MEMALLOCHEAP(sizeof(TABLET_SCANCTX));
 	MEMSET(tablet_scanctx, sizeof(TABLET_SCANCTX));
@@ -2213,6 +2212,9 @@ rg_selcounttab(TREE *command, SELWHERE *selwhere, TABLEHDR *tab_hdr, COLINFO *co
 	tablet_scanctx->orplan = par_get_orplan(command);
 	tablet_scanctx->connfd = -1;
 	tablet_scanctx->querytype = querytype;
+	tablet_scanctx->has_index = tab_hdr->has_index;
+	tablet_scanctx->totcol = tab_hdr->tab_col;
+	tablet_scanctx->colinfo = colinfo;
 
 	tablet_scanctx->sum_coloff = (querytype == SELECTSUM) ?
 					command->left->sym.resdom.coloffset: 0;
@@ -2312,20 +2314,17 @@ rg_selcounttab(TREE *command, SELWHERE *selwhere, TABLEHDR *tab_hdr, COLINFO *co
 				tablet_scanctx->tabid = tab_hdr->tab_id;
 				tablet_scanctx->rowcnt = 0;
 				tablet_scanctx->sum_colval = 0;
+				tablet_scanctx->tabletid =
+						*(int *)row_locate_col(rp, 
+						TABLETSCHM_TABLETID_COLOFF_INROW, 
+						ROW_MINLEN_IN_TABLETSCHM, &ign);
 				
 				if (selwhere->use_idxmeta)
 				{
-					int		tablet_id;
-
-					/* The id of tablet based on index. */
-					tablet_id = *(int *)row_locate_col(rp, 
-						TABLETSCHM_TABLETID_COLOFF_INROW, 
-						ROW_MINLEN_IN_TABLETSCHM, &ign);
-
 					index_range_sstab_scan(tablet_scanctx,
 							&(selwhere->idxmeta),
 							tab_name, tab_name_len,
-							tablet_id);
+							tablet_scanctx->tabletid);
 
 					goto next_tablet;
 				}
@@ -2367,7 +2366,7 @@ next_tablet:
 				{
 					rowcnt += tablet_scanctx->rowcnt;
 				}
-				else
+				else if (querytype == SELECTSUM)
 				{
 					sum_value += tablet_scanctx->sum_colval;
 				}
@@ -2399,9 +2398,12 @@ exit:
 	if (rtn_stat)
 	{
 		
-		resp = conn_build_resp_byte(RPC_SUCCESS, sizeof(int), 
-				(querytype == SELECTCOUNT)? (char *)&rowcnt 
-							: (char *)&sum_value);
+		resp = conn_build_resp_byte(RPC_SUCCESS, 
+				(querytype == DELETEWHERE) ? 0 : sizeof(int), 
+				(querytype == DELETEWHERE) ? NULL 
+					: ((querytype == SELECTCOUNT) 
+					  ?  (char *)&rowcnt 
+					   : (char *)&sum_value));
 	}
 	else
 	{
@@ -3158,6 +3160,7 @@ rg_count_data_tablet(TABLET_SCANCTX *scanctx)
 	sstab_scanctx.andplan	= scanctx->andplan;
 	sstab_scanctx.orplan	= scanctx->orplan;
 	sstab_scanctx.rminlen	= scanctx->rminlen;
+	sstab_scanctx.tabdir	= scanctx->tabdir;
 	rgsel_cont.rowminlen	= scanctx->rminlen;
 	sstab_scanctx.rgsel	= &rgsel_cont;
 	sstab_scanctx.stat	= 0;
@@ -3174,6 +3177,8 @@ rg_count_data_tablet(TABLET_SCANCTX *scanctx)
 	tabinfo->t_rowinfo = &blk_rowinfo;
 
 	tabinfo->t_dold = tabinfo->t_dnew = (BUF *) tabinfo;
+
+	tabinfo->t_has_index = scanctx->has_index;
 
 	tabinfo_push(tabinfo);
 	
@@ -3196,7 +3201,7 @@ rg_count_data_tablet(TABLET_SCANCTX *scanctx)
 
 			Assert(*offset < blk->bfreeoff);
 
-			/* Locate the information of sstab. */
+			/* Locate the information of data sstab. */
 			sstabname = row_locate_col(rp,
 					TABLET_SSTABNAME_COLOFF_INROW, 
 					ROW_MINLEN_IN_TABLET, &namelen);
@@ -3214,16 +3219,27 @@ rg_count_data_tablet(TABLET_SCANCTX *scanctx)
 
 			minrowlen = scanctx->rminlen;
 
+			if (   (sstab_scanctx.querytype & DELETEWHERE)
+			    || (sstab_scanctx.querytype & UPDATE))
+			{
+				P_SPINLOCK(BUF_SPIN);
+			}
+			
 			/* Initialize the searching context. */
 			MEMSET(tabinfo->t_sinfo, sizeof(SINFO));
 			MEMSET(tabinfo->t_rowinfo, sizeof(BLK_ROWINFO));
 			
 			TABINFO_INIT(tabinfo, tab_sstab_dir, NULL, 0,
 					tabinfo->t_sinfo, minrowlen, 
-					0, scanctx->tabid, sstabid);
+					(sstab_scanctx.querytype == DELETEWHERE)
+						? TAB_DEL_DATA : TAB_SRCH_DATA, 
+					scanctx->tabid, sstabid);
 			
 			SRCH_INFO_INIT(tabinfo->t_sinfo, NULL, 0,
 					scanctx->keycolid, VARCHAR, -1);
+
+			tabinfo->t_colinfo = scanctx->colinfo;
+			tabinfo->t_tablet_id = scanctx->tabletid;
 					
 			bp = blk_getsstable(tabinfo);	
 
@@ -3232,10 +3248,18 @@ rg_count_data_tablet(TABLET_SCANCTX *scanctx)
 			sstab_scanctx.currow = 0;
 
 			/* Count the row in one sstable. */
-			rg_count_data_sstable(&sstab_scanctx);
+			rg_count_data_sstable(&sstab_scanctx, tabinfo, bp,
+						scanctx->totcol);
 
 			/* Buffer unkept. */
 			bufunkeep(bp->bsstab);
+
+			if (   (sstab_scanctx.querytype & DELETEWHERE)
+			    || (sstab_scanctx.querytype & UPDATE))
+			{
+				V_SPINLOCK(BUF_SPIN);
+			}
+			
 			bp = NULL;
 
 		}
@@ -3263,6 +3287,10 @@ rg_count_data_tablet(TABLET_SCANCTX *scanctx)
 	    	scanctx->sum_colval += sstab_scanctx.sum_colval;
 	    	break;
 
+	    case DELETEWHERE:
+	    	traceprint("Deletewhere solution.\n");
+	    	break;
+
 	    default:
 	    	traceprint("No any counting.\n");
 	    	break;
@@ -3287,16 +3315,27 @@ rg_count_data_tablet(TABLET_SCANCTX *scanctx)
 /* Clone from rg_sstabscan(). */
 /* Get the row for the OR and AND clause in the query plan. */
 static int
-rg_count_data_sstable(SSTAB_SCANCTX *scanctx)
+rg_count_data_sstable(SSTAB_SCANCTX *scanctx, TABINFO *tabinfo, BUF *bp, int totcol)
 {	
-	BLOCK	*blk;
-	int     *offset;
-	char    *rp;
-	int	minrowlen;
-	char	*colval;
-	int	ign;
+	BLOCK		*blk;
+	int     	*offset;
+	char    	*rp;
+	int		rlen;
+	int		minrowlen;
+	char		*colval;
+	int		ign;
+	unsigned int	oldts;
+	unsigned int	newts;
+	LOGREC		logrec;
+	char		*newrp;
+	int		newrlen;
+	int		blk_stat;
+	int 		log_stat;
+	int		skip_this_row;
+	IDXBLD		idxbld;
 
 
+	skip_this_row = FALSE;
 	minrowlen= scanctx->rminlen;
 
 	while (TRUE)
@@ -3304,6 +3343,7 @@ rg_count_data_sstable(SSTAB_SCANCTX *scanctx)
 		/* Skill to the next block. */
 		blk = (BLOCK *)(scanctx->sstab + scanctx->curblk * BLOCKSIZE);
 
+scan_block:
 		offset = ROW_OFFSET_PTR(blk);
 
 		offset -= scanctx->currow;
@@ -3335,9 +3375,226 @@ rg_count_data_sstable(SSTAB_SCANCTX *scanctx)
 					scanctx->sum_colval += *(int *)colval;
 				    	break;
 					
+				    case DELETEWHERE:
+				    case UPDATE:
+
+					P_SPINLOCK(BUF_SPIN);
+
+					log_stat = 0;
+					
+
+					if (scanctx->querytype == UPDATE)
+					{
+						newrp = (char *)MEMALLOCHEAP(
+							BLOCKSIZE - BLKHEADERSIZE - 4);
+						MEMSET(newrp, 
+							BLOCKSIZE - BLKHEADERSIZE - 4);
+
+						row_rebld_row(rp, newrp, 
+							BLOCKSIZE - BLKHEADERSIZE - 4,
+							tabinfo->t_colinfo, totcol, 
+							tabinfo->t_row_minlen);
+
+						newrlen = ROW_GET_LENGTH(newrp, 
+								tabinfo->t_row_minlen);
+
+						rlen = ROW_GET_LENGTH(rp, 
+							tabinfo->t_row_minlen);
+
+						if (bp->bsstab->bblk->bstat & BLK_SSTAB_SPLIT)
+						{
+							tabinfo->t_stat |=
+								TAB_INS_SPLITING_SSTAB;
+						}
+
+						blk_stat = 
+							blk_update_check_sstab_space(
+								tabinfo, bp, rp, rlen,
+								newrlen, scanctx->currow);
+
+						if (blk_stat == UPDATE_HIT_ERROR)
+						{
+							Assert (0);
+
+							/* TODO: ex_raise(). */
+						}
+						else if (blk_stat == UPDATE_SKIP_THIS_ROW)
+						{
+							/*
+							** TODO: the length of the row 
+							** to be update must be less
+							** than or equal to the original
+							** length.
+							*/
+							traceprint(" the length (%d) of the row to be update must be less than or equal to the original length (%d).", newrlen, rlen);
+
+							skip_this_row = TRUE;
+
+							break;
+						}
+#if 0
+						else if (   (blk_stat == UPDATE_IN_NEXT_SSTAB)
+							 || (blk_stat == UPDATE_IN_NEXT_BLK)
+							 || (blk_stat == UPDATE_BLK_CHANGED))
+						{
+							/* Re-get the index row. */
+							restart = TRUE;
+							MEMFREEHEAP(newrp);
+							bufunkeep(bp->bsstab);
+							V_SPINLOCK(BUF_SPIN);
+							break;
+						}
+#endif
+
+						log_stat = LOG_NOT_REDO;
+					}
+					
+				
+					bufpredirty(bp->bsstab);
+
+					rlen = ROW_GET_LENGTH(rp, scanctx->rminlen);
+
+					tabinfo->t_cur_rowp = rp;
+
+					tabinfo->t_cur_rowlen = rlen;
+					
+					oldts = blk->bsstab_insdel_ts_lo;
+					
+					blk->bsstab_insdel_ts_lo = mtts_increment(
+						blk->bsstab_insdel_ts_lo);
+
+					newts = blk->bsstab_insdel_ts_lo;					
+					
+					log_build(&logrec, LOG_DATA_DELETE, 
+							oldts, newts,
+							tabinfo->t_sstab_name, NULL, 
+							minrowlen, 
+							tabinfo->t_tabid, 
+							scanctx->sstab_id,
+							blk->bblkno, scanctx->currow, 
+							NULL, NULL);
+
+					((LOGHDR *)(&logrec))->status |= log_stat;
+					
+					log_put(&logrec, rp, rlen);				
+					
+					blk_delrow(tabinfo, blk, scanctx->sstab_id,
+							rp, scanctx->currow);
+
+					int oldroffset = tabinfo->t_currid.roffset;
+
+					if (tabinfo->t_has_index)
+					{
+						MEMSET(&idxbld, sizeof(IDXBLD));
+
+						idxbld.idx_tab_name = scanctx->tabdir;
+				
+						idxbld.idx_stat = 0;
+				
+						idxbld.idx_root_sstab = 
+								tabinfo->t_tablet_id;
+				
+						index_delete(&idxbld, tabinfo, 
+							Range_infor->rg_meta_sysindex);
+					}
+
+					if (scanctx->querytype == UPDATE)
+					{
+						tabinfo->t_cur_rowp = newrp;
+
+						tabinfo->t_cur_rowlen = newrlen;
+					
+						tabinfo->t_insdel_old_ts_lo = 
+							bp->bsstab->bblk->bsstab_insdel_ts_lo;
+					
+						bp->bsstab->bblk->bsstab_insdel_ts_lo = 
+							mtts_increment(
+							bp->bsstab->bblk->bsstab_insdel_ts_lo);
+
+						tabinfo->t_insdel_new_ts_lo = 
+							bp->bsstab->bblk->bsstab_insdel_ts_lo;
+						
+						log_build(&logrec, LOG_DATA_INSERT,
+							tabinfo->t_insdel_old_ts_lo,
+							tabinfo->t_insdel_new_ts_lo,
+							tabinfo->t_sstab_name, NULL, 
+							tabinfo->t_row_minlen,
+							tabinfo->t_tabid,
+							tabinfo->t_sstab_id,
+							bp->bblk->bblkno, scanctx->currow,
+							NULL, NULL);
+
+						((LOGHDR *)(&logrec))->status |= LOG_NOT_UNDO;
+						
+						log_put(&logrec, tabinfo->t_cur_rowp,
+								tabinfo->t_cur_rowlen);	
+								
+						if (blk_stat == UPDATE_IN_PLACE)
+						{
+							blk_putrow(tabinfo, blk, 
+								bp->bsstab->bsstabid,
+								newrp, newrlen,
+								scanctx->currow, oldroffset);
+						}
+						else
+						{
+							Assert(blk_stat == UPDATE_IN_CUR_BLK);
+
+							blk_putrow(tabinfo, blk, 
+								bp->bsstab->bsstabid,
+								newrp, newrlen,
+								scanctx->currow, blk->bfreeoff);
+						}
+
+						if (tabinfo->t_has_index)
+						{
+							MEMSET(&idxbld, sizeof(IDXBLD));
+							
+							idxbld.idx_tab_name = scanctx->tabdir;
+					
+							idxbld.idx_stat = 0;
+					
+							idxbld.idx_root_sstab = tabinfo->t_tablet_id;
+
+							index_insert(&idxbld, tabinfo, 
+								Range_infor->rg_meta_sysindex);
+						}
+					}
+
+					if (newrp)
+					{
+						MEMFREEHEAP(newrp);
+					}
+
+					bufdirty(bp->bsstab);
+					V_SPINLOCK(BUF_SPIN);					
+
+					break;
+
+				    
+					
 				    default:
 				    	traceprint("No any counting.\n");
 				    	break;
+				}
+
+
+				if (skip_this_row)
+				{
+					if (newrp)
+					{
+						MEMFREEHEAP(newrp);
+					}
+
+					bufdirty(bp->bsstab);
+					V_SPINLOCK(BUF_SPIN);
+				}
+
+				if (scanctx->querytype == DELETEWHERE)
+				{
+					/* Adjust the sail to re-sailing in this block. */
+					scanctx->currow = 0;
+					goto scan_block;
 				}
 				
 			}
@@ -3423,31 +3680,6 @@ rg_get_meta(char *req_buf, INSMETA **ins_meta, SELRANGE **sel_rg, IDXMETA **idxm
 	return rtn_stat;	
 }
 
-static int
-rg_fill_resd(TREE *command, COLINFO *colinfor, int totcol)
-{
-	COLINFO		*col_info;
-	int		colid;
-
-	while(command)
-	{
-		if (PAR_NODE_IS_RESDOM(command->type))
-		{
-			colid = command->sym.resdom.colid;
-			col_info = meta_get_colinfor(colid, NULL, totcol, colinfor);
-
-			Assert(col_info);
-
-			command->sym.resdom.coloffset = col_info->col_offset;
-			command->sym.resdom.coltype = col_info->col_type;
-		}
-
-		command = command->left;
-	}
-
-	return TRUE;
-
-}
 
 static int
 rg_heartbeat(char * req_buf)
@@ -3877,9 +4109,18 @@ rg_handler(char *req_buf, int fd)
 		command = tss->tcmd_parser;
 
 		if (   (command->sym.command.querytype == SELECTCOUNT)
-		    || (command->sym.command.querytype == SELECTSUM))
+		    || (command->sym.command.querytype == SELECTSUM)
+		    ||(command->sym.command.querytype == DELETEWHERE)
+		    ||(command->sym.command.querytype == UPDATE))
 		{
-			resp = rg_selcounttab(command, sel_where, tab_hdr, col_info, fd);
+			if ((tab_hdr->has_index) && (tab_hdr->index_ts 
+				!= Range_infor->rg_meta_sysindex->idx_ver))
+			{
+				meta_load_sysindex((char *)Range_infor->rg_meta_sysindex);
+			}
+			
+			resp = rg_selcountsum_delupd_tab(command, sel_where, 
+							tab_hdr, col_info, fd);
 		}
 		else
 		{
@@ -4207,8 +4448,6 @@ rg_setup(char *conf_path)
 	char	metaport[32];
 	int	fd;
 	
-	sstab_split_cnt = 0;
-	sstabsplit_idx_upd_cnt = 0;
 
 	Range_infor = malloc(sizeof(RANGEINFO));
 	memset(Range_infor, 0, sizeof(RANGEINFO));
@@ -4640,6 +4879,8 @@ rg_idxroot_split(IDX_ROOT_SPLIT *idx_root_split)
 	{
 		if (idx_root_split->idx_tabid == idx_meta->idx_tabid)
 		{
+			P_SPINLOCK(BUF_SPIN);
+		
 			MEMSET(&idxbld, sizeof(IDXBLD));
 
 			idxbld.idx_meta = idx_meta;
@@ -4753,6 +4994,8 @@ rg_idxroot_split(IDX_ROOT_SPLIT *idx_root_split)
 			
 			bufunkeep(srcbp);
 			bufunkeep(destbp);
+
+			V_SPINLOCK(BUF_SPIN);
 			
 		}
 

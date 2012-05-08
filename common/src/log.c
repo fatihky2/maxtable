@@ -901,6 +901,12 @@ log__recov_undo(char *logfilebuf, int freeoff, char *log_undo_end, char *rg_ip,
 			
 			undo_split(logrec, rg_ip, rg_port);
 			break;
+
+		    case LOG_BLK_SPLIT:
+
+			
+			undo_split(logrec, rg_ip, rg_port);
+			break;
 			
 		    case LOG_INDEX_SSTAB_SPLIT:
 
@@ -1131,11 +1137,51 @@ log__find_undoend(char *log_off, int log_beg_hit, LOG_RECOV *log_recov)
 		    	break;
 
 		    case LOG_DATA_INSERT:
-		    case LOG_DATA_DELETE:
+		    	
+			if (((LOGHDR *)logrec)->status & LOG_NOT_UNDO)
+			{
+				
+				while(undoend > log_recov->log_buf[log_recov->buf_idxcur].buf)
+				{
+					undoend -= ((LOGHDR *)logrec)->loglen;
+					
+					logrec = (LOGREC *)undoend;
 
+					if (((LOGHDR *)logrec)->opid == LOG_DATA_DELETE)
+					{
+						
+						Assert(((LOGHDR *)logrec)->status & LOG_NOT_REDO);
+						
+						break;
+					}
+					else
+					{
+						Assert(   ((LOGHDR *)logrec)->opid 
+						        == LOG_INDEX_DELETE);
+						
+					}
+
+					if (  (undoend - ((LOGHDR *)logrec)->loglen) 
+					    < log_recov->log_buf[log_recov->buf_idxcur].buf)
+					{
+						log_recov->buf_idxcur++;
+						
+						Assert(log_recov->buf_idxcur < log_recov->buf_idxmax);
+
+						undoend = log_recov->log_buf[log_recov->buf_idxcur].buf 
+						    + log_recov->log_buf[log_recov->buf_idxcur].freeoff
+						    - sizeof(LOGREC);
+
+						logrec = (LOGREC *)undoend;
+					}
+				}
+			}
 			
 		    	break;
 
+		    case LOG_DATA_DELETE:
+		    	break;
+			
 		    case LOG_INDEX_INSERT:
 
 			

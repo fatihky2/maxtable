@@ -50,6 +50,7 @@ struct orandplan;
 
 
 
+
 typedef struct idxbld
 {
 	int	idx_root_sstab;		
@@ -204,7 +205,8 @@ void
 index_rmrid(BLOCK *blk, int rnum, int del_ridnum);
 
 void
-index_addrid(BLOCK *blk,int rnum, RID *newridp);
+index_addrid(BLOCK *blk,int rnum, RID *newridp, int ridlist_off, int ridnum_off,
+		int rminlen);
 
 int
 index_rid_cmp(char *rid1, char *rid2);
@@ -214,5 +216,9 @@ index_tab_has_index(META_SYSINDEX *meta_sysidx, int tabid);
 
 int
 index_tab_check_index(META_SYSINDEX *meta_sysidx, int tabid);
+
+void
+index_prt_ridinfo(RID *ridp, int ridnum);
+
 
 #endif

@@ -91,6 +91,8 @@ typedef	struct block
 #define BLK_SSTAB_SPLIT		0x0002	
 #define	BLK_INDEX_ROOT		0x0004	
 #define	BLK_CRT_EMPTY		0x0008	
+#define	BLK_OVERFLOW_SSTAB	0x0010	
+#define	BLK_RENT_DATA		0x0020	
 
 
 #define	ROW_OFFSET_ENTRYSIZE	sizeof(int)
@@ -166,6 +168,14 @@ do {											\
 #define BLK_INS_SPLITTING_SSTAB	0x0008
 
 
+#define	UPDATE_HIT_ERROR		0
+#define	UPDATE_IN_PLACE			1
+#define	UPDATE_IN_CUR_BLK		2
+#define	UPDATE_IN_NEXT_BLK		3
+#define	UPDATE_IN_NEXT_SSTAB		4
+#define	UPDATE_BLK_CHANGED		5
+#define	UPDATE_SKIP_THIS_ROW		6
+
 BUF *
 blkget(struct tab_info *tabinfo);
 
@@ -183,10 +193,10 @@ blkdel(struct tab_info *tabinfo);
 
 int
 blk_check_sstab_space(struct tab_info *tabinfo, BUF *bp, char *rp, int rlen,
-						int ins_rnum);
+					int ins_rnum, int data_insert_needed);
 
-void
-blk_split(BLOCK *blk, struct tab_info *tabinfo);
+int
+blk_split(BLOCK *blk, struct tab_info *tabinfo, int rlen, int inspos);
 
 int
 blk_backmov(BLOCK *blk, struct tab_info *tabinfo);
@@ -211,6 +221,18 @@ blk_shuffle_data(BLOCK *srcblk, BLOCK *destblk);
 
 int
 blk_compact(BLOCK *blk);
+
+int
+blk_delrow(struct tab_info *tabinfo, BLOCK *blk, int sstabid,char *rp, int rnum);
+
+int
+blk_update_check_sstab_space(struct tab_info *tabinfo, BUF *bp, char *oldrp, int oldrlen, 
+				int newrlen, int rnum);
+
+int
+blk_putrow(struct tab_info *tabinfo, BLOCK *blk, int sstabid, char *rp, int rlen,
+			int rnum, int roffset);
+
 
 
 #endif

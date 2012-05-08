@@ -18,12 +18,17 @@
 */
 
 #include "global.h"
+#include "master/metaserver.h"
 #include "row.h"
+#include "tss.h"
+#include "parser.h"
 #include "netconn.h"
 #include "type.h"
 #include "strings.h"
 #include "utils.h"
 
+
+extern TSS	*Tss;
 
 
 
@@ -72,11 +77,249 @@ row_build_hdr(char *rp, int rowno, int status, int vattcnt)
 	return;
 }
 
+
 void
-row_build_row()
+row_rebld_row(char *oldrp, char *newrp, int newrlen, COLINFO *colinfo,
+			int colnum, int minrlen)
 {
-	;
+	LOCALTSS(tss);
+	int		col_offset;
+	int		rp_idx;
+	char		*col_val;
+	int		col_len;
+	int		col_off_idx;
+	char		col_off_tab[COL_OFFTAB_MAX_SIZE];
+	int		col_num;
+	TREE		*cmd;
+	int		i;
+	int		hit_varcol;
+
+
+	MEMCPY(newrp, oldrp, sizeof(ROWFMT));
 	
+	cmd = tss->tcmd_parser;
+
+	col_num = colnum;
+
+	col_offset = sizeof(ROWFMT);
+	rp_idx = sizeof(ROWFMT);
+	col_off_idx = COL_OFFTAB_MAX_SIZE;
+
+	par_fill_resd(cmd, colinfo, col_num);
+	
+	hit_varcol = FALSE;
+
+	
+	while(col_num)
+	{
+		col_val = par_get_colval_by_coloff(cmd, col_offset,	
+							&col_len);
+		if(!col_val)
+		{
+			for (i = 0; i < colnum; i++)
+			{
+				if (colinfo[i].col_offset == col_offset)
+				{
+					col_val = row_locate_col(oldrp, col_offset,
+								minrlen, &col_len);
+					if (col_offset > 0)
+					{
+						col_len = colinfo[i].col_len;
+					}
+
+					break;
+				}
+			}
+
+			if (col_offset && (i == colnum))
+			{
+				
+				hit_varcol = TRUE;
+			}
+		}
+		
+		if(col_val)
+		{
+			if (col_offset < 0)
+			{
+				col_off_idx -= sizeof(int);
+				*((int *)(col_off_tab + col_off_idx)) = rp_idx;
+			}
+
+			if ((rp_idx + col_len) > newrlen)
+			{
+				traceprint("The row to be inserted expand the max size %d of one row.\n", newrlen);
+				goto exit;
+			}
+			
+			PUT_TO_BUFFER(newrp, rp_idx, col_val, col_len);
+			if (col_offset > 0)
+			{
+				col_offset += col_len;
+			}
+			else
+			{				
+				col_offset--;
+			}
+
+			col_num--;
+		}
+		else
+		{
+			Assert((col_offset > 0) && hit_varcol);
+
+			if (!((col_offset > 0) && hit_varcol))
+			{
+				traceprint("Hit a row error!\n");
+				goto exit;
+			}
+
+			hit_varcol = FALSE;
+			
+			
+			
+				
+
+			if (col_num > 0)
+			{
+				
+				rp_idx += sizeof(int);
+				col_offset = -1;
+			}
+			
+		}		
+		
+	}
+
+	if (COL_OFFTAB_MAX_SIZE > col_off_idx)
+	{
+		if ((rp_idx + (COL_OFFTAB_MAX_SIZE - col_off_idx)) > newrlen)
+		{
+			traceprint("The row to be inserted expand the max size %d of one row.\n", newrlen);
+			goto exit;
+		}
+		
+		PUT_TO_BUFFER(newrp, rp_idx, (col_off_tab + col_off_idx), 
+					(COL_OFFTAB_MAX_SIZE - col_off_idx));
+		*(int *)(newrp + minrlen) = rp_idx;
+	}
+exit:
+
+	return;
+
+}
+
+void
+rebld_row(char *oldrp, char *newrp, int newrlen, COLINFO *colinfo,
+			int colnum, int minrlen)
+{
+	LOCALTSS(tss);
+	int		col_offset;
+	int		rp_idx;
+	char		*col_val;
+	int		col_len;
+	int		col_off_idx;
+	char		col_off_tab[COL_OFFTAB_MAX_SIZE];
+	int		col_num;
+	TREE		*cmd;
+
+
+	MEMCPY(newrp, oldrp, sizeof(ROWFMT));
+	
+	cmd = tss->tcmd_parser;
+
+	col_num = colnum;
+
+	col_offset = sizeof(ROWFMT);
+	rp_idx = sizeof(ROWFMT);
+	col_off_idx = COL_OFFTAB_MAX_SIZE;
+
+	par_fill_resd(cmd, colinfo, col_num);
+
+	
+	
+	while(col_num)
+	{
+		col_val = par_get_colval_by_coloff(cmd, col_offset, &col_len);
+
+		if (!col_val)
+		{
+			
+			int	i;
+			
+			for (i = 0; i < colnum; i++)
+			{
+				if (colinfo[i].col_id == (colnum - col_num + 1))
+				{
+					if (colinfo[i].col_offset == -1)
+					{
+						col_offset = colinfo[i].col_offset;
+						
+						
+						rp_idx += sizeof(int);
+					}
+									
+					col_val = row_locate_col(oldrp, col_offset,
+								minrlen, &col_len);
+					if (col_offset > 0)
+					{
+						col_len = colinfo[i].col_len;
+					}
+					
+					break;					
+				}
+			}
+		}
+		
+		Assert(col_val);
+		
+			
+		
+		
+		if (col_offset < 0)
+		{
+			
+			col_off_idx -= sizeof(int);
+			*((int *)(col_off_tab + col_off_idx)) = rp_idx;
+		}
+
+		if ((rp_idx + col_len) > newrlen)
+		{
+			traceprint("The row to be inserted expand the max size %d of one row.\n", newrlen);
+			goto exit;
+		}
+		
+		PUT_TO_BUFFER(newrp, rp_idx, col_val, col_len);
+		
+		if (col_offset > 0)
+		{
+			col_offset += col_len;
+		}
+		else
+		{				
+			col_offset--;
+		}
+
+		col_num--;
+
+	}
+
+	if (COL_OFFTAB_MAX_SIZE > col_off_idx)
+	{
+		if ((rp_idx + (COL_OFFTAB_MAX_SIZE - col_off_idx)) > newrlen)
+		{
+			traceprint("The row to be inserted expand the max size %d of one row.\n", newrlen);
+			goto exit;
+		}
+		
+		PUT_TO_BUFFER(newrp, rp_idx, (col_off_tab + col_off_idx), 
+					(COL_OFFTAB_MAX_SIZE - col_off_idx));
+		*(int *)(newrp + minrlen) = rp_idx;
+	}
+
+exit:
+
+	return;
 }
 
 

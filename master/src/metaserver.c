@@ -1175,10 +1175,17 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 				tablet_schm_upd_col(tabletschm_newrp, tabletschm_rp,
 							TABLETSCHM_KEY_COLID_INROW, 
 						    	keycol, keycolen);
+#if 0
+				char	*key,
+				int	keylen;
+				
+				key = row_locate_col(tabletschm_rp, -1, 
+						ROW_MINLEN_IN_TABLETSCHM, &keylen);
+#endif				
 				
 				tablet_schm_del_row(tab_hdr->tab_id, TABLETSCHM_ID,
 							tab_tabletschm_dir,
-							tabletschm_rp);
+							keycol, keycolen);
 
 				tablet_schm_ins_row(tab_hdr->tab_id, TABLETSCHM_ID, 
 							tab_tabletschm_dir, 
@@ -2415,7 +2422,8 @@ meta_selwheretab(TREE *command, TABINFO *tabinfo)
 	col_buf = (char *)(&(Master_infor->meta_syscol->colinfor[tabidx]));
 			
 	if (   (querytype == SELECTWHERE) || (querytype == SELECTCOUNT) 
-	    || (querytype == SELECTSUM))
+	    || (querytype == SELECTSUM) || (querytype == DELETEWHERE)
+	    || (querytype == UPDATE))
 	{
 		/* TODO: checking for the parser tree. */
 
@@ -4357,6 +4365,8 @@ parse_again:
   	    case SELECTWHERE:
 	    case SELECTCOUNT:
 	    case SELECTSUM:
+	    case DELETEWHERE:
+	    case UPDATE:
 		resp = meta_selwheretab(command, tabinfo);
 		
 		if (DEBUG_TEST(tss))
