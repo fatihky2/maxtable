@@ -78,12 +78,11 @@ bufread(BUF *bp)
 void
 bufwait(BUF *bp)
 {
-#if 0
+	
 	while (SSTABLE_STATE(bp) & BUF_WRITING)
 	{
 		sleep(2);
 	}
-#endif
 
 	if (SSTABLE_STATE(bp) & BUF_IOERR)
 	{
