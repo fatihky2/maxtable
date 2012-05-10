@@ -1191,8 +1191,11 @@ blk_check_sstab_space(TABINFO *tabinfo, BUF *bp, char *rp, int rlen,
 						
 			}
 
-				
+			bufpredirty(bp->bsstab);
+			
 			split_pos = blk_split(blk, tabinfo, rlen, ins_rnum);
+
+			bufdirty(bp->bsstab);
 
 			if ((ins_rnum > split_pos) || (ins_rnum == split_pos))
 			{
@@ -1227,9 +1230,9 @@ blk_check_sstab_space(TABINFO *tabinfo, BUF *bp, char *rp, int rlen,
 				
 				log_put(&logrec, NULL, 0);				
 				
-				bufpredirty(bp->bsstab);
 				
-				bufdirty(bp->bsstab);
+				
+				
 				
 				log_build(&logrec, LOG_END, 0, 0,
 						tabinfo->t_sstab_name,
@@ -1245,6 +1248,7 @@ blk_check_sstab_space(TABINFO *tabinfo, BUF *bp, char *rp, int rlen,
 		}
 		else
 		{
+			
 			if (blk_backmov(nextblk, tabinfo))
 			{
 				
@@ -1258,8 +1262,12 @@ blk_check_sstab_space(TABINFO *tabinfo, BUF *bp, char *rp, int rlen,
 						return rtn_stat;
 					}
 				}
+
+				bufpredirty(bp->bsstab);
 				
 				split_pos = blk_split(blk, tabinfo, rlen, ins_rnum);
+
+				bufdirty(bp->bsstab);
 
 				
 				if (   (ins_rnum > 0) 
@@ -1296,11 +1304,6 @@ blk_check_sstab_space(TABINFO *tabinfo, BUF *bp, char *rp, int rlen,
 							0, 0, 0, 0, 0, NULL, NULL);
 					
 					log_put(&logrec, NULL, 0);
-					
-					
-					bufpredirty(bp->bsstab);
-					
-					bufdirty(bp->bsstab);
 					
 					log_build(&logrec, LOG_END, 0, 0,
 							tabinfo->t_sstab_name,
@@ -1865,6 +1868,11 @@ blk_get_totrow_sstab(BUF *bp)
 
 	while(bp->bblk->bblkno != -1)
 	{
+		if (bp->bblk->bstat & BLK_RENT_DATA)
+		{
+			break;
+		}
+		
 		totrow += BLK_GET_NEXT_ROWNO(bp->bblk);
 		
 		

@@ -54,6 +54,9 @@ ca_prt_dirty();
 void
 ca_prt_hash();
 
+void
+ca_chk_cache();
+
 
 
 #endif
