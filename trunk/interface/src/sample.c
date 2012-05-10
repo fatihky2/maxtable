@@ -79,7 +79,9 @@ exitcrt:
 		if (match(argv[1], "insert"))
 		{
 			/* Insert 10000 data rows into table */
-			for(i = 50101; i < 70100; i++)
+//			for(i = 1; i < 1000; i++)
+//			for(i = 1001; i < 1100; i++)
+			for(i = 1101; i < 71100; i++)
 			{
 #if 0
 				char	*c = "cccccccccccccccccccccccccccccccccccccccccccccccccccccc";
@@ -136,8 +138,8 @@ exitins:
 			//sprintf(cmd, "selectwhere maxtab where id1(aaaa1, aaaa999999)");
 //			sprintf(cmd, "selectwhere maxtab where id1(aaaa20, aaaa30)");
 //			sprintf(cmd, "selectwhere maxtab where id2(bbbb20, bbbb30)");
-//			sprintf(cmd, "selectwhere maxtab where id2(bbbb20, bbbb20)");
-			sprintf(cmd, "selectwhere maxtab where id3(cccccc20, cccccc20)");
+			sprintf(cmd, "selectwhere maxtab where id2(bbbb3744, bbbb3750)");
+//			sprintf(cmd, "selectwhere maxtab where id3(cccccc20, cccccc20)");
 
 			
 			rtn_stat = mt_cli_open_execute(connection, cmd, &exec_ctx);

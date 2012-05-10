@@ -299,7 +299,7 @@ ca_prt_cache()
 		traceprint("bp->bsstabnew : 0x%x\n", bp->bsstabnew);
 		traceprint("bp->bsstabold : 0x%x\n", bp->bsstabold);
 		traceprint("bp->bblk : 0x%x\n", bp->bblk);
-		traceprint("bp->bsstab : %d\n", bp->bsstab);
+		traceprint("bp->bsstab : 0x%x\n", bp->bsstab);
 		traceprint("bp->bblk->bsstabnum : 0x%x\n", bp->bblk->bsstabnum);
 		traceprint("bp->bblk->bprevsstabnum : 0x%x\n", bp->bblk->bprevsstabnum);
 		traceprint("bp->bblk->bnextsstabnum : 0x%x\n", bp->bblk->bnextsstabnum);
@@ -378,4 +378,31 @@ ca_prt_hash()
 }
 
 
+
+void
+ca_chk_cache()
+{
+	BUF	*tempbp;
+	BUF	*bp;
+	int	i;
+
+	
+	tempbp = Kernel->ke_buflru;
+
+	i = 0;
+	bp = tempbp->bsstabnew;
+	
+	while((i < BLOCK_MAX_COUNT) && bp && (bp != tempbp))
+	{	
+		if (bp != bp->bsstab)
+		{
+			Assert (0);
+		}
+		
+		i += BLK_CNT_IN_SSTABLE;
+		bp = bp->bsstabnew;
+	}
+
+	return;
+}
 

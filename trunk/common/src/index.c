@@ -967,6 +967,12 @@ index_srch_root(IDX_ROOT_SRCH *root_srchctx)
 					keycolen);
 	}
 
+	if (rp == NULL)
+	{
+		traceprint("It can not find any row in index root sstable(%d) %s", rootid, rootname);
+		return FALSE;
+	}
+
 	int	namelen;
 	root_srchctx->leafname = row_locate_col(rp, 
 					TABLETSCHM_TABLETNAME_COLOFF_INROW,
@@ -2421,7 +2427,11 @@ index_range_sstab_scan(TABLET_SCANCTX * tablet_scanctx,IDXMETA * idxmeta,
 						: idx_range_ctx->keylen_right;
 	
 
-		index_srch_root(root_srchctx);
+		if (!index_srch_root(root_srchctx))
+		{
+			
+			return;
+		}
 
 		if (k == 0)
 		{
@@ -3468,7 +3478,8 @@ index_root_move(IDXBLD *idxbld, BLOCK *srcblk, BLOCK *destblk, int indexid, char
 
 
 int
-index_root_sstabmov(IDXBLD *idxbld, BLOCK *srcblk, int indexid, char *src_root_dir, char *dest_rootname, 
+index_root_sstabmov(IDXBLD *idxbld, BLOCK *srcblk, int indexid, 
+			char *src_root_dir, char *dest_rootname,
 			int dest_rootid,int sstabid)
 {
 	
@@ -3500,7 +3511,8 @@ index_root_sstabmov(IDXBLD *idxbld, BLOCK *srcblk, int indexid, char *src_root_d
 		
 		
 		for (i = 0; i < srcblk->bnextrno; i++)
-		{
+		{			
+			
 			rp = ROW_GETPTR_FROM_OFFTAB(srcblk, i);
 			rlen = ROW_GET_LENGTH(rp, srcblk->bminlen);
 
@@ -3560,7 +3572,10 @@ index_root_sstabmov(IDXBLD *idxbld, BLOCK *srcblk, int indexid, char *src_root_d
 					ridnum = *(int *)row_locate_col(index_rp, 
 							INDEXBLK_RIDNUM_COLOFF_INROW,
 							ROW_MINLEN_IN_INDEXBLK, &ign);			
-		
+
+					index_rlen -= (ridnum > 1) 
+						? (sizeof(RID) * (ridnum - 1)) : 0;
+					
 					
 					for (k = 0; k < ridnum; k++)
 					{
@@ -3628,6 +3643,7 @@ index_root_sstabmov(IDXBLD *idxbld, BLOCK *srcblk, int indexid, char *src_root_d
 							index_ins_row(idxbld);
 
 							BUF_RELEASE_RESERVED(index_rowblk);
+
 							
 							index_rmrid(src_idxsstab_blk, rnum, k);
 
