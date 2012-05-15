@@ -1654,7 +1654,7 @@ rg_selwheretab(TREE *command, SELWHERE *selwhere, TABLEHDR *tab_hdr, COLINFO *co
 	char		tab_tablet_dir[TABLE_NAME_MAX_LEN];
 	char		tab_rg_dir[TABLE_NAME_MAX_LEN];
 	int		ign;
-	char		tablet_bp[SSTABLE_SIZE];	
+	char		*tablet_bp;	
 
 	/* The tablet to be interested. */
 	char		*wanted_tablet;
@@ -1673,6 +1673,9 @@ rg_selwheretab(TREE *command, SELWHERE *selwhere, TABLEHDR *tab_hdr, COLINFO *co
 	char		*key_right;
 	int		keycolen_left;
 	int		keycolen_right;
+
+
+	tablet_bp = NULL;
 
 	/* Create the socket fot the transferring of bigdata. */
 	int listenfd = conn_socket_open(Range_infor->bigdataport);
@@ -1751,6 +1754,9 @@ rg_selwheretab(TREE *command, SELWHERE *selwhere, TABLEHDR *tab_hdr, COLINFO *co
 		str1_to_str2(tab_rg_dir, '/', tab_name);
 	}
 
+	tablet_bp = (char *)MEMALLOCHEAP(SSTABLE_SIZE);
+	MEMSET(tablet_bp, SSTABLE_SIZE);
+	
 	/* Working for the query. */
 	while (TRUE)
 	{
@@ -2065,6 +2071,11 @@ exit:
 	{
 		MEMFREEHEAP(tablet_schm_bp);
 	}
+
+	if (tablet_bp)
+	{
+		MEMFREEHEAP(tablet_bp);
+	}
 	
 	return resp;
 
@@ -2185,7 +2196,7 @@ rg_selcountsum_delupd_tab(TREE *command, SELWHERE *selwhere, TABLEHDR *tab_hdr,
 	char		*tabletname;
 	char		tab_tablet_dir[TABLE_NAME_MAX_LEN];
 	int		ign;
-	char		tablet_bp[SSTABLE_SIZE];	
+	char		*tablet_bp = NULL;	
 
 	/* The tablet to be interested. */
 	char		*wanted_tablet;
@@ -2219,6 +2230,9 @@ rg_selcountsum_delupd_tab(TREE *command, SELWHERE *selwhere, TABLEHDR *tab_hdr,
 	tablet_scanctx->sum_coloff = (querytype == SELECTSUM) ?
 					command->left->sym.resdom.coloffset: 0;
 
+	tablet_bp = (char *)MEMALLOCHEAP(SSTABLE_SIZE);
+	MEMSET(tablet_bp, SSTABLE_SIZE);
+	
 	/* Working for the query. */
 	while (TRUE)
 	{
@@ -2421,6 +2435,11 @@ exit:
 	if (tablet_schm_bp)
 	{
 		MEMFREEHEAP(tablet_schm_bp);
+	}
+
+	if (tablet_bp)
+	{
+		MEMFREEHEAP(tablet_bp);
 	}
 	
 	return resp;
@@ -3842,7 +3861,7 @@ rg_crtidx(TREE *command, IDXMETA *idxmeta, TABLEHDR *tab_hdr, COLINFO *colinfo, 
 	char		*tabletname;
 	char		tab_tablet_dir[TABLE_NAME_MAX_LEN];
 	int		ign;
-	char		tablet_bp[SSTABLE_SIZE];	
+	char		*tablet_bp = NULL;	
 
 	/* For selectrange. */
 	char		*rp;
@@ -4001,6 +4020,11 @@ exit:
 	if (tablet_schm_bp)
 	{
 		MEMFREEHEAP(tablet_schm_bp);
+	}
+
+	if (tablet_bp)
+	{
+		MEMFREEHEAP(tablet_bp);
 	}
 	
 	return resp;

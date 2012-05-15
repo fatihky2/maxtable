@@ -34,9 +34,11 @@
 #include "session.h"
 #include "rebalancer.h"
 #include "metadata.h"
+#include "sstab.h"
 
 
 extern	TSS	*Tss;
+extern	KERNEL	*Kernel;
 
 
 // char *rp - the row in the tablet (sstabid|sstable row | ranger |key col)
@@ -813,16 +815,18 @@ tablet_schm_get_row(int tabid, int sstabid, char *systab, int rowno)
 		
 		offset = offtab[-(bp->bblk->bnextrno - 1)];		
 	}
+	else if (rowno == 0)
+	{
+		offset = BLKHEADERSIZE;
+		found = TRUE;
+		
+	}
 	else
 	{
 		offset = BLKHEADERSIZE;
 
-		if (rowno == 0)
-		{
-			found = TRUE;
-		}
-
-		while(rowno > 0)
+		
+		while((rowno > 0) || (rowno == 0))
 		{	
 			if (bp->bblk->bfreeoff == BLKHEADERSIZE)
 			{
@@ -844,7 +848,9 @@ tablet_schm_get_row(int tabid, int sstabid, char *systab, int rowno)
 			{
 				bp++;				
 			}
-		}			
+		}	
+
+		
 	}
 
 finish:	
@@ -1126,7 +1132,6 @@ tablet_sharding(TABLEHDR *tablehdr, char *rg_addr, int rg_port,
 	char		tab_meta_dir[TABLE_NAME_MAX_LEN];
 	BLK_ROWINFO	blk_rowinfo;
 	char		tab_tabletschm_dir[TABLE_NAME_MAX_LEN];
-	char		*tablet_schm_bp;
 	int		minrowlen;
 	BUF		*bp;
 	int		i;
@@ -1135,6 +1140,7 @@ tablet_sharding(TABLEHDR *tablehdr, char *rg_addr, int rg_port,
 
 	bp = NULL;
 	destbuf = NULL;
+	rtn_stat = FALSE;
 	MEMSET(tab_tabletschm_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_tabletschm_dir, tabdir, STRLEN(tabdir));
 	
@@ -1166,29 +1172,100 @@ tablet_sharding(TABLEHDR *tablehdr, char *rg_addr, int rg_port,
 
 	bp = blk_getsstable(srctabinfo);
 
-	tablet_schm_bp = (char *)(bp->bsstab->bblk);
+	blk = bp->bsstab->bblk;
+
+	sstab_shuffle(blk);
 		
 	
 	for(i = 0; i < BLK_CNT_IN_SSTABLE; i++)
 	{
-		blk = (BLOCK *)(tablet_schm_bp + i * BLOCKSIZE);
-
 		if (blk->bnextrno == 0)
 		{
 			break;
 		}
+
+		blk++;
 	}
 
+	blk = bp->bsstab->bblk;
 	
 	if (i > 1)
 	{
-		nextblk = (BLOCK *)(tablet_schm_bp + (i / 2) * BLOCKSIZE);
+		nextblk = (blk + (i / 2));
+		rtn_stat = TRUE;
+	}
+	else if (i == 1)
+	{
+		
+		int		*thisofftab;
+		int		*nextofftab;
+		int		offset;
+		int		mvsize;
+		BLOCK		*tmpblock;
+		int		row_cnt;
+	
+		tmpblock = NULL;
+		
+		
+		BUF_GET_RESERVED(tmpblock);
+		
+		MEMCPY(tmpblock, blk, sizeof(BLOCK));
+		if (!blk_shuffle_data(tmpblock, blk))
+		{
+			MEMCPY(blk, tmpblock, sizeof(BLOCK));
+
+			BUF_RELEASE_RESERVED(tmpblock);
+			
+			Assert(0);
+			goto finish;
+		}
+
+		nextblk = (BLOCK *) ((char *)blk + BLOCKSIZE);
+		row_cnt = blk->bnextrno;
+		
+		Assert((blk->bnextblkno!= -1) && (nextblk->bnextrno == 0)
+			&& (row_cnt > 0));
+
+		if (nextblk->bfreeoff > BLKHEADERSIZE)
+		{
+			blk_compact(nextblk);
+		}
+		
+
+		i = blk->bnextrno / 2;
+
+		thisofftab = ROW_OFFSET_PTR(blk);
+
+		offset = thisofftab[-i];
+		mvsize = blk->bfreeoff - offset;
+
+		MEMCPY(nextblk->bdata, (char *)blk + offset, mvsize);
+
+		blk->bnextrno = i;
+		blk->bfreeoff = offset;
+
+		MEMSET((char *)blk + offset, mvsize);
+		
+		nextofftab = ROW_OFFSET_PTR(nextblk);
+
+		int j;
+
+		for (j = 0; i < row_cnt; i++,j++)
+		{
+			nextofftab[-j] = thisofftab[-i] - offset + BLKHEADERSIZE;	
+		}
+
+		nextblk->bnextrno = j;
+		nextblk->bfreeoff = mvsize + BLKHEADERSIZE;
+
+		nextblk->bminlen = blk->bminlen;
+
+		BUF_RELEASE_RESERVED(tmpblock);
+
 		rtn_stat = TRUE;
 	}
 	else
 	{
-		
-		rtn_stat = FALSE;
 		goto finish;
 	}
 	

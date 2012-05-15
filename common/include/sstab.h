@@ -43,6 +43,8 @@ int
 sstab_bld_name(char *sstab_name, char *tab_name, int tab_name_len, 
 				int sstabid);
 
+int
+sstab_shuffle(BLOCK *sstab);
 
 
 #endif
