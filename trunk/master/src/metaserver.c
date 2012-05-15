@@ -3810,7 +3810,7 @@ meta_crtidx(TREE *command)
 	int		tab_name_len;
 	char		*idx_name;
 	int		idx_name_len;
-	char		tab_dir[256];
+	char		tab_dir[TABLE_NAME_MAX_LEN];
 	int		rtn_stat;
 	TABLEHDR	*tab_hdr;
 	char 		*resp;
@@ -3819,6 +3819,7 @@ meta_crtidx(TREE *command)
 	char		*resp_buf;
 	int		resp_buf_len;
 	int		resp_buf_idx;
+	char		tab_meta_dir[TABLE_NAME_MAX_LEN];
 
 
 	Assert(command);
@@ -3839,7 +3840,7 @@ meta_crtidx(TREE *command)
 	tab_name_len = (command->right)->sym.command.tabname_len;
 
 	/* Create the file named table name. */
-	MEMSET(tab_dir, 256);
+	MEMSET(tab_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_dir, MT_META_TABLE, STRLEN(MT_META_TABLE));
 	str1_to_str2(tab_dir, '/', tab_name);
 
@@ -3860,6 +3861,33 @@ meta_crtidx(TREE *command)
 		rpc_status |= RPC_TABLE_NOT_EXIST;
 		goto exit;
 	}
+
+	char	rg_tab_dir[TABLE_NAME_MAX_LEN];
+	
+	/* The full path of ranger table. */
+	MEMSET(rg_tab_dir, TABLE_NAME_MAX_LEN);
+	MEMCPY(rg_tab_dir, MT_RANGE_TABLE, STRLEN(MT_RANGE_TABLE));
+	str1_to_str2(rg_tab_dir, '/', tab_name);
+	
+	
+	int	status;
+
+	/* Build the full path for the tabletscheme file. */
+	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
+	MEMCPY(tab_meta_dir, rg_tab_dir, STRLEN(rg_tab_dir));
+	str1_to_str2(tab_meta_dir, '/', idx_name);
+	
+	/* Make the directory to save the state of ranger servers. */
+	if (STAT(tab_meta_dir, &st) == 0)
+	{
+		traceprint("Index %s on table %s is exist.\n", idx_name, tab_name);
+		goto exit;
+	}
+	else
+	{
+		MKDIR(status, tab_meta_dir, 0755);
+	}
+	
 
 	int	meta_num;
 	
@@ -3895,15 +3923,13 @@ meta_crtidx(TREE *command)
 	
 	rtn_stat = TRUE;
 
-
-	char	tab_dir1[256];
 	int	fd;
 	
-	MEMSET(tab_dir1, 256);
-	MEMCPY(tab_dir1, MT_META_TABLE, STRLEN(MT_META_TABLE));
-	str1_to_str2(tab_dir1, '/', "systable");
+	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
+	MEMCPY(tab_meta_dir, MT_META_TABLE, STRLEN(MT_META_TABLE));
+	str1_to_str2(tab_meta_dir, '/', "systable");
 
-	OPEN(fd, tab_dir1, (O_RDWR));
+	OPEN(fd, tab_meta_dir, (O_RDWR));
 	
 	/* 
 	** We only reserve the ID for this index, so that the index sstable 

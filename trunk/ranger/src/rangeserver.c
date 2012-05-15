@@ -2104,6 +2104,7 @@ rg_selcountsum_delupd_tab(TREE *command, SELWHERE *selwhere, TABLEHDR *tab_hdr,
 	int		querytype;
 	int		rowcnt;		/* The # of row to be wanted. */
 	int		sum_value;	/* For the SELECTSUM. */
+	char		*tablet_bp = NULL;
 
 
 	Assert(command);
@@ -2196,7 +2197,7 @@ rg_selcountsum_delupd_tab(TREE *command, SELWHERE *selwhere, TABLEHDR *tab_hdr,
 	char		*tabletname;
 	char		tab_tablet_dir[TABLE_NAME_MAX_LEN];
 	int		ign;
-	char		*tablet_bp = NULL;	
+	
 
 	/* The tablet to be interested. */
 	char		*wanted_tablet;
@@ -3748,6 +3749,9 @@ rg_crtidx(TREE *command, IDXMETA *idxmeta, TABLEHDR *tab_hdr, COLINFO *colinfo, 
 	int		tabidx;
 	LOGREC		*logrec;
 	int		buf_spin;
+	char		*tablet_bp = NULL;
+	TABLET_SCANCTX	*tablet_scanctx = NULL;
+	char		*tablet_schm_bp = NULL;
 
 
 	Assert(command);
@@ -3812,7 +3816,6 @@ rg_crtidx(TREE *command, IDXMETA *idxmeta, TABLEHDR *tab_hdr, COLINFO *colinfo, 
 
 	char	tab_meta_dir[TABLE_NAME_MAX_LEN];
 	int	fd1;
-	int	status;
 
 	/* Build the full path for the tabletscheme file. */
 	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
@@ -3820,14 +3823,10 @@ rg_crtidx(TREE *command, IDXMETA *idxmeta, TABLEHDR *tab_hdr, COLINFO *colinfo, 
 	str1_to_str2(tab_meta_dir, '/', idx_name);
 	
 	/* Make the directory to save the state of ranger servers. */
-	if (STAT(tab_meta_dir, &st) == 0)
+	if (STAT(tab_meta_dir, &st) != 0)
 	{
-		traceprint("Index %s on table %s is exist.\n", idx_name, tab_name);
+		traceprint("The meta for the index %s on table %s has not been built.\n", idx_name, tab_name);
 		goto exit;
-	}
-	else
-	{
-		MKDIR(status, tab_meta_dir, 0755);
 	}
 	
 	/* Build the full path for the tabletscheme file. */
@@ -3837,8 +3836,7 @@ rg_crtidx(TREE *command, IDXMETA *idxmeta, TABLEHDR *tab_hdr, COLINFO *colinfo, 
 		
 
 	/* Read the file tabletscheme. */
-	char	*tablet_schm_bp = NULL;
-	
+		
 	OPEN(fd1, tab_meta_dir, (O_RDONLY));
 
 	if (fd1 < 0)
@@ -3861,14 +3859,13 @@ rg_crtidx(TREE *command, IDXMETA *idxmeta, TABLEHDR *tab_hdr, COLINFO *colinfo, 
 	char		*tabletname;
 	char		tab_tablet_dir[TABLE_NAME_MAX_LEN];
 	int		ign;
-	char		*tablet_bp = NULL;	
+	
 
 	/* For selectrange. */
 	char		*rp;
 	char		*rg_addr;
 	int		rg_port;
 	int		namelen;
-	TABLET_SCANCTX	*tablet_scanctx;
 	IDXBLD		idxbld;
 
 	P_SPINLOCK(BUF_SPIN);
@@ -3876,6 +3873,9 @@ rg_crtidx(TREE *command, IDXMETA *idxmeta, TABLEHDR *tab_hdr, COLINFO *colinfo, 
 	
 	tablet_scanctx = (TABLET_SCANCTX *)MEMALLOCHEAP(sizeof(TABLET_SCANCTX));
 	MEMSET(tablet_scanctx, sizeof(TABLET_SCANCTX));
+
+	tablet_bp = (char *)MEMALLOCHEAP(SSTABLE_SIZE);
+	MEMSET(tablet_bp, SSTABLE_SIZE);
 
 	/* Insert the begin log for this index creating. */
 	
