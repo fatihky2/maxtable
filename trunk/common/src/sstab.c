@@ -602,3 +602,66 @@ sstab_bld_name(char *sstab_name, char *tab_name, int tab_name_len, int sstabid)
 
 	return TRUE;
 }
+
+
+
+int
+sstab_shuffle(BLOCK *sstab)
+{
+	BLOCK		*nextblk;
+	BLOCK		*emptyblk;
+	BLOCK		*nonemptyblk;
+	
+
+	nextblk = sstab;
+
+	emptyblk = nonemptyblk = NULL;
+	
+	
+	while(nextblk->bblkno != -1) 
+	{		
+		if ((nextblk->bnextrno == 0) && (emptyblk == NULL))
+		{
+			emptyblk = nextblk;
+		}
+
+		if (   (nextblk->bnextrno != 0) && (emptyblk != NULL) 
+		    && (nonemptyblk == NULL))
+		{
+			nonemptyblk = nextblk;
+			
+			
+			MEMCPY(emptyblk->bdata, nonemptyblk->bdata, 
+						BLOCKSIZE - BLKHEADERSIZE - 4);
+			
+			emptyblk->bnextrno = nonemptyblk->bnextrno;				
+			emptyblk->bfreeoff = nonemptyblk->bfreeoff;
+			emptyblk->bminlen = nonemptyblk->bminlen;
+	
+	
+			MEMSET(nonemptyblk->bdata, BLOCKSIZE - BLKHEADERSIZE - 4);
+			nonemptyblk->bnextrno = 0;
+			nonemptyblk->bfreeoff = BLKHEADERSIZE;
+			nonemptyblk->bminlen = 0;
+
+			traceprint("sstable shuffer: one sstab has been shuffled from block (%d) to block (%d)", nonemptyblk->bblkno, emptyblk->bblkno);
+			
+			nextblk = emptyblk;
+
+			emptyblk = NULL;
+			nonemptyblk = NULL;
+			
+		}
+
+		if(nextblk->bnextblkno != -1)
+		{
+			nextblk++;
+		}
+		else
+		{
+			break;
+		}
+	}
+
+	return TRUE;
+}

@@ -79,9 +79,9 @@ exitcrt:
 		if (match(argv[1], "insert"))
 		{
 			/* Insert 10000 data rows into table */
-//			for(i = 1; i < 1000; i++)
+			for(i = 1; i < 100; i++)
 //			for(i = 1001; i < 1100; i++)
-			for(i = 1101; i < 71100; i++)
+//			for(i = 1101; i < 71100; i++)
 			{
 #if 0
 				char	*c = "cccccccccccccccccccccccccccccccccccccccccccccccccccccc";
