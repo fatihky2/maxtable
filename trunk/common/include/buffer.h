@@ -82,6 +82,7 @@ typedef struct buf
 #define DIRTYLINK(bp, hdr)	bufdlink(bp, hdr)
 #define DIRTYUNLINK(bp)		bufdunlink(bp)
 
+
 #define	BUF_GET_RESERVED(bp)					\
 	do {							\
 		if (Kernel->ke_bufresv.bufidx < BUF_RESV_MAX)	\
@@ -97,6 +98,17 @@ typedef struct buf
 		(Kernel->ke_bufresv.bufidx)--;			\
 		(bp) = NULL;					\
 	}while (0)
+
+#define	BUF_GET_LOGBUF(bp)					\
+	do{							\
+		(bp) = Kernel->ke_logbuf;			\
+	}while(0)
+
+#define	BUF_RELEASE_LOGBUF(bp)					\
+	do{							\
+		(bp) = NULL;					\
+	}while(0)
+		
 
 struct tab_info;
 

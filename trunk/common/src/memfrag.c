@@ -103,7 +103,8 @@ mem_init_alloc_regions()
 	Kernel = (KERNEL *)kmem_ptr;
 	MEMSET(Kernel,sizeof(KERNEL));
 
-	tmp_ptr = (char *)mem_os_malloc(BUF_RESV_MAX * BLOCKSIZE);
+	
+	tmp_ptr = (char *)mem_os_malloc((BUF_RESV_MAX + 1)* BLOCKSIZE);
 	MEMSET(tmp_ptr, BUF_RESV_MAX * BLOCKSIZE);
 
 	int i;
@@ -115,6 +116,9 @@ mem_init_alloc_regions()
 	{
 		Kernel->ke_bufresv.bufresv[i] = (void *)(tmp_ptr + i * BLOCKSIZE);
 	}
+
+	
+	Kernel->ke_logbuf = (void *)(tmp_ptr + i * BLOCKSIZE);
 	
 	kmem_ptr += sizeof(KERNEL);
 	size -= sizeof(KERNEL);

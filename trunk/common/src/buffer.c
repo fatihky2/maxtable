@@ -45,10 +45,12 @@ int	bufwrite_cnt = 0;
 void
 bufread(BUF *bp)
 {
+	BLKIO	t_blkio;
 	BLKIO	*blkioptr;
 
 	
-	blkioptr = MEMALLOCHEAP(sizeof(BLKIO));
+//	blkioptr = MEMALLOCHEAP(sizeof(BLKIO));
+	blkioptr = &t_blkio;
 
 	
 	blkioptr->bioflags = DBREAD;
@@ -62,7 +64,7 @@ bufread(BUF *bp)
 		SSTABLE_STATE(bp) |= BUF_IOERR;
 	}
 
-	MEMFREEHEAP(blkioptr);
+//	MEMFREEHEAP(blkioptr);
 
 	
 	if (bp->bstat & BUF_READ_EMPTY)
@@ -189,6 +191,7 @@ void
 bufawrite(BUF *bp)
 {
 	LOCALTSS(tss);
+	BLKIO		t_blkio;
 	BLKIO		*blkioptr;
 	
 
@@ -210,7 +213,8 @@ bufawrite(BUF *bp)
 //	V_SPINLOCK(BUF_SPIN);
 
 	
-	blkioptr = MEMALLOCHEAP(sizeof(BLKIO));
+//	blkioptr = MEMALLOCHEAP(sizeof(BLKIO));
+	blkioptr = &t_blkio;
 
 	
 	blkioptr->bioflags = DBWRITE;
@@ -228,7 +232,7 @@ bufawrite(BUF *bp)
 
 	SSTABLE_STATE(bp) &= ~(BUF_DIRTY|BUF_WRITING);
 
-	MEMFREEHEAP(blkioptr);
+//	MEMFREEHEAP(blkioptr);
 
 	bufwrite_cnt++;
 
