@@ -198,7 +198,8 @@ typedef struct kernel
 	SPINLOCK	ke_msg_obj_lock;
 	SPINLOCK	ke_mem_frag_lock;
 	SPINLOCK	ke_hkgc_spinlock;
-	BUF_RESERVE	ke_bufresv;	
+	BUF_RESERVE	ke_bufresv;
+	void		*ke_logbuf;
 	struct buf	*ke_buflru;			
 	struct buf	**ke_bufhash;		
 	struct buf	*ke_bufwash;		

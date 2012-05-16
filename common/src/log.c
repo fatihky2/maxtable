@@ -239,7 +239,8 @@ log_put(LOGREC *logrec, char *rp, int rlen)
 		logbuflen += sizeof(int) + rlen;
 	}
 		
-	logbuf = (char *)MEMALLOCHEAP(logbuflen);
+//	logbuf = (char *)MEMALLOCHEAP(logbuflen);
+	BUF_GET_LOGBUF(logbuf);
 	
 	if (rp)
 	{
@@ -325,7 +326,7 @@ log_put(LOGREC *logrec, char *rp, int rlen)
 #endif
 
 exit:
-	MEMFREEHEAP(logbuf);
+	BUF_RELEASE_LOGBUF(logbuf);
 
 	return status;
 }

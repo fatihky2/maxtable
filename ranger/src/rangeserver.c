@@ -421,7 +421,7 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 	}
 
 	rlen = BLOCKSIZE - BLK_TAILSIZE - BLKHEADERSIZE - sizeof(int);
-	rp = MEMALLOCHEAP(rlen);
+	BUF_GET_RESERVED(rp);
 
 	/* Begin to build row. */
 	row_build_hdr(rp, 0, 0, ins_meta->varcol_num);
@@ -484,7 +484,7 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 			if (!(col_offset > 0))
 			{
 				traceprint("Hit a row error!\n");
-				MEMFREEHEAP(rp);
+				BUF_RELEASE_RESERVED(rp);
 				ex_raise(EX_ANY);
 			}
 			
@@ -507,7 +507,7 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 			if (ins_meta->varcol_num != col_num)
 			{
 				traceprint("Hit a row error!\n");
-				MEMFREEHEAP(rp);
+				BUF_RELEASE_RESERVED(rp);
 				ex_raise(EX_ANY);
 			}
 		}		
@@ -531,6 +531,9 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 	buf_spin = TRUE;
 
 	rtn_stat = blkins(tabinfo, rp);
+
+	/* Release this buffer for other using like the index insert. */
+	BUF_RELEASE_RESERVED(rp);
 
 	/* Update index. */
 	if (rtn_stat && (tabinfo->t_has_index))
@@ -626,7 +629,7 @@ exit:
 
 	if (rp)
 	{
-		MEMFREEHEAP(rp);
+		BUF_RELEASE_RESERVED(rp);
 	}
 	
 	return resp;
