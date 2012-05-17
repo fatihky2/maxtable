@@ -4,11 +4,13 @@ MQL is based on the style of traditional relational query lanmaxtabage.
   * *CREATE TABLE*.....create table table_name (column1 type1, ...,cloumnx type x) 
   * *INSERT*....................insert into table_name (column1_value,...columnx_value)
   * *DELETE*..................delete table_name (column1_value)
+  * *DELETEWHERE*.........deletewhere table_name where columnX_name(columnX_value1, columnX_value2)
   * *SELECT*..................select table_name (column1_value)
   * *SELECTRANGE*......selectrange table_name (column1_value1, column1_value2)
   * *SELECTWHERE*......selectwhere table_name where columnX_name(columnX_value1, columnX_value2) and columnY_name(columnY_value1, columnY_value2)
   * *SELECTSUM*..........selectsum (column_name) table_name where columnX_name(columnX_value1, columnX_value2) and columnY_name(columnY_value1, columnY_value2)
   * *SELECTCOUNT*......selectcount table_name where columnX_name(columnX_value1, columnX_value2) and columnY_name(columnY_value1, columnY_value2)
+  * *UPDATE*...........update set columnX_name(columnX_value) maxtab where columnX_name(columnX_value1, columnX_value2)
   * *CREATEINDEX*......create index index_name on table_name (columnX_name)
   * *DROPINDEX*........drop index index_name on table_name
   * *DROP*.....................drop table_name
@@ -59,6 +61,10 @@ selectcount maxtab where id1(aaaa38, aaaa47) and id2(bbbb35, bbbb46)
 return:
 The total row # is 890
 }}}
+  * update data by the WHERE clasue
+{{{
+update set id2(aaaa60) maxtab where id2(bbbb20, bbbb20)
+}}}
   * create index against table
 {{{
 create index idx1 on maxtab (id2)
@@ -67,10 +73,14 @@ create index idx1 on maxtab (id2)
 {{{
 drop index idx1 on maxtab
 }}}
-  * delete data
+  * delete data by the index against the first column
 {{{
 delete maxtab (aaaa1)
 return: success or fail
+}}}
+  * delete data by the WHERE clause
+{{{
+deletewhere maxtab where id1(aaaa20, aaaa30)
 }}}
   * drop table
 {{{
