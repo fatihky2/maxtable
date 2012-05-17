@@ -6,6 +6,7 @@
 
 = Usage =
 {{{
-./imql
-./sharding tab_name
+# ./imql
+Please type "help" if you need some further information.
+IMQL:sharding tab_name
 }}}
