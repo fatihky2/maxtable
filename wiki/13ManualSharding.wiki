@@ -1,6 +1,11 @@
 #summary Do tablet split manually for the data rebalance.
 
 = Introduction =
-    * It will scan all the tablet and split those tablets that have at least two blocks containing data.
-    * Generally, manual sharding will be followed by one rebalance operation that will rebalance the tablets because sharding may raise some new tablets.
+    * It will scan all the tablet and split those tablets that have at least two rows.
+    * Generally, manual sharding will be followed by one rebalance operation that will rebalance the new tablets raised by the sharding.
 
+= Usage =
+{{{
+./imql
+./sharding tab_name
+}}}
