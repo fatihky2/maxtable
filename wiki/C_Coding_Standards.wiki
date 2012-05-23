@@ -76,4 +76,7 @@ The best coding guideline is the existing Maxtable code. New or modified code sh
 14. Variable names can be a combination of upper and lower case letters, digits, and underscores, and should be limited to 31 or fewer characters.
 Global variables begin with an upper case character, but include at least one lower case letter to avoid confusion with macro names.
 Local variables should begin with a lower case character.
-Use variable names that can be searched for and are meaningful; avoid single letter names.
+
+15. If a macro is declared with parameters, surround each instance of the macro parameter with parentheses. 
+
+16. Never hard code a value (with the exception of 0 and 1); instead use #define in a related include file. 
