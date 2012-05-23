@@ -20,7 +20,6 @@
 #ifndef GLOBAL_H_
 #define GLOBAL_H_
 
-/**  common header files   **/
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -44,14 +43,13 @@
 #include <sys/wait.h>
 
 /* version part */
-#define VERSION "0.5Dev"
+#define VERSION "1.6Dev"
 
 #define TRUE	1
 #define FALSE	0
 
 #define INDEFINITE	-1 
 
-/** Global Constants Part **/
 #define CLI_DEFAULT_CONF_PATH "config/cli.conf"
 
 #define META_DEFAULT_PORT 1001
@@ -62,7 +60,6 @@
 
 #define LINE_BUF_SIZE 4096
 
-/** Currently only works at Linux **/
 #define LINE_SEPARATOR '\n'
 
 #define CONF_SEPARATOR '='
