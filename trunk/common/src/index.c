@@ -3268,9 +3268,12 @@ int
 index_rid_cmp(char *rid1, char *rid2)
 {
 	int	i;
+	int	ridlen;
 
 
-	for (i = 0; i < sizeof(RID); i++)
+	ridlen = sizeof(RID) - sizeof(int);
+
+	for (i = 0; i < ridlen; i++)
 	{
 		if (rid1[i] < rid2[i])
 		{
