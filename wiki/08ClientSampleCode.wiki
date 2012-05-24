@@ -252,6 +252,8 @@ int main(int argc, char *argv[])
 		printf("Testing create table: ./sample create\n");
 		printf("Testing insert data:  ./sample insert\n");
 		printf("Testing delete data:  ./sample delete\n");
+                printf("Testing deletewhere:  ./sample deletewhere\n");
+                printf("Testing update data:  ./sample update\n");
 		printf("Testing select data:  ./sample select\n");
 		printf("Testing selectrange:  ./sample selectrange\n");
 		printf("Testing selectwhere:  ./sample selectwhere\n");
@@ -646,6 +648,75 @@ exitdel:
 			}
 
 		}
+
+                if (match(argv[1], "deletewhere"))
+                {
+                        memset(resp, 0, 256);
+                        memset(cmd, 0, 256);
+
+                        sprintf(cmd, "deletewhere maxtab where id1(aaaa20, aaaa30)");
+
+                        rtn_stat = mt_cli_open_execute(connection, cmd, &exec_ctx);
+
+                        if (rtn_stat != CLI_SUCCESS)
+                        {
+                                printf ("Error! \n");
+                                goto exitdelwhere;
+                        }
+
+                        printf("Client 1: %s\n", cmd);
+
+                        MT_CLI_EXEC_CONTEX      *t_exec_ctx;
+
+                        t_exec_ctx = exec_ctx;
+
+                        for (i = 0; i < exec_ctx->rg_cnt; i++, t_exec_ctx++)
+                        {
+                                mt_cli_exec_builtin(t_exec_ctx);
+                        }
+
+
+exitdelwhere:
+                        if (exec_ctx)
+                        {
+                                mt_cli_close_execute(exec_ctx);
+                        }
+                }
+
+                if (match(argv[1], "update"))
+                {
+                        memset(resp, 0, 256);
+                        memset(cmd, 0, 256);
+
+                        sprintf(cmd, "update set id2(aaaa60) maxtab where id2(bbbb20, bbbb20)");
+
+                        rtn_stat = mt_cli_open_execute(connection, cmd, &exec_ctx);
+
+                        if (rtn_stat != CLI_SUCCESS)
+                        {
+                                printf ("Error! \n");
+                                goto exitupdate;
+                        }
+
+                        printf("Client 1: %s\n", cmd);
+
+                        MT_CLI_EXEC_CONTEX      *t_exec_ctx;
+
+                        t_exec_ctx = exec_ctx;
+
+                        for (i = 0; i < exec_ctx->rg_cnt; i++, t_exec_ctx++)
+                        {
+                                mt_cli_exec_builtin(t_exec_ctx);
+                        }
+
+
+exitupdate:
+                        if (exec_ctx)
+                        {
+                                mt_cli_close_execute(exec_ctx);
+                        }
+                }
+
 
 		if (match(argv[1], "drop"))
 		{
