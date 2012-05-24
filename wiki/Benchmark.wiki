@@ -14,7 +14,6 @@ create table maxtab(id1 varchar, id2 varchar,id3 int, id4 varchar,id5 varchar,
                     id6 varchar,id7 varchar,id8 varchar,id9 varchar)
 }}}
   # One machine, one Meta server, one Ranger server (one thread), one Client
-
   # DEBUG Binary (Meta & Ranger Server)
 
 * Performance
