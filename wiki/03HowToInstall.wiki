@@ -1,4 +1,5 @@
 #summary How to install MaxTable servers on a cluster.
+#labels Featured
 
 *HOW TO CONFIGURE*<br>
 If using the Kosmos file system as your back-end storage engine, you should set the MT_BACKEND with 'KFS'
