@@ -1,4 +1,5 @@
 #summary How to use the client API.
+#labels Featured
 * 1. Intoduction to the client API
 {{{
 
