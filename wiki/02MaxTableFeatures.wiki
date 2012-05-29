@@ -1,4 +1,5 @@
 #summary Features supported in MaxTable
+#labels Featured
 
   * *Scalability*: New ranger nodes can be added as storage needs increase; the system automatically adapts to the new nodes while running the loadbalance.
  
