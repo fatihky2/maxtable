@@ -1,5 +1,4 @@
 #summary Checking the consistency of metadata to make sure the validity of matedata.
-#labels Featured
 
 1. Manual 
 
