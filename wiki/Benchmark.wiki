@@ -1,4 +1,9 @@
 #summary Benchmark working
+#labels Featured
+
+* Introduction
+
+This post is not the official benchmark for Maxtable, and its performance should be tested on your application to find bottleneck and do the performance tuning.
 
 * Background
 
