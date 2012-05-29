@@ -1,4 +1,5 @@
 #summary How to deploy MaxTable servers on a cluster.
+#labels Featured
 
 ==Defining Machine Configuration for MaxTable==
 Maxtable can use the local system or Kosmos file system (KFS) as its back-end storage engine. If using the KFS as the back-end storage, you need to build the library for the KFS and link it into the binary (startMaster and startRanger).
