@@ -543,7 +543,6 @@ rg_again:
 			goto finish;
 
 		}		
-		/* DELETE case doesn't have any result response. */
 		else if(querytype == SELECT)
 		{
 			if (rg_resp->result == NULL)
@@ -679,7 +678,7 @@ finish:
 		t_exec_ctx->meta_resp = (char *)resp;
 		t_exec_ctx->rg_resp = (char *)rg_resp;
 		t_exec_ctx->querytype = querytype;
-
+		
 		/* SELECT needs to free the memory for the ranger response. */
 		t_exec_ctx->rg_cnt = 1;
 

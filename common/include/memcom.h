@@ -182,6 +182,15 @@ typedef struct buf_reserve
 	void		*bufresv[BUF_RESV_MAX];	
 }BUF_RESERVE;
 
+#define	SSTAB_RESV_MAX		2
+typedef struct sstab_reserve
+{
+	int		sstabidx;
+	int		pad;
+	void		*sstabresv[BUF_RESV_MAX];	
+}SSTAB_RESERVE;
+
+
 typedef struct kernel
 {
 	MEMPLIST	*ke_fragpool_list;	
@@ -199,6 +208,7 @@ typedef struct kernel
 	SPINLOCK	ke_mem_frag_lock;
 	SPINLOCK	ke_hkgc_spinlock;
 	BUF_RESERVE	ke_bufresv;
+	SSTAB_RESERVE	ke_sstabresv;
 	void		*ke_logbuf;
 	struct buf	*ke_buflru;			
 	struct buf	**ke_bufhash;		
@@ -241,7 +251,7 @@ typedef struct kernel
 
 
 void *
-mem_os_malloc(unsigned long size);
+mem_os_malloc(long long size);
 
 int
 mem_init_alloc_regions();

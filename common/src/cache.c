@@ -110,13 +110,14 @@ ca_setup_pool()
 	struct_size = 0;
 	
 	
+	traceprint("Initializing the cache pool...\n");
 	ca_memptr = mem_os_malloc(BLOCK_CACHE_SIZE);
 	MEMSET(ca_memptr, BLOCK_CACHE_SIZE);
-
+	
 	Kernel->ke_bufhash = (BUF **)ca_memptr;
 	ca_memptr += bufhashsize();
 	struct_size += bufhashsize();
-	
+
 	
 	sbufptr = (BUF *) ca_memptr;
 	ca_memptr += sizeof (BUF);
@@ -129,6 +130,7 @@ ca_setup_pool()
 	struct_size += (sizeof(BUF) * BLOCK_MAX_COUNT);
 
 	temp = (BLOCKSIZE - (((long)ca_memptr) & ~BLOCKMASK));
+
 	ca_memptr += temp;
 	struct_size += temp;
 
@@ -157,6 +159,17 @@ ca_setup_pool()
 	count = BLOCK_MAX_COUNT - temp - 1;
 
 	traceprint("BLOCK_MAX_COUNT : %d  --  Block # : %d  -- temp # : %ld\n", BLOCK_MAX_COUNT, count, temp);
+
+	if (count > (BLK_CNT_IN_SSTABLE * SSTABLE_MAX_COUNT))
+	{
+		
+		count = BLK_CNT_IN_SSTABLE * SSTABLE_MAX_COUNT;
+	}
+	else if (count < (BLK_CNT_IN_SSTABLE * SSTABLE_MAX_COUNT))
+	{
+		assert(0);
+	}
+
 	i = 0;
 	j = 0;
 	

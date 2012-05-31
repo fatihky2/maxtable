@@ -5739,6 +5739,7 @@ meta_check_tablet(char *tabdir, int tabid, char *tabletname, int tabletid)
 	char		*lastkey_in_blk;
 	int		lastkeylen_in_blk;
 	int 		result;
+	int		rowcnt = 0;
 	
 	for(i = 0; i < BLK_CNT_IN_SSTABLE; i ++)
 	{
@@ -5775,7 +5776,10 @@ meta_check_tablet(char *tabdir, int tabid, char *tabletname, int tabletid)
 			lastkeylen_in_blk = keylen_in_blk; 
 		}
 		
+		rowcnt += blk->bnextrno;
 	}
+
+	traceprint("%s(%d) has %d rows.\n",tabletname, tabletid, rowcnt);
 
 	bufunkeep(bp->bsstab);
 	

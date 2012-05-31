@@ -108,6 +108,23 @@ typedef struct buf
 	do{							\
 		(bp) = NULL;					\
 	}while(0)
+
+
+#define	SSTAB_GET_RESERVED(sstab)						\
+	do {									\
+		if (Kernel->ke_sstabresv.sstabidx < SSTAB_RESV_MAX)		\
+		{								\
+			(sstab) = (char *)(Kernel->ke_sstabresv.sstabresv[Kernel->ke_sstabresv.sstabidx]);	\
+			(Kernel->ke_sstabresv.sstabidx)++;			\
+		}								\
+	}while (0)
+	
+#define	SSTAB_RELEASE_RESERVED(sstab)						\
+	do{									\
+		Assert((void *)(sstab) == Kernel->ke_sstabresv.sstabresv[Kernel->ke_sstabresv.sstabidx - 1]);	\
+		(Kernel->ke_sstabresv.sstabidx)--;				\
+		(sstab) = NULL;							\
+	}while (0)
 		
 
 struct tab_info;

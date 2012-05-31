@@ -79,7 +79,7 @@ exitcrt:
 		if (match(argv[1], "insert"))
 		{
 			/* Insert 10000 data rows into table */
-			for(i = 1000; i < 10000; i++)
+			for(i = 1000; i < 1000000; i++)
 //			for(i = 1001; i < 1100; i++)
 //			for(i = 1101; i < 71100; i++)
 			{
@@ -134,11 +134,11 @@ exitins:
 			memset(cmd, 0, 256);
 			//sprintf(cmd, "selectwhere maxtab where id1(aaaa1, *) and id2(bbbb35, bbbb46)");
 			//sprintf(cmd, "selectwhere maxtab where id2(bbbb39, bbbb39) and id4(cccccc39, cccccc39)");
-//			sprintf(cmd, "selectwhere maxtab where id2(bbbb1, bbbb9999999)");
+			sprintf(cmd, "selectwhere maxtab where id2(aaaa60, aaaa60)");
 			//sprintf(cmd, "selectwhere maxtab where id1(aaaa1, aaaa999999)");
 //			sprintf(cmd, "selectwhere maxtab where id1(aaaa20, aaaa30)");
-//			sprintf(cmd, "selectwhere maxtab where id2(bbbb20, bbbb30)");
-			sprintf(cmd, "selectwhere maxtab where id2(bbbb3744, bbbb3750)");
+//			sprintf(cmd, "selectwhere maxtab where id2(bbbb2000, bbbb2000)");
+//			sprintf(cmd, "selectwhere maxtab where id2(bbbb3744, bbbb3750)");
 //			sprintf(cmd, "selectwhere maxtab where id3(cccccc20, cccccc20)");
 
 			
@@ -194,8 +194,8 @@ exitselwh:
 //			sprintf(cmd, "selectcount maxtab where id1(aaaa3, aaaa8)");	
 //			sprintf(cmd, "selectcount maxtab where id2(bbbb551, bbbb551)");
 
-//			sprintf(cmd, "selectcount maxtab where id2(bbbb20, bbbb20)");
-			sprintf(cmd, "selectcount maxtab where id2(aaaa60, aaaa60)");
+			sprintf(cmd, "selectcount maxtab where id2(bbbb3744, bbbb3750)");
+//			sprintf(cmd, "selectcount maxtab where id2(aaaa60, aaaa60)");
 //			sprintf(cmd, "selectcount maxtab where id4(cccccc20, cccccc20)");
 
 
@@ -317,7 +317,7 @@ exitdelwhere:
 //			sprintf(cmd, "selectcount maxtab where id1(aaaa38, aaaa47) and id2(bbbb35, bbbb46)");
 //			sprintf(cmd, "selectcount maxtab where id1(aaaa3, aaaa8)");	
 //			sprintf(cmd, "deletewhere maxtab where id2(bbbb551, bbbb551)");
-			sprintf(cmd, "update set id2(aaaa60) maxtab where id2(bbbb20, bbbb20)");
+			sprintf(cmd, "update set id2(aaaa60) maxtab where id2(bbbb2000, bbbb2000)");
 			
 			rtn_stat = mt_cli_open_execute(connection, cmd, &exec_ctx);
 
@@ -412,7 +412,7 @@ exitdropindx:
 		if (match(argv[1], "select"))
 		{
 			/* Select datas from table */
-			for(i = 1; i < 10000; i++)
+			for(i = 60010; i < 70000; i++)
 			{
 				memset(resp, 0, 256);
 				memset(cmd, 0, 256);
@@ -514,7 +514,7 @@ exitselrg:
 		{
 
 			/* Delete data in the table */
-			for(i = 6010; i < 7000; i++)
+			for(i = 70010; i < 70100; i++)
 			{
 				memset(resp, 0, 256);
 				memset(cmd, 0, 256);

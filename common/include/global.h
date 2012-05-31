@@ -43,7 +43,7 @@
 #include <sys/wait.h>
 
 /* version part */
-#define VERSION "1.6Dev"
+#define VERSION "1.6.2Dev"
 
 #define TRUE	1
 #define FALSE	0
