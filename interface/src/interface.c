@@ -542,7 +542,8 @@ rg_again:
 			
 			goto finish;
 
-		}		
+		}	
+		/* DELETE case doesn't have any result response. */	
 		else if(querytype == SELECT)
 		{
 			if (rg_resp->result == NULL)
