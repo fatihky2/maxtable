@@ -543,7 +543,8 @@ rg_again:
 			goto finish;
 
 		}		
-		else if((querytype == SELECT) || (querytype == DELETE) )
+		/* DELETE case doesn't have any result response. */
+		else if(querytype == SELECT)
 		{
 			if (rg_resp->result == NULL)
 			{
