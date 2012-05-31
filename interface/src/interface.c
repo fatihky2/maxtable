@@ -679,6 +679,9 @@ finish:
 		t_exec_ctx->rg_resp = (char *)rg_resp;
 		t_exec_ctx->querytype = querytype;
 
+		/* SELECT needs to free the memory for the ranger response. */
+		t_exec_ctx->rg_cnt = 1;
+
 		if (rtn_stat == CLI_HAS_NO_DATA)
 		{
 			t_exec_ctx->end_rowpos = 0;
