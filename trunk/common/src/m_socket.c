@@ -186,9 +186,8 @@ retry:
 										
 		recvbp += n;
 		need -= n;
+		got += n;
 	}
-
-	got += n;
 
 	return got;
 }

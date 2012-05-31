@@ -46,14 +46,14 @@ mp_list_insert(void * pool_hdl, int type);
 
 
 void * 
-mem_os_malloc(unsigned long size)
+mem_os_malloc(long long size)
 {
-	int             rnd;
-	unsigned long   alloc_size;
+	long long             rnd;
+	long long	alloc_size;
 	void		*start_addr;
 
 	
-	rnd = MY_MEMPAGESIZE;
+	rnd = (long long)MY_MEMPAGESIZE;
 
 	if (size % rnd)
 	{
@@ -65,17 +65,20 @@ mem_os_malloc(unsigned long size)
 	}
 
 	
-	alloc_size += (unsigned long) MY_MEMPAGESIZE;
-	start_addr = (void *)malloc((unsigned int)alloc_size);
+	alloc_size += (long long) MY_MEMPAGESIZE;
+	start_addr = (void *)malloc((long long)alloc_size);
 
 	Assert(start_addr != NULL);
 
 	
-	if (0 && ((long) start_addr % MY_MEMPAGESIZE))
+#if 0
+	if (((long) start_addr % MY_MEMPAGESIZE))
 	{
 		start_addr = (start_addr + MY_MEMPAGESIZE) -
 			    ((long) start_addr % MY_MEMPAGESIZE);
 	}
+
+#endif
 
 	if (start_addr != NULL)
 	{
@@ -114,11 +117,25 @@ mem_init_alloc_regions()
 
 	for (i = 0; i < BUF_RESV_MAX; i++)
 	{
-		Kernel->ke_bufresv.bufresv[i] = (void *)(tmp_ptr + i * BLOCKSIZE);
+		Kernel->ke_bufresv.bufresv[i] 
+					= (void *)(tmp_ptr + i * BLOCKSIZE);
 	}
 
 	
 	Kernel->ke_logbuf = (void *)(tmp_ptr + i * BLOCKSIZE);
+
+	
+        tmp_ptr = (char *)mem_os_malloc(SSTAB_RESV_MAX * SSTABLE_SIZE);
+        MEMSET(tmp_ptr, SSTAB_RESV_MAX * SSTABLE_SIZE);
+
+        
+        Kernel->ke_sstabresv.sstabidx = 0;
+
+        for (i = 0; i < SSTAB_RESV_MAX; i++)
+        {
+                Kernel->ke_sstabresv.sstabresv[i] 
+					= (void *)(tmp_ptr + i * SSTABLE_SIZE);
+        }
 	
 	kmem_ptr += sizeof(KERNEL);
 	size -= sizeof(KERNEL);
@@ -813,7 +830,7 @@ mem_prt_fragmp(MEMPOOL *mp)
 
 	traceprint("\n Pint Frag List : BEGIN \n");
 	traceprint("\n Free  Frag LIST \n");
-	P_SPINLOCK(MEM_FRAG_SPIN);
+
 	FOR_QUEUE(FLINK, &mp->mp_free_frags, free_link)
     	{
 		mfp = MF_GET_MFP(free_link);
@@ -826,7 +843,6 @@ mem_prt_fragmp(MEMPOOL *mp)
     	{
 		prLINK((LINK *)mfp);
 	}
-	V_SPINLOCK(MEM_FRAG_SPIN);
 
 	traceprint("\n Pint Frag List : END \n");
 

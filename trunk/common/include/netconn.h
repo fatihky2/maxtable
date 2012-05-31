@@ -55,8 +55,11 @@
 #define RECVIO_TIMEOUT			30
 #define HEARTBEAT_INTERVAL		30
 
-/* The Buffer Pool for holding RPCRESP Data  */
-#define CONN_BUF_SIZE (1024 * 1024)
+/*
+** The Buffer Pool for holding RPCRESP Data
+**	Note: It must be greater than the BLOCKSIZE.
+*/
+#define CONN_BUF_SIZE (1025 * 1024)
 
 typedef struct rpcreq
 {

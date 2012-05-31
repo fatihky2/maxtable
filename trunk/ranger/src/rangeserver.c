@@ -1639,8 +1639,7 @@ rg_selwheretab(TREE *command, SELWHERE *selwhere, TABLEHDR *tab_hdr, COLINFO *co
 	       goto exit;
 	}
 
-	tablet_schm_bp = (char *)MEMALLOCHEAP(SSTABLE_SIZE);
-	MEMSET(tablet_schm_bp, SSTABLE_SIZE);
+	SSTAB_GET_RESERVED(tablet_schm_bp);
 
 	READ(fd1, tablet_schm_bp, SSTABLE_SIZE); 
 
@@ -1754,8 +1753,7 @@ rg_selwheretab(TREE *command, SELWHERE *selwhere, TABLEHDR *tab_hdr, COLINFO *co
 		str1_to_str2(tab_rg_dir, '/', tab_name);
 	}
 
-	tablet_bp = (char *)MEMALLOCHEAP(SSTABLE_SIZE);
-	MEMSET(tablet_bp, SSTABLE_SIZE);
+	SSTAB_GET_RESERVED(tablet_bp);
 	
 	/* Working for the query. */
 	while (TRUE)
@@ -2067,14 +2065,14 @@ exit:
 		MEMFREEHEAP(tablet_scanctx);
 	}
 
-	if (tablet_schm_bp)
-	{
-		MEMFREEHEAP(tablet_schm_bp);
-	}
-
 	if (tablet_bp)
 	{
-		MEMFREEHEAP(tablet_bp);
+		SSTAB_RELEASE_RESERVED(tablet_bp);
+	}
+
+	if (tablet_schm_bp)
+	{
+		SSTAB_RELEASE_RESERVED(tablet_schm_bp);
 	}
 	
 	return resp;
@@ -2183,8 +2181,7 @@ rg_selcountsum_delupd_tab(TREE *command, SELWHERE *selwhere, TABLEHDR *tab_hdr,
 	       goto exit;
 	}
 
-	tablet_schm_bp = (char *)MEMALLOCHEAP(SSTABLE_SIZE);
-	MEMSET(tablet_schm_bp, SSTABLE_SIZE);
+	SSTAB_GET_RESERVED(tablet_schm_bp);
 
 	READ(fd1, tablet_schm_bp, SSTABLE_SIZE); 
 
@@ -2231,8 +2228,7 @@ rg_selcountsum_delupd_tab(TREE *command, SELWHERE *selwhere, TABLEHDR *tab_hdr,
 	tablet_scanctx->sum_coloff = (querytype == SELECTSUM) ?
 					command->left->sym.resdom.coloffset: 0;
 
-	tablet_bp = (char *)MEMALLOCHEAP(SSTABLE_SIZE);
-	MEMSET(tablet_bp, SSTABLE_SIZE);
+	SSTAB_GET_RESERVED(tablet_bp);
 	
 	/* Working for the query. */
 	while (TRUE)
@@ -2433,16 +2429,16 @@ exit:
 		MEMFREEHEAP(tablet_scanctx);
 	}
 
-	if (tablet_schm_bp)
-	{
-		MEMFREEHEAP(tablet_schm_bp);
-	}
-
 	if (tablet_bp)
 	{
-		MEMFREEHEAP(tablet_bp);
+		SSTAB_RELEASE_RESERVED(tablet_bp);		
 	}
-	
+
+	if (tablet_schm_bp)
+	{
+		SSTAB_RELEASE_RESERVED(tablet_schm_bp);
+	}
+
 	return resp;
 
 }
@@ -3845,8 +3841,7 @@ rg_crtidx(TREE *command, IDXMETA *idxmeta, TABLEHDR *tab_hdr, COLINFO *colinfo, 
 	       goto exit;
 	}
 
-	tablet_schm_bp = (char *)MEMALLOCHEAP(SSTABLE_SIZE);
-	MEMSET(tablet_schm_bp, SSTABLE_SIZE);
+	SSTAB_GET_RESERVED(tablet_schm_bp);
 
 	READ(fd1, tablet_schm_bp, SSTABLE_SIZE); 
 
@@ -3874,8 +3869,7 @@ rg_crtidx(TREE *command, IDXMETA *idxmeta, TABLEHDR *tab_hdr, COLINFO *colinfo, 
 	tablet_scanctx = (TABLET_SCANCTX *)MEMALLOCHEAP(sizeof(TABLET_SCANCTX));
 	MEMSET(tablet_scanctx, sizeof(TABLET_SCANCTX));
 
-	tablet_bp = (char *)MEMALLOCHEAP(SSTABLE_SIZE);
-	MEMSET(tablet_bp, SSTABLE_SIZE);
+	SSTAB_GET_RESERVED(tablet_bp);
 
 	/* Insert the begin log for this index creating. */
 	
@@ -4016,17 +4010,16 @@ exit:
 		resp = conn_build_resp_byte(RPC_FAIL, 0, NULL);
 	}
 
-
-	if (tablet_schm_bp)
-	{
-		MEMFREEHEAP(tablet_schm_bp);
-	}
-
 	if (tablet_bp)
 	{
-		MEMFREEHEAP(tablet_bp);
+		SSTAB_RELEASE_RESERVED(tablet_bp);
 	}
 	
+	if (tablet_schm_bp)
+	{
+		SSTAB_RELEASE_RESERVED(tablet_schm_bp);
+	}
+
 	return resp;
 	
 }
@@ -4463,7 +4456,7 @@ rg_crt_rg_insdel_logfile(char *rgip, int rgport)
 }
 
 
-void
+int
 rg_setup(char *conf_path)
 {
 	int	status;
@@ -4526,6 +4519,8 @@ rg_setup(char *conf_path)
 		MKDIR(status, MT_RANGE_STATE, 0755);
 	}
 
+	ca_setup_pool();
+
 	rg_regist();
 
 	char	rgname[64];
@@ -4544,7 +4539,7 @@ rg_setup(char *conf_path)
 	if (!(STAT(Range_infor->rglogfiledir, &st) == 0))
 	{
 		traceprint("Log file %s is not exist.\n", Range_infor->rglogfiledir);
-		return;
+		return FALSE;
 	}
 
 	log_get_latest_rglogfile(Rg_loginfo->logdir, Range_infor->rg_ip,
@@ -4583,14 +4578,14 @@ rg_setup(char *conf_path)
 	if (STAT(Range_infor->rgbackup, &st) != 0)
 	{
 		traceprint("Backup file %s is not exist.\n", Range_infor->rgbackup);
-		return;
+		return FALSE;
 	}
 
 	/* Build the array for the range state directory. */
 	if (!ri_get_rgstate(Range_infor->rgstatefile,Range_infor->rg_ip, 
 				Range_infor->port))
 	{
-		return;
+		return FALSE;
 	}
 
 	if (STAT(MT_META_INDEX, &st) != 0)
@@ -4603,9 +4598,7 @@ rg_setup(char *conf_path)
 		meta_load_sysindex((char *)Range_infor->rg_meta_sysindex);
 	}
 
-	ca_setup_pool();	
-
-	return;
+	return TRUE;
 }
 
 
@@ -5989,7 +5982,10 @@ main(int argc, char *argv[])
 
 	tss_setup(TSS_OP_RANGESERVER);
 
-	rg_setup(conf_path);
+	if (!rg_setup(conf_path))
+	{
+		return FALSE;
+	}
 
 	//Trace = MEM_USAGE;
 	Trace = 0;
