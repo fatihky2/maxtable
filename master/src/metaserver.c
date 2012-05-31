@@ -2420,6 +2420,8 @@ meta_selwheretab(TREE *command, TABINFO *tabinfo)
 	Assert(Master_infor->meta_syscol->colnum[tabidx] == tab_hdr->tab_col);
 	
 	col_buf = (char *)(&(Master_infor->meta_syscol->colinfor[tabidx]));
+
+	MEMSET(&selwhere, sizeof(SELWHERE));
 			
 	if (   (querytype == SELECTWHERE) || (querytype == SELECTCOUNT) 
 	    || (querytype == SELECTSUM) || (querytype == DELETEWHERE)
@@ -2439,8 +2441,6 @@ meta_selwheretab(TREE *command, TABINFO *tabinfo)
 			}
 		}	
 
-		MEMSET(&selwhere, sizeof(SELWHERE));
-		
 		CONSTANT *cons = par_get_constant_by_colname(command, 
 						((COLINFO *)col_buf)[i].col_name);
 
