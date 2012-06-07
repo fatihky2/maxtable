@@ -216,7 +216,7 @@ par_destroy_resdom(TREE * node)
 }
 
 int 
-parser_open(char *s_str)
+parser_open(char *s_str, int s_strlen)
 {
 	LOCALTSS(tss);
 	int 	querytype;
@@ -235,12 +235,12 @@ parser_open(char *s_str)
 		break;
 	    case TABCREAT:
 	    	tss->topid |= TSS_OP_CRTTAB;
-		rtn_stat = par_crtins_tab((s_str + s_idx), TABCREAT);
+		rtn_stat = par_crtins_tab((s_str + s_idx), s_strlen - s_idx, TABCREAT);
 		break;
 		
 	    case INSERT:
 	    	tss->topid |= TSS_OP_INSTAB;
-		rtn_stat = par_crtins_tab((s_str + s_idx), INSERT);
+		rtn_stat = par_crtins_tab((s_str + s_idx), s_strlen - s_idx, INSERT);
 	        break;
 
 	    case CRTINDEX:
@@ -666,7 +666,8 @@ par_add_server(char *s_str, int querytype)
 	
 	int		rtn_stat;
 	
-	rtn_stat = par_col_info((col_info + start), (end - start), querytype);
+	rtn_stat = par_col_info((col_info + start), (end - start), querytype,
+				NULL, 0);
 
 	return TRUE;
 }
@@ -696,8 +697,9 @@ par_name_check(char *name, int len)
 	return (i == len) ? TRUE : FALSE;
 }
 
+
 int 
-par_crtins_tab(char *s_str, int querytype)
+par_crtins_tab(char *s_str, int s_strlen, int querytype)
 {
 	LOCALTSS(tss);
 	int		len;
@@ -708,6 +710,8 @@ par_crtins_tab(char *s_str, int querytype)
 	int		end;
 	char		*col_info;
 	TREE		*command;
+	int		blob_datalen;
+	char		*blob_data;
 
 
 	if (s_str == NULL || (STRLEN(s_str) == 0))
@@ -717,7 +721,7 @@ par_crtins_tab(char *s_str, int querytype)
 
 	len = 0;
 
-	cmd_len = STRLEN(s_str);
+	cmd_len = s_strlen;
 
 	len = str1nstr(s_str, "(\0", cmd_len);
 
@@ -804,11 +808,17 @@ par_crtins_tab(char *s_str, int querytype)
 #else
 	len =  str1nstr(col_info, ")\0", cmd_len - start);
 
+	blob_datalen = cmd_len - start - len;
+
+	blob_data = (blob_datalen> 0)? &(col_info[len]) : NULL;
+
+#if 0	
 	if (len != (cmd_len - start))
 	{
 		
 		return FALSE;
 	}
+#endif
 
 	if (len < 2)
 	{
@@ -817,11 +827,12 @@ par_crtins_tab(char *s_str, int querytype)
 	}
 
 	str0n_trunc_0t(col_info, len - 1, &start, &end);
-
+	
 #endif	
 	int		rtn_stat;
 	
-	rtn_stat = par_col_info((col_info + start), (end - start), querytype);
+	rtn_stat = par_col_info((col_info + start), (end - start), querytype,
+				blob_data, blob_datalen);
 
 	return rtn_stat;
 }
@@ -900,7 +911,8 @@ par_seldel_tab(char *s_str, int querytype)
 	
 	int		rtn_stat;
 	
-	rtn_stat = par_col_info((col_info + start), (end - start), querytype);
+	rtn_stat = par_col_info((col_info + start), (end - start), querytype,
+				NULL, 0);
 
 	return TRUE;
 }
@@ -964,6 +976,7 @@ par_selrange_tab(char *s_str, int querytype)
 	col_info = s_str + start;
 	len =  str1nstr(col_info, ")\0", cmd_len - len);
 
+	
 	if (len != (cmd_len - start))
 	{
 		
@@ -980,8 +993,10 @@ par_selrange_tab(char *s_str, int querytype)
 
 	
 	int		rtn_stat;
+
 	
-	rtn_stat = par_col_info((col_info + start), (end - start), querytype);
+	rtn_stat = par_col_info((col_info + start), (end - start), querytype,
+				NULL, 0);
 
 	return TRUE;
 }
@@ -1008,6 +1023,7 @@ par_selwherecnt_tab(char *s_str, int querytype)
 	char		*coldata;
 	int		coldatalen;
 	TREE		*upd_cmd;
+	int		is_like;
 	
 
 	if (s_str == NULL || (STRLEN(s_str) == 0))
@@ -1234,6 +1250,22 @@ par_selwherecnt_tab(char *s_str, int querytype)
 		
 		str0n_trunc_0t(colname, len - 1, &start, &end);
 		colnamelen = end - start;
+
+		is_like = FALSE;
+		
+		
+		if (!strncasecmp("LIKE", &(colname[end -4]), 4))
+		{
+			is_like = TRUE;
+
+			colnamelen -= 4;
+			
+			MEMCPY(colname, &(colname[start]), colnamelen);
+			
+			str0n_trunc_0t(colname, colnamelen, &start, &end);
+			colnamelen = end - start;
+		}
+		
 		char	tmpcolname[32];
 
 		
@@ -1261,8 +1293,8 @@ par_selwherecnt_tab(char *s_str, int querytype)
 		
 		str0n_trunc_0t(col_info, len - 1, &start, &end);
 
-		
-		if (!par_col_info4where((col_info + start), (end - start), querytype, tmpcolname))
+		if (!par_col_info4where((col_info + start), (end - start),
+					querytype, tmpcolname, is_like))
 		{
 			goto exit;
 		}
@@ -1297,7 +1329,7 @@ par_selwherecnt_tab(char *s_str, int querytype)
 		    case AND:
 		    	cmd_str = "AND\0";
 			break;
-
+		    
 		    default:
 		    	break;
 		}
@@ -1374,7 +1406,7 @@ par_crt_idx_tab(char *s_str, int querytype)
 	tss->tcmd_parser = par_bld_cmd(&(idx_name[start]), 
 					idx_name_len, querytype);
 
-	if (par_crtins_tab(s_str + len, querytype))
+	if (par_crtins_tab(s_str + len, cmd_len - len, querytype))
 	{
 		parser_result = TRUE;
 	}
@@ -1516,6 +1548,10 @@ par_op_where(char *cmd, int len)
 	{
 		return WHERE;
 	}
+	else if (!strncasecmp("LIKE", cmd, len))
+	{
+		return LIKE;
+	}
 	
 
 	return 0;
@@ -1633,14 +1669,15 @@ par_addsstab(char *s_str, int querytype)
 	
 	int		rtn_stat;
 	
-	rtn_stat = par_col_info((col_info + start), (end - start), querytype);
+	rtn_stat = par_col_info((col_info + start), (end - start), querytype,
+				NULL, 0);
 
 	return TRUE;
 }
 
 
 int
-par_col_info(char *cmd, int cmd_len, int querytype)
+par_col_info(char *cmd, int cmd_len, int querytype, char *blob_data, int blob_datalen)
 {
 	LOCALTSS(tss);
 	int	start;
@@ -1692,7 +1729,7 @@ par_col_info(char *cmd, int cmd_len, int querytype)
 		}
 
 		str0n_trunc_0t(cmd, len + 1, &start, &end);
-
+				
 		coldata = col_info = &cmd[start];
 
 		if (start == end)
@@ -1765,10 +1802,32 @@ par_col_info(char *cmd, int cmd_len, int querytype)
 
 			command->left = par_bld_resdom(NULL, NULL, colid, 0);
 
-			command->left->right = par_bld_const(coldata, (end - start),
-							rg_insert ? colinfor->col_type 
+			if (rg_insert && TYPE_IS_BLOB(colinfor->col_type))
+			{
+				Assert((blob_data != NULL) && (blob_datalen > 0));
+				
+				char	*this_blob;
+				int	this_blob_len;
+
+				
+				this_blob = &(blob_data[*(int *)(coldata + 1)]);
+
+				this_blob_len = *(int *)(coldata + sizeof(int) + 1);
+				
+				command->left->right = par_bld_const(this_blob, 
+								this_blob_len,
+								colinfor->col_type,
+								NULL, 0);	
+		
+			}
+			else
+			{
+				command->left->right = par_bld_const(coldata, 
+								(end - start),
+								rg_insert ? colinfor->col_type 
 								      : INVALID_TYPE, 
-							NULL, 0);
+								NULL, 0);
+			}
 		}
 		else if (querytype == SELECTRANGE)
 		{
@@ -1818,7 +1877,8 @@ par_col_info(char *cmd, int cmd_len, int querytype)
 
 
 int
-par_col_info4where(char *cmd, int cmd_len, int querytype, char *colname)
+par_col_info4where(char *cmd, int cmd_len, int querytype, char *colname,
+			int is_like)
 {
 	LOCALTSS(tss);
 	int	start;
@@ -1863,8 +1923,15 @@ par_col_info4where(char *cmd, int cmd_len, int querytype, char *colname)
 	{
 		cmd = &(cmd[len]);
 
-		len = str01str(cmd, ",\0", cmd_len);
-
+		if (is_like)
+		{
+			len = str01str(cmd, ")\0", cmd_len);
+		}
+		else
+		{
+			len = str01str(cmd, ",\0", cmd_len);
+		}
+		
 		if (len == -1)
 		{
 			traceprint("Value is not allowed with NULL.\n");
@@ -1885,6 +1952,11 @@ par_col_info4where(char *cmd, int cmd_len, int querytype, char *colname)
 			rightdata = &cmd[start];
 			rightlen = (end - start);
 		}
+
+		if (is_like)
+		{
+			break;
+		}
 		
 		len +=2;
 	}
@@ -1902,6 +1974,14 @@ par_col_info4where(char *cmd, int cmd_len, int querytype, char *colname)
 						rg_selwhere ? colinfor->col_type 
 								: INVALID_TYPE,
 						rightdata, rightlen);
+
+	if (is_like)
+	{
+		struct constant *const_node = 
+			(struct constant *)(&(command->left->right)->sym);
+
+		const_node->constat |= CONSTANT_LIKE_OP;
+	}
 	
 	return TRUE;
 }
@@ -1964,10 +2044,13 @@ par_get_orplan(TREE *command)
 	ORANDPLAN	*orplan;
 	ORANDPLAN	*orplanhdr;
 	TREE		*tmpcommand;
+	int		opid;
+	int		first_cmd;
 	
 
 	orplanhdr = orplan = NULL;
 	tmpcommand = command;
+	first_cmd = FALSE;
 	
 	while (tmpcommand)
 	{
@@ -1975,8 +2058,10 @@ par_get_orplan(TREE *command)
 		
 		Assert(PAR_NODE_IS_COMMAND(command->type));
 		
-		if (par_op_where(command->sym.command.tabname, 
-				command->sym.command.tabname_len) == OR)
+		opid = par_op_where(command->sym.command.tabname, 
+					command->sym.command.tabname_len);
+		
+		if ((opid == OR) || (opid == WHERE))
 		{
 			orplan = (ORANDPLAN *)MEMALLOCHEAP(sizeof(ORANDPLAN));
 			MEMSET(orplan, sizeof(ORANDPLAN));
@@ -1986,10 +2071,35 @@ par_get_orplan(TREE *command)
 			if (orplanhdr == NULL)
 			{
 				orplanhdr = orplan;					
+
+				if (opid == WHERE)
+				{
+					
+					first_cmd = TRUE;
+				}
 			}
 			else
 			{
+				if (first_cmd)
+				{
+					first_cmd = FALSE;
+				}
+
+				orplan->orandplnext = orplanhdr->orandplnext;
 				orplanhdr->orandplnext = orplan;
+				
+			}
+		}
+		
+		else if (opid == AND)
+		{
+			if (first_cmd)
+			{
+				MEMFREEHEAP(orplanhdr);
+
+				orplanhdr = NULL;
+
+				first_cmd = FALSE;
 			}
 		}
 
@@ -2010,10 +2120,12 @@ par_get_andplan(TREE *command)
 	ORANDPLAN	*andplanhdr;
 	TREE		*tmpcommand;
 	int		opid;
+	int		first_cmd;
 	
 
 	andplanhdr = andplan = NULL;
 	tmpcommand = command;
+	first_cmd = FALSE;
 	
 	while (tmpcommand)
 	{
@@ -2033,12 +2145,34 @@ par_get_andplan(TREE *command)
 
 			if (andplanhdr == NULL)
 			{
-				andplanhdr = andplan;					
+				andplanhdr = andplan;
+
+				if (opid == WHERE)
+				{
+					
+					first_cmd = TRUE;
+				}
 			}
 			else
 			{
+				if (first_cmd)
+				{
+					first_cmd = FALSE;
+				}
+				
 				andplan->orandplnext = andplanhdr->orandplnext;
 				andplanhdr->orandplnext = andplan;				
+			}
+		}
+		else if(opid == OR)
+		{
+			if (first_cmd)
+			{
+				MEMFREEHEAP(andplanhdr);
+
+				andplanhdr = NULL;
+
+				first_cmd = FALSE;
 			}
 		}
 
@@ -2103,11 +2237,35 @@ par_process_orplan(ORANDPLAN *cmd, char *rp, int minrowlen)
 		rightval = srchclause->scterms->left->right->sym.constant.rightval;
 		rightvallen = srchclause->scterms->left->right->sym.constant.rightlen;
 
+		if (srchclause->scterms->left->right->sym.constant.constat 
+							& CONSTANT_LIKE_OP)
+		{	
+			char	tmp[128];
+
+			
+
+			MEMCPY(tmp, leftval, leftvallen);
+			tmp[leftvallen] = '\0';
+			
+			if (str01str(colp, tmp, length) == (length - 1))
+			{
+				
+				cmd = cmd->orandplnext;
+				continue;
+			}
+
+			
+			rtn_stat = TRUE;
+			
+			break;
+		}
+
 		result = row_col_compare(coltype, colp, length, leftval, 
 					leftvallen);
 
 		if (result == LE)
 		{
+			
 			cmd = cmd->orandplnext;
 			continue;
 		}
@@ -2170,25 +2328,44 @@ par_process_andplan(ORANDPLAN *cmd, char *rp, int minrowlen)
 		rightval = srchclause->scterms->left->right->sym.constant.rightval;
 		rightvallen = srchclause->scterms->left->right->sym.constant.rightlen;
 
-		if (strncasecmp("*", leftval, leftvallen) != 0)
+		if (srchclause->scterms->left->right->sym.constant.constat 
+							& CONSTANT_LIKE_OP)
 		{
-			result = row_col_compare(coltype, colp, length, leftval, 
-						leftvallen);
+			char	tmp[128];
 
-			if (result == LE)
+			
+
+			MEMCPY(tmp, leftval, leftvallen);
+			tmp[leftvallen] = '\0';
+			
+			if (str01str(colp, tmp, length) == (length - 1))
 			{
+				
 				break;
 			}
 		}
-
-		if (strncasecmp("*", rightval, rightvallen) != 0)
-		{
-			result = row_col_compare(coltype, colp, length, rightval, 
-						rightvallen);
-
-			if (result == GR)
+		else
+		{		
+			if (strncasecmp("*", leftval, leftvallen) != 0)
 			{
-				break;
+				result = row_col_compare(coltype, colp, length,
+							leftval, leftvallen);
+
+				if (result == LE)
+				{
+					break;
+				}
+			}
+
+			if (strncasecmp("*", rightval, rightvallen) != 0)
+			{
+				result = row_col_compare(coltype, colp, 
+						length, rightval, rightvallen);
+
+				if (result == GR)
+				{
+					break;
+				}
 			}
 		}
 		

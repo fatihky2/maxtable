@@ -16,7 +16,6 @@ struct timeval tpStart;
 struct timeval tpEnd;
 float timecost;
 
-
 /* Following definition is for the stat. */
 #define	SELECT_RANGE_OP		0x0001
 #define	SELECT_WHERE_OP		0x0002
@@ -24,7 +23,7 @@ float timecost;
 int main(int argc, char *argv[])
 {
 	CONN 	*connection;
-	char	resp[256], cmd[256];
+	char	resp[256], cmd[1024];
 	int	rtn_stat;
 	int	i;
 	
@@ -55,11 +54,13 @@ int main(int argc, char *argv[])
 			
 			/* Create Table */
 			memset(resp, 0, 256);
-			memset(cmd , 0, 256);
+			memset(cmd , 0, 1024);
 
 			sprintf(cmd, "create table maxtab(id1 varchar, id2 varchar,id3 int, id4 varchar,id5 varchar,id6 varchar,id7 varchar,id8 varchar,id9 varchar)");
-		//	sprintf(cmd, "create table maxtab(id1 varchar, id2 varchar,id3 int)");
-			rtn_stat = mt_cli_open_execute(connection, cmd, &exec_ctx);
+			
+//			sprintf(cmd, "create table maxtab(id1 varchar, id2 varchar, id3 varchar, id4 varchar, id5 varchar, id6 varchar)");
+//			sprintf(cmd, "create table maxtab(id1 varchar, id2 varchar,id3 text)");
+			rtn_stat = mt_cli_open_execute(connection, cmd, strlen(cmd), &exec_ctx);
 
 			if (rtn_stat != CLI_SUCCESS)
 			{
@@ -79,7 +80,7 @@ exitcrt:
 		if (match(argv[1], "insert"))
 		{
 			/* Insert 10000 data rows into table */
-			for(i = 1000; i < 1000000; i++)
+			for(i = 30000; i < 100000; i++)
 //			for(i = 1001; i < 1100; i++)
 //			for(i = 1101; i < 71100; i++)
 			{
@@ -100,14 +101,14 @@ exitcrt:
 				char 	*f = "ffffff";
 				char	*g = "gggggg";
 				char	*h = "hhhhhh";
- 
+				
+				
 //				sprintf(cmd, "insert into maxtab(aaaa%d, bbbb20, %d, %s%d, %s%d, %s%d, %s%d, %s%d, %s%d)", i,i,c,i,d, i,e, i,f,i,g,i,h,i);
 				sprintf(cmd, "insert into maxtab(aaaa%d, bbbb%d, %d, %s%d, %s%d, %s%d, %s%d, %s%d, %s%d)", i,i,i,c,i,d, i,e, i,f,i,g,i,h,i);
-//				 sprintf(cmd, "insert into maxtab(aaaa1653, bbbb%d, %d, %s%d, %s%d, %s%d, %d, %d, %d)", i,i,c,i,d, i,e, i,i,i,i);
-				
-//				sprintf(cmd, "insert into maxtab(aaaa%d, bbbb%d, %d)", i,i,i);
+//				sprintf(cmd, "insert into maxtab(aaaa1653, bbbb%d, %d, %s%d, %s%d, %s%d, %d, %d, %d)", i,i,c,i,d, i,e, i,i,i,i);
+			
 
-				rtn_stat = mt_cli_open_execute(connection, cmd, &exec_ctx);
+				rtn_stat = mt_cli_open_execute(connection, cmd, strlen(cmd), &exec_ctx);
 
 				if (rtn_stat != CLI_SUCCESS)
 				{
@@ -127,6 +128,64 @@ exitins:
 			
 	
 		}
+		
+		if (match(argv[1], "inserttext"))
+		{
+			/* Insert 10000 data rows into table */
+			for(i = 0; i < 50; i++)
+//			for(i = 1001; i < 1100; i++)
+//			for(i = 1101; i < 71100; i++)
+			{
+
+				char	*blob = "Edward P. Gibson, Esq., CISSP, FBCS, is a Director in PricewaterhouseCoopers' Forensic Services Group. He specializes in gathering intelligence to detect, mitigate, and prevent corporate IT and security risks such as economic espionage, IT / bank fraud, and cyber attacks.  Prior to PwC, 2005-2009, Gibson was the Chief cyber Security Advisor for Microsoft Ltd in the United Kingdom (UK) and praised for his  unique ability to make security issues relevant and personal. From 1985-2005 Gibson was a career FBI Special Agent.  He specialized in investigating complex international white-collar crimes, and was cited for his work in various espionage investigations involving FBI & CIA traitors.\0";	
+				int	blob_len = strlen(blob);
+				int	blob_start = 0;
+				char	blob_id[8];
+
+				char	cmd_header[64];
+				int	cmd_hdlen;
+
+				memset(cmd_header, 0, 64);		
+
+				memcpy(blob_id, &blob_start, 4);
+				memcpy(&(blob_id[4]), &blob_len, 4);
+
+				sprintf(cmd_header, "insert into maxtab(aaaa%d, bbbb%d, ", i,i);
+			
+				cmd_hdlen = strlen(cmd_header);
+	
+				memcpy(cmd, cmd_header, cmd_hdlen);
+				memcpy(cmd + cmd_hdlen, "[", 1);
+				memcpy(cmd + cmd_hdlen+1, blob_id, 8);
+				memcpy(cmd + cmd_hdlen + 9, "]", 1);
+				
+				memcpy(cmd + cmd_hdlen + 10, ")\0", 1);
+				
+				memcpy(cmd + cmd_hdlen + 11, blob, blob_len);
+				
+
+				assert((cmd_hdlen + 9 + blob_len) < 1024);				
+
+				rtn_stat = mt_cli_open_execute(connection, cmd, (cmd_hdlen + 9 + blob_len), &exec_ctx);
+
+				if (rtn_stat != CLI_SUCCESS)
+				{
+					printf ("Error! \n");
+
+	                                goto exitinstxt;
+				}
+				
+				printf("Client 1: %s\n", cmd);
+exitinstxt:
+				if (exec_ctx)
+				{
+					mt_cli_close_execute(exec_ctx);
+				}
+			}
+
+			
+	
+		}
 
 		if (match(argv[1], "selectwhere"))
 		{	
@@ -134,7 +193,7 @@ exitins:
 			memset(cmd, 0, 256);
 			//sprintf(cmd, "selectwhere maxtab where id1(aaaa1, *) and id2(bbbb35, bbbb46)");
 			//sprintf(cmd, "selectwhere maxtab where id2(bbbb39, bbbb39) and id4(cccccc39, cccccc39)");
-			sprintf(cmd, "selectwhere maxtab where id2(aaaa60, aaaa60)");
+			sprintf(cmd, "selectwhere maxtab where id2(bbbb60, bbbb70)");
 			//sprintf(cmd, "selectwhere maxtab where id1(aaaa1, aaaa999999)");
 //			sprintf(cmd, "selectwhere maxtab where id1(aaaa20, aaaa30)");
 //			sprintf(cmd, "selectwhere maxtab where id2(bbbb2000, bbbb2000)");
@@ -142,7 +201,7 @@ exitins:
 //			sprintf(cmd, "selectwhere maxtab where id3(cccccc20, cccccc20)");
 
 			
-			rtn_stat = mt_cli_open_execute(connection, cmd, &exec_ctx);
+			rtn_stat = mt_cli_open_execute(connection, cmd, strlen(cmd), &exec_ctx);
 
 			if (rtn_stat != CLI_SUCCESS)
 			{
@@ -186,6 +245,65 @@ exitselwh:
 			}
 		}
 
+		
+		if (match(argv[1], "selectlike"))
+		{	
+			memset(resp, 0, 256);
+			memset(cmd, 0, 256);
+			//sprintf(cmd, "selectwhere maxtab where id1(aaaa1, *) and id2(bbbb35, bbbb46)");
+			//sprintf(cmd, "selectwhere maxtab where id2(bbbb39, bbbb39) and id4(cccccc39, cccccc39)");
+			sprintf(cmd, "selectwhere maxtab where id3 like (bank fraud)");
+			//sprintf(cmd, "selectwhere maxtab where id1(aaaa1, aaaa999999)");
+//			sprintf(cmd, "selectwhere maxtab where id1(aaaa20, aaaa30)");
+//			sprintf(cmd, "selectwhere maxtab where id2(bbbb2000, bbbb2000)");
+//			sprintf(cmd, "selectwhere maxtab where id2(bbbb3744, bbbb3750)");
+//			sprintf(cmd, "selectwhere maxtab where id3(cccccc20, cccccc20)");
+
+			
+			rtn_stat = mt_cli_open_execute(connection, cmd, strlen(cmd), &exec_ctx);
+
+			if (rtn_stat != CLI_SUCCESS)
+			{
+				printf ("Error! \n");
+				goto exitsellike;
+			}
+
+			printf("Client 1: %s\n", cmd);
+
+			int	rlen;
+			char	*rp = NULL;
+			MT_CLI_EXEC_CONTEX	*t_exec_ctx;
+
+			t_exec_ctx = exec_ctx;
+
+			int	test = 0;
+			
+			for (i = 0; i < exec_ctx->rg_cnt; i++, t_exec_ctx++)
+			{
+				test++;
+				
+				do{
+					rp = mt_cli_get_nextrow(t_exec_ctx, &rlen);
+					
+					if (rp)
+					{
+						int	collen = 0;				
+						char	*col;
+						
+						col = mt_cli_get_colvalue(t_exec_ctx, rp, 0, &collen);
+
+						printf ("col: %s\n", col);
+					}			
+				} while(rp);
+
+			}
+exitsellike:			
+			if (exec_ctx)
+			{
+				mt_cli_close_execute(exec_ctx);
+			}
+		}
+
 		if (match(argv[1], "selectcount"))
 		{	
 			memset(resp, 0, 256);
@@ -201,7 +319,7 @@ exitselwh:
 
 
 			
-			rtn_stat = mt_cli_open_execute(connection, cmd, &exec_ctx);
+			rtn_stat = mt_cli_open_execute(connection, cmd, strlen(cmd), &exec_ctx);
 
 			if (rtn_stat != CLI_SUCCESS)
 			{
@@ -242,7 +360,7 @@ exitselcnt:
 
 //			sprintf(cmd, "selectsum (id3) maxtab where id2(aaaa20, aaaa20)");
 			
-			rtn_stat = mt_cli_open_execute(connection, cmd, &exec_ctx);
+			rtn_stat = mt_cli_open_execute(connection, cmd, strlen(cmd), &exec_ctx);
 
 			if (rtn_stat != CLI_SUCCESS)
 			{
@@ -282,7 +400,7 @@ exitselsum:
 //			sprintf(cmd, "deletewhere maxtab where id2(bbbb551, bbbb551)");
 			sprintf(cmd, "deletewhere maxtab where id1(aaaa20, aaaa30)");
 			
-			rtn_stat = mt_cli_open_execute(connection, cmd, &exec_ctx);
+			rtn_stat = mt_cli_open_execute(connection, cmd, strlen(cmd), &exec_ctx);
 
 			if (rtn_stat != CLI_SUCCESS)
 			{
@@ -319,7 +437,7 @@ exitdelwhere:
 //			sprintf(cmd, "deletewhere maxtab where id2(bbbb551, bbbb551)");
 			sprintf(cmd, "update set id2(aaaa60) maxtab where id2(bbbb2000, bbbb2000)");
 			
-			rtn_stat = mt_cli_open_execute(connection, cmd, &exec_ctx);
+			rtn_stat = mt_cli_open_execute(connection, cmd, strlen(cmd), &exec_ctx);
 
 			if (rtn_stat != CLI_SUCCESS)
 			{
@@ -353,7 +471,7 @@ exitupdate:
 			memset(cmd, 0, 256);
 			sprintf(cmd, "create index idx1 on maxtab (id2)");
 			
-			rtn_stat = mt_cli_open_execute(connection, cmd, &exec_ctx);
+			rtn_stat = mt_cli_open_execute(connection, cmd, strlen(cmd), &exec_ctx);
 
 			if (rtn_stat != CLI_SUCCESS)
 			{
@@ -392,7 +510,7 @@ exitcrtidx:
 			memset(cmd, 0, 256);
 			sprintf(cmd, "drop index idx1 on maxtab");
 			
-			rtn_stat = mt_cli_open_execute(connection, cmd, &exec_ctx);
+			rtn_stat = mt_cli_open_execute(connection, cmd, strlen(cmd), &exec_ctx);
 
 			if (rtn_stat != CLI_SUCCESS)
 			{
@@ -412,13 +530,13 @@ exitdropindx:
 		if (match(argv[1], "select"))
 		{
 			/* Select datas from table */
-			for(i = 60010; i < 70000; i++)
+			for(i = 1; i < 100000; i++)
 			{
 				memset(resp, 0, 256);
 				memset(cmd, 0, 256);
 				sprintf(cmd, "select maxtab (aaaa%d)", i);
 
-				rtn_stat = mt_cli_open_execute(connection, cmd, &exec_ctx);
+				rtn_stat = mt_cli_open_execute(connection, cmd, strlen(cmd), &exec_ctx);
 
 				if (rtn_stat != CLI_SUCCESS)
 				{
@@ -442,9 +560,8 @@ exitdropindx:
 					printf("%d, col 1: %s\n", collen, col);
 					col = mt_cli_get_colvalue(exec_ctx, rp, 1, &collen);
                                         printf("%d, col 2: %s\n", collen, col);
-					collen = 0;
 					col = mt_cli_get_colvalue(exec_ctx, rp, 2, &collen);
-                                        printf("%d, col 3: %s, %d\n", collen, col, *((int*)col));
+                                        printf("%d, col 2: %s\n", collen, col);
 				}
 #endif				
 
@@ -465,7 +582,7 @@ exitsel:
 			//sprintf(cmd, "selectrange maxtab (*, aaaa46)");
 			//sprintf(cmd, "selectrange maxtab (aaaa45, *)");
 			sprintf(cmd, "selectrange maxtab (*, *)");
-			rtn_stat = mt_cli_open_execute(connection, cmd, &exec_ctx);
+			rtn_stat = mt_cli_open_execute(connection, cmd, strlen(cmd), &exec_ctx);
 
 			if (rtn_stat != CLI_SUCCESS)
 			{
@@ -495,7 +612,7 @@ exitsel:
 						int	collen = 0;				
 						char	*col;
 						
-						col = mt_cli_get_colvalue(t_exec_ctx, rp, 6, &collen);
+						col = mt_cli_get_colvalue(t_exec_ctx, rp, 0, &collen);
 
 						printf ("col: %s\n", col);
 					}			
@@ -519,7 +636,7 @@ exitselrg:
 				memset(resp, 0, 256);
 				memset(cmd, 0, 256);
 				sprintf(cmd, "delete maxtab (aaaa%d)", i);
-				rtn_stat = mt_cli_open_execute(connection, cmd, &exec_ctx);
+				rtn_stat = mt_cli_open_execute(connection, cmd, strlen(cmd), &exec_ctx);
 
 				if (rtn_stat != CLI_SUCCESS)
 				{
@@ -542,7 +659,7 @@ exitdel:
 			memset(cmd, 0, 256);
 			sprintf(cmd, "drop table maxtab");
 			
-			rtn_stat = mt_cli_open_execute(connection, cmd, &exec_ctx);
+			rtn_stat = mt_cli_open_execute(connection, cmd, strlen(cmd), &exec_ctx);
 
 			if (rtn_stat != CLI_SUCCESS)
 			{

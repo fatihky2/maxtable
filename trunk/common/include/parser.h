@@ -57,6 +57,7 @@ typedef struct constant
 
 
 #define	CONSTANT_SELECTWHERE	0x0001	
+#define	CONSTANT_LIKE_OP	0x0002	
 
 
 typedef union symbol
@@ -89,6 +90,7 @@ typedef struct tree
 #define	OR	1
 #define	AND	2
 #define WHERE	3
+#define	LIKE	4
 
 
 typedef struct srchclause
@@ -122,7 +124,7 @@ void
 par_destroy_resdom(TREE * node);
 
 int 
-parser_open(char *s_str);
+parser_open(char *s_str, int s_strlen);
 
 void
 parser_close(void);
@@ -137,7 +139,7 @@ int
 par_add_server(char *s_str, int querytype);
 
 int 
-par_crtins_tab(char *s_str, int querytype);
+par_crtins_tab(char *s_str, int s_strlen, int querytype);
 
 int 
 par_seldel_tab(char *s_str, int querytype);
@@ -149,7 +151,7 @@ int
 par_get_query(char *s_str, int *s_idx);
 
 int
-par_col_info(char *cmd, int cmd_len, int querytype);
+par_col_info(char *cmd, int cmd_len, int querytype, char *blob_data, int blob_datalen);
 
 void
 par_prt_tree(TREE *command);
@@ -164,7 +166,8 @@ int
 par_selrange_tab(char *s_str, int querytype);
 
 int
-par_col_info4where(char *cmd, int cmd_len, int querytype, char *colname);
+par_col_info4where(char *cmd, int cmd_len, int querytype, char *colname,
+			int is_like);
 
 int 
 par_selwherecnt_tab(char *s_str, int querytype);

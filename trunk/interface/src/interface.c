@@ -75,6 +75,10 @@ int validation_request(char * request)
     return TRUE;
 }
 
+int mt_cli_php_test(int a, int b)
+{
+	return (a + b);
+}
 
 /* 
 ** Client context initialization. 
@@ -231,7 +235,7 @@ mt_cli_close_connection(CONN * connection)
 **
 */
 int 
-mt_cli_exec_crtseldel(CONN * connection, char * cmd, MT_CLI_EXEC_CONTEX **exec_ctx)
+mt_cli_exec_crtseldel(CONN * connection, char * cmd, int cmd_len, MT_CLI_EXEC_CONTEX **exec_ctx)
 {
 	LOCALTSS(tss);
 	char		send_buf[LINE_BUF_SIZE];/* The RPC buffer for sending
@@ -305,15 +309,22 @@ retry:
 		send_buf_size = strlen(cmd);
 	}
 #else
-	send_buf_size = strlen(cmd);
+	send_buf_size = cmd_len;
 #endif
 	
 	MEMSET(send_buf, LINE_BUF_SIZE);
-	MEMCPY(send_buf, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
-	MEMCPY(send_buf + RPC_MAGIC_MAX_LEN, cmd, send_buf_size);
 
+	int	sendbp_idx = 0;
+		
+	PUT_TO_BUFFER(send_buf, sendbp_idx, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
+	PUT_TO_BUFFER(send_buf, sendbp_idx, &send_buf_size, sizeof(int));
+	/* Set the information header with the MAGIC. */
+	PUT_TO_BUFFER(send_buf, sendbp_idx, cmd, send_buf_size);
+
+	Assert(sendbp_idx < LINE_BUF_SIZE);
+	
 	/* Send the requirment to the meta server. */
-	tcp_put_data(connection->connection_fd, send_buf, (send_buf_size + RPC_MAGIC_MAX_LEN));
+	tcp_put_data(connection->connection_fd, send_buf, sendbp_idx);
 
 	/* Accept the response from the meta server. */
 	resp = conn_recv_resp(connection->connection_fd);
@@ -470,16 +481,19 @@ rg_again:
 			MEMCPY(resp->result, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
 		}		
 		MEMSET(send_rg_buf, LINE_BUF_SIZE);
-		MEMCPY(send_rg_buf, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
-				
-		MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN, resp->result,
-						resp->result_length);
-		MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN + resp->result_length,
-						cmd, send_buf_size);
 
+		int	sendbp_idx = 0;
+			
+		PUT_TO_BUFFER(send_rg_buf, sendbp_idx, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
+		PUT_TO_BUFFER(send_rg_buf, sendbp_idx, resp->result, resp->result_length);
+		PUT_TO_BUFFER(send_rg_buf, sendbp_idx, &send_buf_size, sizeof(int));
+		/* Set the information header with the MAGIC. */
+		PUT_TO_BUFFER(send_rg_buf, sendbp_idx, cmd, send_buf_size);
+
+		Assert(sendbp_idx < LINE_BUF_SIZE);
+		
 		/* Send the query requirment to the ranger server. */
-		tcp_put_data(rg_connection->connection_fd, send_rg_buf, 
-			(resp->result_length + send_buf_size + RPC_MAGIC_MAX_LEN));
+		tcp_put_data(rg_connection->connection_fd, send_rg_buf, sendbp_idx);
 		
 		rg_resp = conn_recv_resp_abt(rg_connection->connection_fd);
 
@@ -611,14 +625,20 @@ rg_again:
 					split_sstabid, sstab_key);
 
 			MEMSET(send_buf, LINE_BUF_SIZE);
-			MEMCPY(send_buf, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
-			MEMCPY(send_buf + RPC_MAGIC_MAX_LEN, new_buf, new_size);
 
+			int	sendbp_idx = 0;
+			
+			PUT_TO_BUFFER(send_buf, sendbp_idx, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
+			PUT_TO_BUFFER(send_buf, sendbp_idx, &new_size, sizeof(int));
+			/* Set the information header with the MAGIC. */
+			PUT_TO_BUFFER(send_buf, sendbp_idx, new_buf, new_size);
+			
 			MEMFREEHEAP(sstab_key);
 
+			Assert(sendbp_idx < LINE_BUF_SIZE);
+			
 			/* Send the split requirment to the meta server. */
-			tcp_put_data(connection->connection_fd, send_buf, 
-						(new_size + RPC_MAGIC_MAX_LEN));
+			tcp_put_data(connection->connection_fd, send_buf, sendbp_idx);
 
 			sstab_split_resp = conn_recv_resp(connection->connection_fd);
 			sstab_split = TRUE;
@@ -787,11 +807,18 @@ retry:
 	send_buf_size = strlen(cmd);
 
 	MEMSET(send_buf, LINE_BUF_SIZE);
-	MEMCPY(send_buf, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
-	MEMCPY(send_buf + RPC_MAGIC_MAX_LEN, cmd, send_buf_size);
+	
+	int	sendbp_idx = 0;
+			
+	PUT_TO_BUFFER(send_buf, sendbp_idx, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
+	PUT_TO_BUFFER(send_buf, sendbp_idx, &send_buf_size, sizeof(int));
+	/* Set the information header with the MAGIC. */
+	PUT_TO_BUFFER(send_buf, sendbp_idx, cmd, send_buf_size);
 
+	Assert(sendbp_idx < LINE_BUF_SIZE);
+	
 	/* Send the requirment to the meta server. */
-	tcp_put_data(connection->connection_fd, send_buf, (send_buf_size + RPC_MAGIC_MAX_LEN));
+	tcp_put_data(connection->connection_fd, send_buf, sendbp_idx);
 
 	/* Accept the response from the meta server. */
 	resp = conn_recv_resp(connection->connection_fd);
@@ -951,19 +978,19 @@ retry:
 	}
 	
 	MEMSET(send_rg_buf, LINE_BUF_SIZE);
-	MEMCPY(send_rg_buf, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
 
+	sendbp_idx = 0;
+			
+	PUT_TO_BUFFER(send_rg_buf, sendbp_idx, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
+	PUT_TO_BUFFER(send_rg_buf, sendbp_idx,  resp->result, RPC_MAGIC_MAX_LEN);
+	PUT_TO_BUFFER(send_rg_buf, sendbp_idx, &send_buf_size, sizeof(int));
+	/* Set the information header with the MAGIC. */
+	PUT_TO_BUFFER(send_rg_buf, sendbp_idx, cmd, send_buf_size);
+
+	Assert(sendbp_idx < LINE_BUF_SIZE);
 	
-	MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN, resp->result, 
-					RPC_MAGIC_MAX_LEN);
-	MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN + RPC_MAGIC_MAX_LEN,
-					cmd, send_buf_size);
-
 	/* Send the query requirment to the ranger server. */
-	tcp_put_data(rg_connection->connection_fd, send_rg_buf, 
-        	(RPC_MAGIC_MAX_LEN + send_buf_size + RPC_MAGIC_MAX_LEN));
-	
-	
+	tcp_put_data(rg_connection->connection_fd, send_rg_buf, sendbp_idx);	
 
 	rg_resp = conn_recv_resp_abt(rg_connection->connection_fd);
 
@@ -1059,15 +1086,21 @@ retry:
 	}
 	
 	MEMSET(send_buf, LINE_BUF_SIZE);
-	MEMCPY(send_buf, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
-	MEMCPY(send_buf + RPC_MAGIC_MAX_LEN, new_buf, new_size);
 
+	sendbp_idx = 0;
+			
+	PUT_TO_BUFFER(send_buf, sendbp_idx, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
+	PUT_TO_BUFFER(send_buf, sendbp_idx, &new_size, sizeof(int));
+	/* Set the information header with the MAGIC. */
+	PUT_TO_BUFFER(send_buf, sendbp_idx, new_buf, new_size);
+
+	Assert(sendbp_idx < LINE_BUF_SIZE);
+	
 	/* 
 	** Send the requirment to the meta server and continue
 	** to do the 'remove' operation.
 	*/
-	tcp_put_data(connection->connection_fd, send_buf, 
-				(new_size + RPC_MAGIC_MAX_LEN));
+	tcp_put_data(connection->connection_fd, send_buf, sendbp_idx);
 
 
 	remove_tab_resp = conn_recv_resp(connection->connection_fd);
@@ -1436,12 +1469,17 @@ retry:
 
 	send_buf_size = strlen(cmd);
 	MEMSET(send_buf, LINE_BUF_SIZE);
-	MEMCPY(send_buf, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
-	MEMCPY(send_buf + RPC_MAGIC_MAX_LEN, cmd, send_buf_size);
+	int	sendbp_idx = 0;
+			
+	PUT_TO_BUFFER(send_buf, sendbp_idx, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
+	PUT_TO_BUFFER(send_buf, sendbp_idx, &send_buf_size, sizeof(int));
+	/* Set the information header with the MAGIC. */
+	PUT_TO_BUFFER(send_buf, sendbp_idx, cmd, send_buf_size);
 
+	Assert(sendbp_idx < LINE_BUF_SIZE);
+	
 	/* Send the requirment to the meta server. */
-	tcp_put_data(connection->connection_fd, send_buf, 
-				(send_buf_size + RPC_MAGIC_MAX_LEN));
+	tcp_put_data(connection->connection_fd, send_buf, sendbp_idx);
 
 	/* Get the meta data information from the meta server. */
 	resp = conn_recv_resp(connection->connection_fd);
@@ -1756,7 +1794,8 @@ mt_cli_rgsel__ranger(CONN * connection, char * cmd, MT_CLI_EXEC_CONTEX *exec_ctx
 
 		
 		send_rg_buflen = RPC_MAGIC_MAX_LEN + sizeof(IDXMETA) + sizeof(TABLEHDR)
-				+ (tab_hdr->tab_col) * sizeof(COLINFO) + cmd_size;
+				+ (tab_hdr->tab_col) * sizeof(COLINFO) + sizeof(int) 
+				+ cmd_size;
 		
 		send_rg_buf = malloc(send_rg_buflen);
 		MEMSET(send_rg_buf, send_rg_buflen);
@@ -1782,6 +1821,8 @@ mt_cli_rgsel__ranger(CONN * connection, char * cmd, MT_CLI_EXEC_CONTEX *exec_ctx
 //		MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN + sizeof(IDXMETA), (char *)tab_hdr,
 //				sizeof(TABLEHDR)+ (tab_hdr->tab_col) * sizeof(COLINFO));
 
+		PUT_TO_BUFFER(send_rg_buf, buf_idx, &cmd_size, sizeof(int));
+
 		PUT_TO_BUFFER(send_rg_buf, buf_idx, cmd, cmd_size);
 
 //		MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN + sizeof(IDXMETA) +
@@ -1800,23 +1841,27 @@ mt_cli_rgsel__ranger(CONN * connection, char * cmd, MT_CLI_EXEC_CONTEX *exec_ctx
 
 		
 		send_rg_buflen = RPC_MAGIC_MAX_LEN + sizeof(SELWHERE) + sizeof(TABLEHDR)
-				+ (tab_hdr->tab_col) * sizeof(COLINFO) + cmd_size;
+				+ (tab_hdr->tab_col) * sizeof(COLINFO) + sizeof(int)
+				+ cmd_size;
 		
 		send_rg_buf = malloc(send_rg_buflen);
 		MEMSET(send_rg_buf, send_rg_buflen);
-		MEMCPY(send_rg_buf, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
+
+		int	buf_idx = 0;
+
+		PUT_TO_BUFFER(send_rg_buf, buf_idx, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
 
 
-		MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN, 
+		PUT_TO_BUFFER(send_rg_buf, buf_idx,  
 				((RPCRESP *)(exec_ctx->meta_resp))->result, 
 				sizeof(SELWHERE));
 
-		MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN + sizeof(SELWHERE), (char *)tab_hdr,
+		PUT_TO_BUFFER(send_rg_buf, buf_idx, (char *)tab_hdr,
 				sizeof(TABLEHDR)+ (tab_hdr->tab_col) * sizeof(COLINFO));
+
+		PUT_TO_BUFFER(send_rg_buf, buf_idx, &cmd_size, sizeof(int));
 		
-		MEMCPY(send_rg_buf + RPC_MAGIC_MAX_LEN + sizeof(SELWHERE) +
-				sizeof(TABLEHDR) + (tab_hdr->tab_col) * sizeof(COLINFO), 
-				cmd, cmd_size);
+		PUT_TO_BUFFER(send_rg_buf, buf_idx, cmd, cmd_size);
 	}
 
 	/* Send the requirment to the range server. */
@@ -2438,7 +2483,7 @@ mt_cli_get_firstrow(RANGE_QUERYCTX *rgsel_cont)
 **
 */
 int 
-mt_cli_open_execute(CONN *connection, char *cmd, MT_CLI_EXEC_CONTEX **exec_ctx)
+mt_cli_open_execute(CONN *connection, char *cmd, int cmd_len, MT_CLI_EXEC_CONTEX **exec_ctx)
 {
 	int 	querytype;	/* Query type. */
 	int	s_idx;		/* The char index of command string. */
@@ -2467,12 +2512,12 @@ mt_cli_open_execute(CONN *connection, char *cmd, MT_CLI_EXEC_CONTEX **exec_ctx)
 	{
 	    case TABCREAT:
 	    	tss->topid |= TSS_OP_CRTTAB;
-		rtn_stat = par_crtins_tab((cmd + s_idx), TABCREAT);
+		rtn_stat = par_crtins_tab((cmd + s_idx), cmd_len - s_idx, TABCREAT);
 		break;
 		
 	    case INSERT:
 	    	tss->topid |= TSS_OP_INSTAB;
-		rtn_stat = par_crtins_tab((cmd + s_idx), INSERT);
+		rtn_stat = par_crtins_tab((cmd + s_idx), cmd_len - s_idx, INSERT);
 	        break;
 
 	    case SELECT:		
@@ -2544,7 +2589,7 @@ mt_cli_open_execute(CONN *connection, char *cmd, MT_CLI_EXEC_CONTEX **exec_ctx)
 	    case INSERT:
 	    case DELETE:
 	    case SELECT:
-		rtn_stat = mt_cli_exec_crtseldel(connection, cmd, exec_ctx);
+		rtn_stat = mt_cli_exec_crtseldel(connection, cmd, cmd_len, exec_ctx);
 		break;
 
 	    case DROPINDEX:
@@ -2689,6 +2734,8 @@ mt_mapred_get_splits(CONN *connection, MT_SPLIT ** splits, int * split_count, ch
 	PUT_TO_BUFFER(send_buf, send_buf_size, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
 	PUT_TO_BUFFER(send_buf, send_buf_size, RPC_MAPRED_GET_SPLITS, RPC_MAGIC_MAX_LEN);
 	PUT_TO_BUFFER(send_buf, send_buf_size, table_name, strlen(table_name)+1);
+
+	Assert(send_buf_size < LINE_BUF_SIZE);
 	
 	/* Send the requirment to the meta server. */
 	tcp_put_data(connection->connection_fd, send_buf, send_buf_size);
@@ -2763,6 +2810,9 @@ int mt_mapred_get_reader_meta(MT_READER * reader)
 		return rtn_stat;
 	
 	}
+
+	Assert(send_buf_size < LINE_BUF_SIZE);
+	
 	tcp_put_data(fd, send_buf, send_buf_size);
 		
 	/* Get the splits info from the meta server. */
@@ -2834,6 +2884,8 @@ int mt_mapred_create_reader(MT_READER ** mtreader, MT_SPLIT * split)
 	PUT_TO_BUFFER(send_rg_buf, send_buf_size, reader->table_name, strlen(reader->table_name)+1);
 	PUT_TO_BUFFER(send_rg_buf, send_buf_size, reader->tablet_name, strlen(reader->tablet_name)+1);	
 
+	Assert(send_buf_size < LINE_BUF_SIZE);
+	
 	/* Send the requirment to the range server. */
 	tcp_put_data(rg_connection->connection_fd, send_rg_buf, send_buf_size);
 

@@ -4071,7 +4071,8 @@ rg_handler(char *req_buf, int fd)
 	*/
 	if (req_op & RPC_REQ_DROPTAB_OP)
 	{
-		if (!parser_open(req_buf + RPC_MAGIC_MAX_LEN))
+		if (!parser_open(req_buf + RPC_MAGIC_MAX_LEN + sizeof(int), 
+				*(int *)(req_buf + RPC_MAGIC_MAX_LEN)))
 		{
 			parser_close();
 			tss->tstat |= TSS_PARSER_ERR;
@@ -4089,7 +4090,8 @@ rg_handler(char *req_buf, int fd)
 	}
 	else if (req_op & RPC_REQ_DROPIDX_OP)
 	{
-		if (!parser_open(req_buf + RPC_MAGIC_MAX_LEN))
+		if (!parser_open(req_buf + RPC_MAGIC_MAX_LEN + sizeof(int), 
+				*(int *)(req_buf + RPC_MAGIC_MAX_LEN)))
 		{
 			parser_close();
 			tss->tstat |= TSS_PARSER_ERR;
@@ -4115,7 +4117,7 @@ rg_handler(char *req_buf, int fd)
 		req_buf += sizeof(SELWHERE) + sizeof(TABLEHDR) + 
 				tab_hdr->tab_col * sizeof(COLINFO);
 		
-		if (!parser_open(req_buf))
+		if (!parser_open(req_buf + sizeof(int), *(int *)(req_buf)))
 		{
 			parser_close();
 			tss->tstat |= TSS_PARSER_ERR;
@@ -4200,7 +4202,7 @@ rg_handler(char *req_buf, int fd)
 		req_buf += sizeof(IDXMETA) + sizeof(TABLEHDR) + 
 				tab_hdr->tab_col * sizeof(COLINFO);
 		
-		if (!parser_open(req_buf))
+		if (!parser_open(req_buf + sizeof(int), *(int *)(req_buf)))
 		{
 			parser_close();
 			tss->tstat |= TSS_PARSER_ERR;
@@ -4252,7 +4254,7 @@ rg_handler(char *req_buf, int fd)
 				ins_meta->col_num * sizeof(COLINFO);
 	}
 
-	if (!parser_open(req_buf))
+	if (!parser_open(req_buf + sizeof(int), *(int *)(req_buf)))
 	{
 		parser_close();
 		tss->tstat |= TSS_PARSER_ERR;

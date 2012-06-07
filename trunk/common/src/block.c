@@ -1463,7 +1463,7 @@ blk_split(BLOCK *blk, TABINFO *tabinfo, int rlen, int inspos)
 
 	thisofftab = ROW_OFFSET_PTR(blk);
 
-	offset = thisofftab[-i];
+	offset = (i == blk->bnextrno) ? blk->bfreeoff : thisofftab[-i];
 	mvsize = blk->bfreeoff - offset;
 
 	MEMCPY(nextblk->bdata, (char *)blk + offset, mvsize);

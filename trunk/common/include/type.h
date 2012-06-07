@@ -81,6 +81,8 @@ extern	DTYPE	DTypeInfo[18];
 
 #define TYPE_GET_TYPE_NAME(type)        (DTypeInfo[type].type_name)
 
+#define	TYPE_IS_BLOB(type)		((TYPE_GET_TYPE_NUM(type) == TEXT) || (TYPE_GET_TYPE_NUM(type) == IMAGE))
+
 
 int
 type_get_index_by_name(char *type);

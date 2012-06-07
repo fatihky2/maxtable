@@ -1171,21 +1171,29 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 				** TODO: tabletschm_rp may be CHANGED before we 
 				** use it here, because we just use the buffer but we 
 				** don't reserve it or lock it. 
+				** RESOLVED: The meta server just has single 
+				** working thread, so we can make sure the
+				** buffer is valid here.
 				*/
 				tablet_schm_upd_col(tabletschm_newrp, tabletschm_rp,
 							TABLETSCHM_KEY_COLID_INROW, 
 						    	keycol, keycolen);
-#if 0
-				char	*key,
+
+				/* 
+				** The key of tabletshema row to be deleted
+				** should be from the row in tabletschema file,
+				** but not the input row.
+				*/
+				char	*key;
 				int	keylen;
 				
 				key = row_locate_col(tabletschm_rp, -1, 
 						ROW_MINLEN_IN_TABLETSCHM, &keylen);
-#endif				
+				
 				
 				tablet_schm_del_row(tab_hdr->tab_id, TABLETSCHM_ID,
 							tab_tabletschm_dir,
-							keycol, keycolen);
+							key, keylen);
 
 				tablet_schm_ins_row(tab_hdr->tab_id, TABLETSCHM_ID, 
 							tab_tabletschm_dir, 
@@ -2446,7 +2454,7 @@ meta_selwheretab(TREE *command, TABINFO *tabinfo)
 
 	
 
-		if (cons == NULL)
+		if ((cons == NULL) ||(cons->constat & CONSTANT_LIKE_OP))
 		{
 			range_leftkey = "*\0";
 			range_rightkey = "*\0";
@@ -4281,7 +4289,7 @@ meta_handler(char *req_buf, int fd)
 	}
 	
 parse_again:
-	if (!parser_open(tmp_req_buf))
+	if (!parser_open(tmp_req_buf + sizeof(int), *(int *)tmp_req_buf))
 	{
 		parser_close();
 		tss->tstat |= TSS_PARSER_ERR;
