@@ -23,7 +23,7 @@
 
 #ifndef	BLOCKSIZE
 #define	BLOCKSIZE		(1024 * 1024)
-//#define	BLOCKSIZE		512
+//#define	BLOCKSIZE		(2 * 1024)
 #endif
 
 /* The context of range query. */

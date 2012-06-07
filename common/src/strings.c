@@ -36,8 +36,9 @@ str1nstr (char *buf, char *sub, int len)
 	{
 		return i;
 	}
+
 	
-	while (*buf && (i < len))
+	while (i < len)
 	{
 		bp = buf;
 		sp = sub;
@@ -73,8 +74,9 @@ str01str (char *buf, char *sub, int len)
 	{
 		return (i - 1);
 	}
+
 	
-	while (*buf &&  (i < len))
+	while (i < len)
 	{
 		bp = buf;
 		sp = sub;

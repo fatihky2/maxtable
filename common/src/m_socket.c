@@ -192,6 +192,10 @@ retry:
 	return got;
 }
 
+/*
+** sendbp will only be headered by the cmd length while the data needs to be in the
+** parser_open().
+*/
 int
 tcp_put_data(int socket, char *sendbp, int count)
 {

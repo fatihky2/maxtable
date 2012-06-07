@@ -181,7 +181,7 @@ cli_deamon()
 			continue;
 		}
 		
-		if (!parser_open(cli_str))
+		if (!parser_open(cli_str, send_buf_size))
 		{
 			parser_close();
 			printf("PARSER ERR: Please input the command again by the 'help' signed.\n");
@@ -214,12 +214,16 @@ conn_again:
 		}
 		   
 		sockfd = conn_open(ip, port);
-
+		
 		MEMSET(send_buf, LINE_BUF_SIZE);
-		MEMCPY(send_buf, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
-		/* Set the information header with the MAGIC. */
-		MEMCPY((send_buf + RPC_MAGIC_MAX_LEN), cli_str, send_buf_size);
 
+		int	sendbp_idx = 0;
+		
+		PUT_TO_BUFFER(send_buf, sendbp_idx, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
+		PUT_TO_BUFFER(send_buf, sendbp_idx, &send_buf_size, sizeof(int));
+		/* Set the information header with the MAGIC. */
+		PUT_TO_BUFFER(send_buf, sendbp_idx, cli_str, send_buf_size);
+		
 		//if ((Cli_infor->cli_status == CLI_CONN_REGION) && (meta_only == FALSE) && send_rg_bp)
 		if (send_rg_bp)
 		{
@@ -227,7 +231,9 @@ conn_again:
 			send_rg_bp = NULL;
 		}
 
-		tcp_put_data(sockfd, send_buf, (send_buf_size + RPC_MAGIC_MAX_LEN));
+		Assert(sendbp_idx < LINE_BUF_SIZE);
+		
+		tcp_put_data(sockfd, send_buf, sendbp_idx);
 
 		resp = conn_recv_resp(sockfd);
 
@@ -427,6 +433,8 @@ conn_again:
 				send_rg_bp = MEMALLOCHEAP(send_buf_size);				    
 
 				send_rg_bp_idx = 0;
+
+				/* The cmd length should be re-assigned. */
 				PUT_TO_BUFFER(send_rg_bp, send_rg_bp_idx, 
 					  RPC_DROP_TABLE_MAGIC, RPC_MAGIC_MAX_LEN);
 
@@ -577,7 +585,7 @@ cli_test_main(char *cmd)
 		return TRUE;
 	}
 	
-	if (!parser_open(cli_str))
+	if (!parser_open(cli_str, send_buf_size))
 	{
 		parser_close();
 		printf("PARSER ERR: Please input the command again by the 'help' signed.\n");
@@ -607,10 +615,14 @@ conn_again:
 	sockfd = conn_open(ip, port);
 
 	MEMSET(send_buf, LINE_BUF_SIZE);
-	MEMCPY(send_buf, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
-	/* Set the information header with the MAGIC. */
-	MEMCPY((send_buf + RPC_MAGIC_MAX_LEN), cli_str, send_buf_size);
 
+	int	sendbp_idx = 0;
+		
+	PUT_TO_BUFFER(send_buf, sendbp_idx, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
+	PUT_TO_BUFFER(send_buf, sendbp_idx, &send_buf_size, sizeof(int));
+	/* Set the information header with the MAGIC. */
+	PUT_TO_BUFFER(send_buf, sendbp_idx, cli_str, send_buf_size);
+		
 	//if ((Cli_infor->cli_status == CLI_CONN_REGION) && (meta_only == FALSE) && send_rg_bp)
 	if (send_rg_bp)
 	{
@@ -618,7 +630,9 @@ conn_again:
 		send_rg_bp = NULL;
 	}
 
-	tcp_put_data(sockfd, send_buf, (send_buf_size + RPC_MAGIC_MAX_LEN));
+	Assert(sendbp_idx < LINE_BUF_SIZE);
+	
+	tcp_put_data(sockfd, send_buf, sendbp_idx);
 
 	resp = conn_recv_resp(sockfd);
 

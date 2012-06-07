@@ -185,7 +185,7 @@ mt_cli_close_connection(CONN * connection);
 ** 
 */
 extern int 
-mt_cli_open_execute(CONN *connection, char *cmd, MT_CLI_EXEC_CONTEX **exec_ctx);
+mt_cli_open_execute(CONN *connection, char *cmd, int cmd_len, MT_CLI_EXEC_CONTEX **exec_ctx);
 
 
 /*
@@ -244,6 +244,9 @@ mt_cli_get_colvalue(MT_CLI_EXEC_CONTEX *exec_ctx, char *rowbuf, int col_idx, int
 
 extern int
 mt_cli_exec_builtin(MT_CLI_EXEC_CONTEX *exec_ctx);
+
+extern int
+mt_cli_php_test(int a, int b);
 
 /*
 ** Send the result of create index to the meta server and receive its response.

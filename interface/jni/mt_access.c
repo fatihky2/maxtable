@@ -53,7 +53,7 @@ JNIEXPORT jlong JNICALL Java_org_maxtable_client_MtAccess_openExecute
 
 	char *cmd = (char *)(*jenv)->GetStringUTFChars(jenv, jcmd, 0);
 	
-	mt_cli_open_execute(connection, cmd, exec_ctx);
+	mt_cli_open_execute(connection, cmd, strlen(cmd),exec_ctx);
 
 	(*jenv)->ReleaseStringUTFChars(jenv, jcmd, cmd);
 	return (jlong)(exec_ctx);
