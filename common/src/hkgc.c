@@ -46,6 +46,8 @@ hkgc_wash_sstab(int force)
 	LOGREC		logrec;
 
 
+	// ca_chk_cache();
+	
 	if (!force)
 	{
 		P_SPINLOCK(BUF_SPIN);	
@@ -56,7 +58,7 @@ hkgc_wash_sstab(int force)
 	hk_info = (HKGC_INFO *)(Kernel->hk_info);
 
 	washlink = Kernel->ke_bufwash->bdnew;
-	
+
 	for (i = 0; i < HK_BATCHSIZE; i++)
 	{
 		sstab = washlink;
@@ -82,7 +84,7 @@ hkgc_wash_sstab(int force)
 		{
 			Assert(sstab->bkeep);
 
-			traceprint("Buf(0x%x) still has been kept.\n", (char *)sstab);
+			traceprint("HK Flush(%d) - HK index: %d - Buf(0x%x) still has been kept.\n", force, i, (char *)sstab);
 
 			i--;
 

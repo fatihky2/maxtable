@@ -364,7 +364,11 @@ conn_again:
 			}
 			else
 			{
-				traceprint("Result : %s\n",resp->result);
+				if (DEBUG_TEST(tss))
+				{
+					traceprint("Result : %s\n",resp->result);
+				}
+				
 				meta_only = TRUE;
 			}
 			break;
@@ -400,7 +404,10 @@ conn_again:
 			}
 			else
 			{
-				traceprint("Result : %s\n",resp->result);
+				if (DEBUG_TEST(tss))
+				{
+					traceprint("Result : %s\n",resp->result);
+				}
 				meta_only = TRUE;
 			}
 			break;
@@ -761,7 +768,11 @@ conn_again:
 		}
 		else
 		{
-			traceprint("Result : %s\n",resp->result);
+			if (DEBUG_TEST(tss))
+			{
+				traceprint("Result : %s\n",resp->result);
+			}
+			
 			meta_only = TRUE;
 		}
 		break;
@@ -797,7 +808,11 @@ conn_again:
 		}
 		else
 		{
-			traceprint("Result : %s\n",resp->result);
+			if (DEBUG_TEST(tss))
+			{
+				traceprint("Result : %s\n",resp->result);
+			}
+			
 			meta_only = TRUE;
 		}
 		break;

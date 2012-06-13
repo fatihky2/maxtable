@@ -74,7 +74,7 @@ void * msg_recv(void *args)
 {
     	msg_recv_args * input = (msg_recv_args *)args;
 	int i, n;
-	int listenfd, nfds, connfd, sockfd;
+	int listenfd, nfds, connfd, sockfd, totfds;
 	socklen_t clilen;
 	char cliip[24];
 	char buf[MSG_SIZE];
@@ -109,25 +109,29 @@ void * msg_recv(void *args)
 
 
 	epfd = epoll_create(EPOLL_SIZE);
-	if (epfd == -1) {
+	if (epfd == -1) 
+	{
 		perror("epoll_create");
 	}
 
 	struct epoll_event ev0;
 	ev0.data.fd = listenfd;
 	ev0.events=  EPOLLIN;
-	if(epoll_ctl(epfd, EPOLL_CTL_ADD, listenfd, &ev0) == -1){
+	if(epoll_ctl(epfd, EPOLL_CTL_ADD, listenfd, &ev0) == -1)
+	{
 		perror("epoll_ctl");
 	}
 
+	totfds = 1;
+	
 	while(TRUE)
 	{
 		//printf("waiting...\n");
 
-		nfds = epoll_wait(epfd, events, 20, -1);
-		if(nfds == -1)
+		nfds = epoll_wait(epfd, events, totfds, -1);
+		if(nfds <= 0)
 		{
-			;
+			continue;
 			//perror("epoll_wait");
 		}
 
@@ -138,11 +142,22 @@ void * msg_recv(void *args)
 			if(events[i].data.fd == listenfd)
 			{
 				clilen = sizeof(cliaddr);
-				if((connfd = accept(listenfd, (struct sockaddr *)&cliaddr, &clilen))==-1)
+
+				connfd = accept(listenfd, (struct sockaddr *)&cliaddr, &clilen);
+				
+				if(connfd < 0)
 				{
 					perror("error in accept new connection");
 					continue;
 				}
+
+				if (totfds >= EPOLL_SIZE)
+				{
+					close(connfd);
+
+					continue;
+				}
+			
 				if(set_nonblock(connfd)==-1)
 				{
 					perror("error in set_nonblock");
@@ -155,13 +170,18 @@ void * msg_recv(void *args)
 				ev.data.fd = connfd;
 				ev.events = EPOLLIN;
 				epoll_ctl(epfd, EPOLL_CTL_ADD, connfd, &ev);
+
+				totfds++;
 			}
 
 			else if(events[i].events & EPOLLIN)
 			{
 				if((sockfd = events[i].data.fd)<0)	
-				  continue;
-				MEMSET(buf, MSG_SIZE);
+				{
+					continue;
+				}
+				
+//				MEMSET(buf, MSG_SIZE);
 
 
 				n = tcp_get_data(sockfd, buf, MSG_SIZE);
@@ -169,15 +189,19 @@ void * msg_recv(void *args)
 				if (n < 0)
 				{	
 					tcp_get_err_output(n);
-		
+
 					switch (n)
 					{
 					   case MT_READDISCONNECT:
+					   	totfds--;
 					    	close(sockfd);
+
 						break;
 						
 					    case MT_READQUIT:
+					    	totfds--;
 					    	close(sockfd);
+
 						break;
 						
 					    default:
@@ -285,7 +309,9 @@ void * msg_recv(void *args)
 
 finish:
 				if(msg_list_len > MAX_MSG_LIST)
+				{
 					fprintf(stderr, "big error, msg list length exceeds the max len!\n");
+				}
 			}
 
 			else if(events[i].events & EPOLLOUT)
@@ -297,7 +323,7 @@ finish:
 				sockfd = resp_msg->fd;
 				//msg_write(sockfd, resp_msg->data, resp_msg->n_size);
 				tcp_put_data(sockfd, resp_msg->data, resp_msg->n_size);
-				printf("write %d->[%s] -- socketfd = %d \n", resp_msg->n_size, resp_msg->data, sockfd);
+				// printf("write %d->[%s] -- socketfd = %d \n", resp_msg->n_size, resp_msg->data, sockfd);
 
 				if(resp_msg->block_buffer)
 				{

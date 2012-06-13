@@ -553,9 +553,12 @@ index__del_row(TABINFO *tabinfo, char *delrow)
 
 	}
 
-	traceprint("Index Delete: deleted row - %s   in-block row - %s. tot_ridnum = %d \n", 
+	if (DEBUG_TEST(tss))
+	{
+		traceprint("Index Delete: deleted row - %s   in-block row - %s. tot_ridnum = %d \n", 
 			(delrow + 20), (rp + 20), tot_ridnum);
-
+	}
+	
 	ROW_SET_STATUS(rp, ROW_DELETED);	
 
 	offtab = ROW_OFFSET_PTR(bp->bblk);
@@ -768,7 +771,10 @@ index_upd_rid(IDXBLD *idxbld, RID *oldrid, RID *newrid)
 						INDEXBLK_RIDNUM_COLOFF_INROW,
 						ROW_MINLEN_IN_INDEXBLK, &ign);
 
-			traceprint("RID count is %d -- state 1.\n",ridnum);
+			if (DEBUG_TEST(tss))
+			{
+				traceprint("RID count is %d -- state 1.\n",ridnum);
+			}
 			
 			result = LE;
 			
@@ -1378,6 +1384,7 @@ static int
 index__get_count_or_sum(SSTAB_SCANCTX *scanctx, char *tabname, int tab_name_len,
 				int tabid)
 {
+	LOCALTSS(tss);
 	int		ridnum;
 	int		colen;
 	RID		*ridarry;
@@ -1420,9 +1427,12 @@ index__get_count_or_sum(SSTAB_SCANCTX *scanctx, char *tabname, int tab_name_len,
 		ridnum = *(int *)row_locate_col(indexrp, 
 						INDEXBLK_RIDNUM_COLOFF_INROW,
 						ROW_MINLEN_IN_INDEXBLK, &colen);
-		
-		traceprint("RID count is %d.\n -- state 2",ridnum);
 
+		if (DEBUG_TEST(tss))
+		{
+			traceprint("RID count is %d.\n -- state 2",ridnum);
+		}
+		
 		ridarry = (RID *)row_locate_col(indexrp, 
 					IDXBLK_RIDARRAY_FAKE_COLOFF_INROW,
 					ROW_MINLEN_IN_INDEXBLK, &colen);
@@ -1514,6 +1524,7 @@ static int
 index__range_delete_update(SSTAB_SCANCTX *scanctx, char *tabname, int tab_name_len,
 			int tabid, int tabletid,COLINFO *colinfo, int totcol)
 {
+	LOCALTSS(tss);
 	int		ridnum;
 	int		colen;
 	RID		*ridarry;
@@ -1566,9 +1577,12 @@ index__range_delete_update(SSTAB_SCANCTX *scanctx, char *tabname, int tab_name_l
 		ridnum = *(int *)row_locate_col(indexrp, 
 						INDEXBLK_RIDNUM_COLOFF_INROW,
 						ROW_MINLEN_IN_INDEXBLK, &colen);
-		
-		traceprint("RID count is %d.\n -- state 2",ridnum);
 
+		if (DEBUG_TEST(tss))
+		{
+			traceprint("RID count is %d.\n -- state 2",ridnum);
+		}
+		
 		ridarry = (RID *)row_locate_col(indexrp, 
 					IDXBLK_RIDARRAY_FAKE_COLOFF_INROW,
 					ROW_MINLEN_IN_INDEXBLK, &colen);
@@ -1860,6 +1874,7 @@ static int
 index__range_delupd_sstab_scan(TABLET_SCANCTX *tablet_scanctx, IDXMETA *idxmeta, 
 			IDX_RANGE_CTX *idx_range_ctx, char *tabdir)
 {
+	LOCALTSS(tss);
 	BUF		*bp;
 	int		rnum;
 	char		last_sstab[SSTABLE_NAME_MAX_LEN];
@@ -2089,9 +2104,12 @@ nextblk:
 			MEMSET(last_sstab, SSTABLE_NAME_MAX_LEN);
 			MEMCPY(last_sstab, tabinfo->t_sstab_name, 
 					STRLEN(tabinfo->t_sstab_name));
-			
-			traceprint("index__range_delupd_sstab_scan()----tabinfo->t_sstab_name: %s, tabinfo->t_sstab_id: %d \n",tabinfo->t_sstab_name, tabinfo->t_sstab_id);
 
+			if (DEBUG_TEST(tss))
+			{
+				traceprint("index__range_delupd_sstab_scan()----tabinfo->t_sstab_name: %s, tabinfo->t_sstab_id: %d \n",tabinfo->t_sstab_name, tabinfo->t_sstab_id);
+			}
+			
 			MEMSET(tabinfo->t_sstab_name, SSTABLE_NAME_MAX_LEN);			
 			
 			sstab_namebyid(last_sstab, tabinfo->t_sstab_name, 
@@ -2099,8 +2117,11 @@ nextblk:
 
 			tabinfo->t_sstab_id = bp->bsstab->bblk->bnextsstabnum;
 
-			traceprint("index__range_delupd_sstab_scan()----tabinfo->t_sstab_name: %s, tabinfo->t_sstab_id: %d \n",tabinfo->t_sstab_name, tabinfo->t_sstab_id);
-
+			if (DEBUG_TEST(tss))
+			{
+				traceprint("index__range_delupd_sstab_scan()----tabinfo->t_sstab_name: %s, tabinfo->t_sstab_id: %d \n",tabinfo->t_sstab_name, tabinfo->t_sstab_id);
+			}
+			
 			bufunkeep(bp->bsstab);
 
 			bp = blk_getsstable(tabinfo);
@@ -2387,6 +2408,7 @@ void
 index_range_sstab_scan(TABLET_SCANCTX * tablet_scanctx,IDXMETA * idxmeta,
 				char *tabname, int tabnamelen, int tabletid)
 {
+	LOCALTSS(tss);
 	IDX_RANGE_CTX	*idx_range_ctx;
 	IDX_RANGE_CTX	t_idx_range_ctx;
 
@@ -2413,7 +2435,10 @@ index_range_sstab_scan(TABLET_SCANCTX * tablet_scanctx,IDXMETA * idxmeta,
 	
 	root_srchctx->coltype = idx_range_ctx->coltype;
 
-	traceprint("Using Index.\n");
+	if (DEBUG_TEST(tss))
+	{
+		traceprint("Using Index.\n");
+	}
 	
 	int k;
 	
@@ -2486,6 +2511,7 @@ int
 index_bld_row(char *index_rp, int index_rlen, RID *rid, char *keycol, 
 					int keycolen, int keycol_type)
 {
+	LOCALTSS(tss);
 	int	index_ridx;
 	int	ridnum = 1;
 
@@ -2506,8 +2532,11 @@ index_bld_row(char *index_rp, int index_rlen, RID *rid, char *keycol,
 	
 	PUT_TO_BUFFER(index_rp, index_ridx, keycol, keycolen);
 
-	traceprint("index row key is %s.\n", keycol);
-
+	if (DEBUG_TEST(tss))
+	{
+		traceprint("index row key is %s.\n", keycol);
+	}
+	
 	Assert(keycol != NULL);
 
 	PUT_TO_BUFFER(index_rp, index_ridx, rid, sizeof(RID));
@@ -2814,6 +2843,7 @@ index_bld_leaf_name(char *tab_meta_dir, char *index_sstab_name, char *tab_name,
 int
 index_get_datarow(SSTAB_SCANCTX *scanctx, char *tabname, int tab_name_len, int tabid)
 {
+	LOCALTSS(tss);
 	int		ridnum;
 	int		colen;
 	RID		*ridarry;
@@ -2854,9 +2884,12 @@ index_get_datarow(SSTAB_SCANCTX *scanctx, char *tabname, int tab_name_len, int t
 		ridnum = *(int *)row_locate_col(indexrp, 
 						INDEXBLK_RIDNUM_COLOFF_INROW,
 						ROW_MINLEN_IN_INDEXBLK, &colen);
-		
-		traceprint("RID count is %d.\n -- state 2",ridnum);
 
+		if (DEBUG_TEST(tss))
+		{
+			traceprint("RID count is %d.\n -- state 2",ridnum);
+		}
+		
 		ridarry = (RID *)row_locate_col(indexrp, 
 					IDXBLK_RIDARRAY_FAKE_COLOFF_INROW,
 					ROW_MINLEN_IN_INDEXBLK, &colen);
@@ -3485,7 +3518,7 @@ index_root_sstabmov(IDXBLD *idxbld, BLOCK *srcblk, int indexid,
 			char *src_root_dir, char *dest_rootname,
 			int dest_rootid,int sstabid)
 {
-	
+	LOCALTSS(tss);
 	char		*rp;
 	int		rlen;
 	int		i,j,k,rnum;
@@ -3537,7 +3570,10 @@ index_root_sstabmov(IDXBLD *idxbld, BLOCK *srcblk, int indexid,
 			MEMSET(idxsstab_name, TABLE_NAME_MAX_LEN);
 			sprintf(idxsstab_name, "%s/%s", src_root_dir, pidxsstab_name);
 
-			traceprint("idxsstab_name - %s is be scanning.\n", idxsstab_name);
+			if (DEBUG_TEST(tss))
+			{
+				traceprint("idxsstab_name - %s is be scanning.\n", idxsstab_name);
+			}
 			
 			
 			TABINFO_INIT(tabinfo, idxsstab_name, NULL, 0, 

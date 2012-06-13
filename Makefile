@@ -1,7 +1,7 @@
-CC		= gcc -g -Wall
-CPP		= g++ -g -Wall
-#CC		= gcc -Wall
-#CPP		= g++ -Wall
+#CC		= gcc -g -Wall
+#CPP		= g++ -g -Wall
+CC		= gcc -Wall
+CPP		= g++ -Wall
 AR		= ar cr
 CFLAGS		= -I./common/include/ -I./client/include -I./master/include -I./ranger/include -I./interface/include -I./service/include -lpthread -I/usr/lib/jvm/java-6-openjdk/include/ -D_GNU_SOURCE -D_XOPEN_SOURCE=500
 KFSFLAG		= -I${MT_DFS_INCLUDE_PATH} -L${MT_DFS_CLI_LIB_PATH} -lkfsClient -lboost_regex
@@ -57,14 +57,14 @@ master: ${COMMON_SRC} ${MASTER_SRC}
 	$(CC) $(CFLAGS) $(KFSFLAG) ${COMMON_SRC} ${MASTER_SRC} -L. kfsfacer.a -lstdc++ -D MEMMGR_TEST -D MAXTABLE_BENCH_TEST -D MT_KFS_BACKEND ${MT_KEY_VALUE} -o startMaster
 
 ranger: ${COMMON_SRC} ${REGION_SRC}
-	$(CC) $(CFLAGS) $(KFSFLAG) ${COMMON_SRC} ${REGION_SRC} -L. kfsfacer.a -lstdc++ -D MEMMGR_TEST -D MAXTABLE_BENCH_TEST -D MT_KFS_BACKEND -D MT_ASYNC_IO ${MT_KEY_VALUE} -o startRanger
+	$(CC) $(CFLAGS) $(KFSFLAG) ${COMMON_SRC} ${REGION_SRC} -L. kfsfacer.a -lstdc++ -D MEMMGR_TEST -D RANGER -D MAXTABLE_BENCH_TEST -D MT_KFS_BACKEND -D MT_ASYNC_IO ${MT_KEY_VALUE} -o startRanger
 
 client: ${COMMON_SRC} ${CLI_SRC}
 	$(CC) $(CFLAGS) $(KFSFLAG) ${COMMON_SRC} ${CLI_SRC} -L. kfsfacer.a -lstdc++ -D MEMMGR_TEST -D MAXTABLE_UNIT_TEST -D MT_KFS_BACKEND ${MT_KEY_VALUE} -o startClient
 	$(CC) $(CFLAGS) $(KFSFLAG) ${COMMON_SRC} ${CLI_SRC} -L. kfsfacer.a -lstdc++ -D MEMMGR_TEST -D MT_KFS_BACKEND ${MT_KEY_VALUE} -o imql        
   
 sample: ${COMMON_SRC} ${INTERFACE_SRC}
-	$(CC) $(CFLAGS) $(KFSFLAG) ${COMMON_SRC} ${INTERFACE_SRC} -L. kfsfacer.a -lstdc++ -D DEBUG -D MAXTABLE_SAMPLE_TEST -D MT_KFS_BACKEND ${MT_KEY_VALUE} -o sample
+	$(CC) $(CFLAGS) $(KFSFLAG) ${COMMON_SRC} ${INTERFACE_SRC} -L. kfsfacer.a -lstdc++ -D MAXTABLE_SAMPLE_TEST -D MT_KFS_BACKEND ${MT_KEY_VALUE} -o sample
 
 kfsmain:
 	$(CPP) -I./dfsfacer/include/ $(KFSFLAG) dfsfacer/src/kfsfacer.cc -D MEMMGR_KFS_TEST -o kfsmain
@@ -72,13 +72,13 @@ kfsmain:
 else ifeq (${MT_BACKEND}, LOCAL)
 
 master: ${COMMON_SRC} ${MASTER_SRC}
-	$(CC) $(CFLAGS) ${COMMON_SRC} ${MASTER_SRC} -D DEBUG -D MEMMGR_TEST -D MAXTABLE_BENCH_TEST ${MT_KEY_VALUE} -o startMaster
+	$(CC) $(CFLAGS) ${COMMON_SRC} ${MASTER_SRC} -D MEMMGR_TEST -D MAXTABLE_BENCH_TEST ${MT_KEY_VALUE} -o startMaster
 
 ranger: ${COMMON_SRC} ${REGION_SRC}
-	$(CC) $(CFLAGS) ${COMMON_SRC} ${REGION_SRC} -D DEBUG -D MEMMGR_TEST -D MAXTABLE_BENCH_TEST -D MT_ASYNC_IO ${MT_KEY_VALUE} -o startRanger
+	$(CC) $(CFLAGS) ${COMMON_SRC} ${REGION_SRC} -D MEMMGR_TEST -D MAXTABLE_BENCH_TEST -D RANGER -D MT_ASYNC_IO ${MT_KEY_VALUE} -o startRanger
 	
 client: ${COMMON_SRC} ${CLI_SRC}
-	$(CC) $(CFLAGS) ${COMMON_SRC} ${CLI_SRC} -D DEBUG -D MEMMGR_TEST -D MAXTABLE_UNIT_TEST -o startClient
+	$(CC) $(CFLAGS) ${COMMON_SRC} ${CLI_SRC} -D MEMMGR_TEST -D MAXTABLE_UNIT_TEST -o startClient
 	$(CC) $(CFLAGS) ${COMMON_SRC} ${CLI_SRC} -D MEMMGR_TEST -o imql
 	
 sample: ${COMMON_SRC} ${INTERFACE_SRC}
@@ -100,7 +100,7 @@ service_sample: service/src/sample.cpp libmtService.a
 	$(CPP) $(CFLAGS) service/src/sample.cpp libmtService.a -o service_sample
 
 client_lib: ${LIB_OBJS_C}
-	$(CC) -shared -fPIC -o libmtClient.so ${LIB_OBJS_C}
+	$(CC) -shared -fPIC -o libmtClient.so ${LIB_OBJS_C} -lpthread
 
 clients_lib: ${LIB_OBJS_C}
 	$(AR) libmtcli.a ${LIB_OBJS_C}
