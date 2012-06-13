@@ -144,6 +144,8 @@ ri_rgstat_deldata(char *statefile, char *new_sstab)
 	SSTAB_SPLIT_INFO	*split_info;	/* Ptr to one slot in the
 						** rg_state.
 						*/
+	int			split_info_len;
+	char			*next_split_info;
 
 
 	rtn_state = FALSE;
@@ -169,30 +171,26 @@ ri_rgstat_deldata(char *statefile, char *new_sstab)
 		/* Must be less than the valid storage zone. */
 		Assert((char *)split_info < ((char *)rgstate + 
 			rgstate->offset - SSTAB_SPLIT_INFO_HEADER));
+
+		split_info_len = split_info->sstab_keylen +
+					SSTAB_SPLIT_INFO_HEADER;
+
+		next_split_info = (char *)split_info + 
+						split_info_len;
+		
 		if (!strcmp(split_info->newsstabname, new_sstab))
 		{			
 			rtn_state = TRUE;
 
-			char	*next_split_info = (char *)split_info + 
-					(split_info->sstab_keylen +
-					SSTAB_SPLIT_INFO_HEADER);
-
-			/* Forward memory move. */
-			int forward_len = rgstate->offset - 
-					(next_split_info - (char *)rgstate);
-			
-			Assert(forward_len + 1);
-			
-			MEMCPY((char *)split_info, next_split_info, forward_len);
+			MEMCPY((char *)split_info, next_split_info, 
+							split_info_len);
 
 			/* Update the header of rgstate file. */
 			(rgstate->sstab_split_num)--;
-			rgstate->offset -= (split_info->sstab_keylen +
-					SSTAB_SPLIT_INFO_HEADER);
+			rgstate->offset -= split_info_len;
 		}
 
-		split_info = (SSTAB_SPLIT_INFO *)((char *)split_info + 
-			SSTAB_SPLIT_INFO_HEADER + split_info->sstab_keylen);
+		split_info = (SSTAB_SPLIT_INFO *)next_split_info;
 	}
 
 	if (!rtn_state)

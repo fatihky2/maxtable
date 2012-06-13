@@ -15,6 +15,7 @@ match(char* dest, char *src)
 struct timeval tpStart;
 struct timeval tpEnd;
 float timecost;
+char *s[50];
 
 /* Following definition is for the stat. */
 #define	SELECT_RANGE_OP		0x0001
@@ -23,7 +24,7 @@ float timecost;
 int main(int argc, char *argv[])
 {
 	CONN 	*connection;
-	char	resp[256], cmd[1024];
+	char	resp[256], cmd[4096];
 	int	rtn_stat;
 	int	i;
 	
@@ -41,6 +42,55 @@ int main(int argc, char *argv[])
 		return 0;
 	}
 
+	char    c[256]; 
+	char    d[256];
+	char    e[256];
+	char    f[256];
+	char    g[256];
+	char    h[256];
+
+	for (i = 0; i < 255; i++)
+	{
+		c[i] = 'c';
+	}
+
+	c[255] = '\0';
+
+	for (i = 0; i < 255; i++)
+	{
+		d[i] = 'd';
+	}
+
+	d[255] = '\0';
+
+	for (i = 0; i < 55; i++)
+	{
+		e[i] = 'e';
+	}
+
+	e[55] = '\0';
+
+	for (i = 0; i < 55; i++)
+	{
+		f[i] = 'f';
+	}
+
+	f[55] = '\0';
+
+	for (i = 0; i < 255; i++)
+	{
+		g[i] = 'g';
+	}
+
+	g[255] = '\0';
+
+	for (i = 0; i < 55; i++)
+	{
+		h[i] = 'h';
+	}
+
+	h[55] = '\0';
+
 	mt_cli_crt_context();
 
 	MT_CLI_EXEC_CONTEX *exec_ctx = NULL;
@@ -54,7 +104,7 @@ int main(int argc, char *argv[])
 			
 			/* Create Table */
 			memset(resp, 0, 256);
-			memset(cmd , 0, 1024);
+			memset(cmd , 0, 4096);
 
 			sprintf(cmd, "create table maxtab(id1 varchar, id2 varchar,id3 int, id4 varchar,id5 varchar,id6 varchar,id7 varchar,id8 varchar,id9 varchar)");
 			
@@ -73,38 +123,24 @@ int main(int argc, char *argv[])
 exitcrt:
 			if (exec_ctx)
 			{
-				mt_cli_close_execute(exec_ctx);			
+				mt_cli_close_execute(exec_ctx);
+
+				exec_ctx = NULL;
 			}
 		}
 
 		if (match(argv[1], "insert"))
 		{
+
+			memset(cmd , 0, 4096);
+
 			/* Insert 10000 data rows into table */
-			for(i = 30000; i < 100000; i++)
+			for(i = 1; i < 1000; i++)
 //			for(i = 1001; i < 1100; i++)
 //			for(i = 1101; i < 71100; i++)
 			{
-#if 0
-				char	*c = "cccccccccccccccccccccccccccccccccccccccccccccccccccccc";
-				char	*d = "dddddddddddddddddddddddddddddddddddddddddddddddddddddd";
-				char	*e = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
-
-				char 	*f = "ffffffffffffffffffffffffffffffffffffffffffffffffffffff";
-				char	*g = "gggggggggggggggggggggggggggggggggggggggggggggggggggggg";
-
-				char	*h = "hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh";
-#endif
-
-				char	*c = "cccccc";
-				char	*d = "dddddd";
-				char	*e = "eeeeee";
-				char 	*f = "ffffff";
-				char	*g = "gggggg";
-				char	*h = "hhhhhh";
-				
-				
 //				sprintf(cmd, "insert into maxtab(aaaa%d, bbbb20, %d, %s%d, %s%d, %s%d, %s%d, %s%d, %s%d)", i,i,c,i,d, i,e, i,f,i,g,i,h,i);
-				sprintf(cmd, "insert into maxtab(aaaa%d, bbbb%d, %d, %s%d, %s%d, %s%d, %s%d, %s%d, %s%d)", i,i,i,c,i,d, i,e, i,f,i,g,i,h,i);
+				sprintf(cmd, "insert into maxtab(%d, bbbb%d, 1, %s%d, %s%d, %s%d, %s%d, %s%d, %s%d)", i,i,c,i,d, i,e, i,f,i,g,i,h,i);
 //				sprintf(cmd, "insert into maxtab(aaaa1653, bbbb%d, %d, %s%d, %s%d, %s%d, %d, %d, %d)", i,i,c,i,d, i,e, i,i,i,i);
 			
 
@@ -116,12 +152,21 @@ exitcrt:
 
 	                                goto exitins;
 				}
-				
-				printf("Client 1: %s\n", cmd);
+
+				if ((i % 10000) == 0)
+				{
+					gettimeofday(&tpEnd, NULL);
+					timecost = 0.0f;
+					timecost = tpEnd.tv_sec - tpStart.tv_sec + (float)(tpEnd.tv_usec-tpStart.tv_usec)/1000000;
+					printf("insert %d data rows. time cost: %f\n", i, timecost);
+
+				}				
 exitins:
 				if (exec_ctx)
 				{
 					mt_cli_close_execute(exec_ctx);
+
+					exec_ctx = NULL;
 				}
 			}
 
@@ -180,6 +225,8 @@ exitinstxt:
 				if (exec_ctx)
 				{
 					mt_cli_close_execute(exec_ctx);
+
+					exec_ctx = NULL;
 				}
 			}
 
@@ -209,31 +256,42 @@ exitinstxt:
 				goto exitselwh;
 			}
 
+#if 0
 			printf("Client 1: %s\n", cmd);
-
+#endif
 			int	rlen;
 			char	*rp = NULL;
 			MT_CLI_EXEC_CONTEX	*t_exec_ctx;
 
 			t_exec_ctx = exec_ctx;
 
-			int	test = 0;
+			int	tot_row = 0;
 			
 			for (i = 0; i < exec_ctx->rg_cnt; i++, t_exec_ctx++)
 			{
-				test++;
-				
 				do{
 					rp = mt_cli_get_nextrow(t_exec_ctx, &rlen);
 					
 					if (rp)
 					{
+#if 0
 						int	collen = 0;				
 						char	*col;
 						
 						col = mt_cli_get_colvalue(t_exec_ctx, rp, 6, &collen);
 
 						printf ("col: %s\n", col);
+#endif
+						if (((++tot_row) % 10000) == 0)
+						{
+							gettimeofday(&tpEnd, NULL);
+							timecost = 0.0f;
+							timecost = tpEnd.tv_sec - tpStart.tv_sec + (float)(tpEnd.tv_usec-tpStart.tv_usec)/1000000;
+							printf("select where %d data rows, time cost: %f\n", tot_row, timecost);
+						}
+
+			
+
 					}			
 				} while(rp);
 
@@ -242,6 +300,8 @@ exitselwh:
 			if (exec_ctx)
 			{
 				mt_cli_close_execute(exec_ctx);
+
+				exec_ctx = NULL;
 			}
 		}
 
@@ -301,6 +361,8 @@ exitsellike:
 			if (exec_ctx)
 			{
 				mt_cli_close_execute(exec_ctx);
+
+				exec_ctx = NULL;
 			}
 		}
 
@@ -348,6 +410,8 @@ exitselcnt:
 			if (exec_ctx)
 			{
 				mt_cli_close_execute(exec_ctx);
+
+				exec_ctx = NULL;
 			}
 		}
 
@@ -388,6 +452,8 @@ exitselsum:
 			if (exec_ctx)
 			{
 				mt_cli_close_execute(exec_ctx);
+
+				exec_ctx = NULL;
 			}
 		}
 
@@ -424,6 +490,8 @@ exitdelwhere:
 			if (exec_ctx)
 			{
 				mt_cli_close_execute(exec_ctx);
+
+				exec_ctx = NULL;
 			}
 		}
 
@@ -461,6 +529,8 @@ exitupdate:
 			if (exec_ctx)
 			{
 				mt_cli_close_execute(exec_ctx);
+
+				exec_ctx = NULL;
 			}
 		}
 
@@ -501,6 +571,8 @@ exitcrtidx:
 			if (exec_ctx)
 			{
 				mt_cli_close_execute(exec_ctx);
+
+				exec_ctx = NULL;
 			}
 		}
 
@@ -524,6 +596,8 @@ exitdropindx:
 			if (exec_ctx)
 			{
 				mt_cli_close_execute(exec_ctx);
+
+				exec_ctx = NULL;
 			}
 		}
 		
@@ -534,7 +608,7 @@ exitdropindx:
 			{
 				memset(resp, 0, 256);
 				memset(cmd, 0, 256);
-				sprintf(cmd, "select maxtab (aaaa%d)", i);
+				sprintf(cmd, "select maxtab (%d)", i);
 
 				rtn_stat = mt_cli_open_execute(connection, cmd, strlen(cmd), &exec_ctx);
 
@@ -547,11 +621,18 @@ exitdropindx:
 				
 				//printf("Client 1: %s\n", cmd);
 
+				if ((i % 10000) == 0)
+				{
+					gettimeofday(&tpEnd, NULL);
+					timecost = 0.0f;
+					timecost = tpEnd.tv_sec - tpStart.tv_sec + (float)(tpEnd.tv_usec-tpStart.tv_usec)/1000000;
+					printf("select %d data rows. time cost: %f\n", i, timecost);
+				}
+#if 0
 				int	rlen;
 				char	*rp = mt_cli_get_nextrow(exec_ctx, &rlen);
 				printf("row length: %d\n", rlen);
 				printf("original rp: %s\n", rp);
-#if 1
 				if (rp)
 				{
 					int	collen = 0;
@@ -569,6 +650,8 @@ exitsel:
 				if (exec_ctx)
 				{
 					mt_cli_close_execute(exec_ctx);
+
+					exec_ctx = NULL;
 				}
 			
 			}
@@ -598,23 +681,25 @@ exitsel:
 
 			t_exec_ctx = exec_ctx;
 
-			int	test = 0;
+			int	tot_row = 0;
 			
 			for (i = 0; i < exec_ctx->rg_cnt; i++, t_exec_ctx++)
 			{
-				test++;
 				
 				do{
 					rp = mt_cli_get_nextrow(t_exec_ctx, &rlen);
 					
 					if (rp)
 					{
+						tot_row++;
+#if 0
 						int	collen = 0;				
 						char	*col;
 						
 						col = mt_cli_get_colvalue(t_exec_ctx, rp, 0, &collen);
 
 						printf ("col: %s\n", col);
+#endif
 					}			
 				} while(rp);
 
@@ -623,7 +708,10 @@ exitselrg:
 			if (exec_ctx)
 			{
 				mt_cli_close_execute(exec_ctx);
+
+				exec_ctx = NULL;
 			}
+			printf("total row : %d \n", tot_row);
 		}
 
 	
@@ -647,6 +735,8 @@ exitdel:
 				if (exec_ctx)
 				{
 					mt_cli_close_execute(exec_ctx);
+
+					exec_ctx = NULL;
 				}
 			
 			}
@@ -671,6 +761,8 @@ exitdrop:
 			if (exec_ctx)
 			{
 				mt_cli_close_execute(exec_ctx);
+
+				exec_ctx = NULL;
 			}
 			
 		}

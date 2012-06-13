@@ -4,7 +4,7 @@
 /* Must be greater than the block size. */
 #define MSG_SIZE (8 * 1024)
 
-#define EPOLL_SIZE 256
+#define EPOLL_SIZE 1024
 
 #define LISTENQ 20
 

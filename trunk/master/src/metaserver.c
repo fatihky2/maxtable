@@ -971,8 +971,11 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 		rg_port = *(int *)row_locate_col(tabletschm_rp, 
 						 TABLETSCHM_RGPORT_COLOFF_INROW,
 					 	 ROW_MINLEN_IN_TABLETSCHM, &ign);
-				
-		traceprint("select ranger server %s/%d for insert\n", rg_addr, rg_port);		
+
+		if (DEBUG_TEST(tss))
+		{
+			traceprint("select ranger server %s/%d for insert\n", rg_addr, rg_port);		
+		}
 		tss->tcur_rgprof = rebalan_get_rg_prof_by_addr(rg_addr, rg_port);
 
 		Assert(tss->tcur_rgprof);
