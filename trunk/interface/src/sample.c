@@ -49,19 +49,19 @@ int main(int argc, char *argv[])
 	char    g[256];
 	char    h[256];
 
-	for (i = 0; i < 255; i++)
+	for (i = 0; i < 55; i++)
 	{
 		c[i] = 'c';
 	}
 
-	c[255] = '\0';
+	c[55] = '\0';
 
-	for (i = 0; i < 255; i++)
+	for (i = 0; i < 55; i++)
 	{
 		d[i] = 'd';
 	}
 
-	d[255] = '\0';
+	d[55] = '\0';
 
 	for (i = 0; i < 55; i++)
 	{
@@ -77,12 +77,12 @@ int main(int argc, char *argv[])
 
 	f[55] = '\0';
 
-	for (i = 0; i < 255; i++)
+	for (i = 0; i < 55; i++)
 	{
 		g[i] = 'g';
 	}
 
-	g[255] = '\0';
+	g[55] = '\0';
 
 	for (i = 0; i < 55; i++)
 	{
@@ -135,7 +135,7 @@ exitcrt:
 			memset(cmd , 0, 4096);
 
 			/* Insert 10000 data rows into table */
-			for(i = 1; i < 1000; i++)
+			for(i = 1; i < 100000; i++)
 //			for(i = 1001; i < 1100; i++)
 //			for(i = 1101; i < 71100; i++)
 			{
@@ -274,7 +274,7 @@ exitinstxt:
 					
 					if (rp)
 					{
-#if 0
+#if 1 
 						int	collen = 0;				
 						char	*col;
 						
@@ -628,7 +628,7 @@ exitdropindx:
 					timecost = tpEnd.tv_sec - tpStart.tv_sec + (float)(tpEnd.tv_usec-tpStart.tv_usec)/1000000;
 					printf("select %d data rows. time cost: %f\n", i, timecost);
 				}
-#if 0
+#if 1 
 				int	rlen;
 				char	*rp = mt_cli_get_nextrow(exec_ctx, &rlen);
 				printf("row length: %d\n", rlen);

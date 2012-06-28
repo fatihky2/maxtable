@@ -66,14 +66,43 @@ blkget(TABINFO *tabinfo)
 	BLK_ROWINFO	blk_rinfo;
 
 
-	stat_chg = FALSE;
+	volatile struct
+	{
+		BUF	*bp;
+	} copy;
+
+	copy.bp = NULL;
 	
+	if(ex_handle(EX_BUFERR, yxue_handler))
+	{
+		bp = copy.bp;
+
+		if (bp)
+		{
+			bufunkeep(bp->bsstab);
+		}
+
+		ex_delete();
+
+		return NULL;
+	}
+	
+	stat_chg = FALSE;
+
 nextsstab:
 
 	bp = blk_getsstable(tabinfo);
 
 	Assert(bp);
+	
+	if (bp == NULL)
+	{
+		traceprint("Buffer is NULL!\n");
 
+		ex_raise(EX_BUFERR);
+	}
+
+	copy.bp = bp;
 
 	
 
@@ -83,6 +112,13 @@ nextsstab:
 
 	Assert(blkidx < BLK_CNT_IN_SSTABLE);
 
+	if (blkidx >= BLK_CNT_IN_SSTABLE)
+	{
+		traceprint("Block index is error!\n");
+
+		ex_raise(EX_BUFERR);
+	}
+	
 	tabinfo->t_sinfo->sistate &= ~SI_INDEX_BLK;
 
 	
@@ -116,7 +152,17 @@ nextsstab:
 						> tabinfo->t_insmeta->ts_low)
 			       || (tmpbp->bsstab->bblk->bsstab_split_ts_lo 
 						== tabinfo->t_insmeta->ts_low));
+			
+			if (!(   (tmpbp->bsstab->bblk->bsstab_split_ts_lo 
+					> tabinfo->t_insmeta->ts_low)
+			      || (tmpbp->bsstab->bblk->bsstab_split_ts_lo 
+					== tabinfo->t_insmeta->ts_low)))
+			{
+				traceprint("splitting timestamp on sstab hit error!\n");
 
+				ex_raise(EX_BUFERR);
+			}
+			
 			if (tss->topid & TSS_OP_INSTAB) 
 			{
 				tabinfo->t_stat |= TAB_INS_SPLITING_SSTAB;
@@ -158,7 +204,11 @@ nextsstab:
 				}
 				else
 				{
-					Assert(tmpbp->bblk->bnextrno == 0);				
+					Assert(tmpbp->bblk->bnextrno == 0);
+
+					traceprint("Row no in the block hit error!\n");
+
+					ex_raise(EX_BUFERR);
 				}
 			}
 
@@ -271,6 +321,13 @@ blksrch(TABINFO *tabinfo, BUF *bp)
 
 	Assert(blkidx != -1);
 
+	if (blkidx == -1)
+	{
+		traceprint("The block num hit error.\n");
+		
+		ex_raise(EX_BUFERR);
+	}
+
 	low = 0;
 	high = BLK_GET_NEXT_ROWNO(bp->bblk) - 1;
 	total = BLK_GET_NEXT_ROWNO(bp->bblk);
@@ -282,6 +339,13 @@ blksrch(TABINFO *tabinfo, BUF *bp)
 	SRCHINFO_INIT(srchinfo, 0, high, total, result);
 
 	Assert (!(blk->bstat & BLK_RENT_DATA));
+
+	if (blk->bstat & BLK_RENT_DATA)
+	{
+		traceprint("The block rented should not be searched.\n");
+		
+		ex_raise(EX_BUFERR);
+	}
 
 	
 	b_srch_block(tabinfo, bp, srchinfo);
@@ -454,12 +518,35 @@ blkins(TABINFO *tabinfo, char *rp)
 	int	hit_ridlist_scope;
 
 
+	volatile struct
+	{
+		BUF	*bp;
+	} copy;
+
+	copy.bp = NULL;
+	
+	if(ex_handle(EX_BUFERR, yxue_handler))
+	{
+		bp = copy.bp;
+
+		if (bp)
+		{
+			bufdestroy(bp->bsstab);
+		}
+
+		ex_delete();
+
+		return FALSE;
+	}
+
 	minlen = tabinfo->t_row_minlen;
 	blk_stat = 0;
 	
 	tabinfo->t_sinfo->sistate |= SI_INS_DATA;
 	
-	bp = blkget(tabinfo);	
+	bp = blkget(tabinfo);
+
+	copy.bp = bp;
 
 	
 	if (   (tabinfo->t_stat & TAB_RETRY_LOOKUP) 
@@ -467,6 +554,7 @@ blkins(TABINFO *tabinfo, char *rp)
 	    	&& !(tabinfo->t_sinfo->sistate & SI_NODATA)))
 	{
 		bufunkeep(bp->bsstab);
+		ex_delete();
 		return FALSE;
 	}
 
@@ -474,6 +562,15 @@ blkins(TABINFO *tabinfo, char *rp)
 
 	Assert(tabinfo->t_rowinfo->rblknum == bp->bblk->bblkno);
 	Assert(tabinfo->t_rowinfo->rsstabid == bp->bsstab->bsstabid);
+
+	if (   (tabinfo->t_rowinfo->rblknum != bp->bblk->bblkno)
+	    || (tabinfo->t_rowinfo->rsstabid != bp->bsstab->bsstabid))
+	{
+		traceprint("BLOCKINS: The searching result in block is not match with the one in memory.");
+
+		ex_raise(EX_BUFERR);
+	}
+	
 	rnum = tabinfo->t_rowinfo->rnum;
 
 	ign = 0;
@@ -496,7 +593,7 @@ blkins(TABINFO *tabinfo, char *rp)
 	if (blk_stat & BLK_INS_SPLITTING_SSTAB)
 	{
 		bufdestroy(bp);
-
+		ex_delete();
 		return FALSE;
 	}
 	
@@ -566,6 +663,12 @@ blkins(TABINFO *tabinfo, char *rp)
 			ROW_SET_STATUS(rp, ROW_OVERFLOW);
 
 			Assert(bp->bblk->bblkno > 0);
+			
+			if (bp->bblk->bblkno <= 0)
+			{
+				traceprint("Block num hit error!\n");
+				ex_raise(EX_BUFERR);
+			}
 
 
 			BUF	*tmpbp;
@@ -677,6 +780,8 @@ finish:
 		
 	tabinfo->t_sinfo->sistate &= ~SI_INS_DATA;
 
+	ex_delete();
+
 	return TRUE;
 }
 
@@ -694,6 +799,27 @@ blkdel(TABINFO *tabinfo)
 	int	del_stat;
 
 
+	volatile struct
+	{
+		BUF	*bp;
+	} copy;
+
+	copy.bp = NULL;
+	
+	if(ex_handle(EX_BUFERR, yxue_handler))
+	{
+		bp = copy.bp;
+
+		if (bp)
+		{
+			bufdestroy(bp->bsstab);
+		}
+
+		ex_delete();
+
+		return FALSE;
+	}
+	
 	minlen = tabinfo->t_row_minlen;
 	del_stat = TRUE;
 	
@@ -704,6 +830,7 @@ blkdel(TABINFO *tabinfo)
 	if (tabinfo->t_stat & TAB_RETRY_LOOKUP)
 	{
 		bufunkeep(bp->bsstab);
+		ex_delete();
 		return FALSE;
 	}
 
@@ -713,12 +840,22 @@ blkdel(TABINFO *tabinfo)
 
 	Assert(tabinfo->t_rowinfo->rblknum == bp->bblk->bblkno);
 	Assert(tabinfo->t_rowinfo->rsstabid == bp->bsstab->bsstabid);
+
+	if (   (tabinfo->t_rowinfo->rblknum != bp->bblk->bblkno)
+	    || (tabinfo->t_rowinfo->rsstabid != bp->bsstab->bsstabid))
+	{
+		traceprint("BLOCKDEL: The searching result in block is not match with the one in memory.");
+
+		ex_raise(EX_BUFERR);
+	}
+	
 	rnum = tabinfo->t_rowinfo->rnum;
 
 	if (tabinfo->t_sinfo->sistate & SI_NODATA)
 	{
 		traceprint("We can not find the row to be deleted.\n");	
 		bufunkeep(bp->bsstab);
+		ex_delete();
 		return FALSE;
 	}
 
@@ -766,6 +903,8 @@ blkdel(TABINFO *tabinfo)
 	bufunkeep(bp->bsstab);
 		
 	tabinfo->t_sinfo->sistate &= ~SI_DEL_DATA;
+
+	ex_delete();
 
 	return TRUE;
 }
@@ -865,31 +1004,44 @@ blkupdate(TABINFO *tabinfo, char *newrp)
 	int	oldrlen;
 	int	newrlen;
 	char	*oldrp;
+	int	rtn_stat;
+	
 
-
+	rtn_stat = TRUE;
 	minlen = tabinfo->t_row_minlen;
+	bp = NULL;
 	
 	tabinfo->t_sinfo->sistate |= SI_UPD_DATA;
 	
 	bp = blkget(tabinfo);
 
-	if (tabinfo->t_stat & TAB_RETRY_LOOKUP)
+	if (!bp || (tabinfo->t_stat & TAB_RETRY_LOOKUP))
 	{
-		bufunkeep(bp->bsstab);
-		return FALSE;
+		rtn_stat = FALSE;
+		goto cleanup;
 	}
 
 //	offset = blksrch(tabinfo, bp);
 
 	Assert(tabinfo->t_rowinfo->rblknum == bp->bblk->bblkno);
 	Assert(tabinfo->t_rowinfo->rsstabid == bp->bsstab->bsstabid);
+
+	if (   (tabinfo->t_rowinfo->rblknum != bp->bblk->bblkno)
+	    || (tabinfo->t_rowinfo->rsstabid != bp->bsstab->bsstabid))
+	{
+		traceprint("BLOCKUP: The searching result in block is not match with the one in memory.");
+
+		rtn_stat = FALSE;
+		goto cleanup;
+	}
+	
 	rnum = tabinfo->t_rowinfo->rnum;
 
 	if (tabinfo->t_sinfo->sistate & SI_NODATA)
 	{
 		traceprint("We can not find the row to be deleted.\n");	
-		bufunkeep(bp->bsstab);
-		return FALSE;
+		rtn_stat = FALSE;
+		goto cleanup;
 	}
 
 	
@@ -929,7 +1081,11 @@ blkupdate(TABINFO *tabinfo, char *newrp)
 			tabinfo->t_stat |= TAB_SRCH_DATA;
 		}
 		
-		blkdel(tabinfo);
+		if (!blkdel(tabinfo))
+		{
+			rtn_stat = FALSE;
+			goto cleanup;
+		}
 
 		if (tabinfo->t_stat & TAB_SCHM_UPDATE)
 		{
@@ -945,8 +1101,13 @@ blkupdate(TABINFO *tabinfo, char *newrp)
 
 		SRCH_INFO_INIT(tabinfo->t_sinfo, keycol, keycolen,
 				TABLET_KEY_COLID_INROW, VARCHAR, -1);
+
 		
-		blkins(tabinfo, newrp);
+		if (!blkins(tabinfo, newrp))
+		{
+			rtn_stat = FALSE;
+			goto cleanup;
+		}
 
 		if (tabinfo->t_stat & TAB_SCHM_UPDATE)
 		{
@@ -954,14 +1115,26 @@ blkupdate(TABINFO *tabinfo, char *newrp)
 		}
 	}
 
+cleanup:
+	if(bp != NULL)
+	{
+		if (rtn_stat)
+		{
+			bufunkeep(bp->bsstab);
+		}
+		else
+		{			
+			bufdestroy(bp->bsstab);
+		}
+	}
 	
-	bufunkeep(bp->bsstab);
-		
 	tabinfo->t_sinfo->sistate &= ~SI_UPD_DATA;
 
-	return TRUE;
+	return rtn_stat;
 }
 
+
+#if 0
 
 void
 blk_file_back_move(BLOCK *blk)
@@ -1009,6 +1182,7 @@ blk_file_back_move(BLOCK *blk)
 		offtab[-i] = offset;
 	}	
 }
+#endif
 
 
 int
@@ -1035,7 +1209,8 @@ blk_check_sstab_space(TABINFO *tabinfo, BUF *bp, char *rp, int rlen,
 	{
 		traceprint("The row looks expand the limit of max value.");
 		Assert(0);
-		return rtn_stat;
+
+		ex_raise(EX_BUFERR);
 	}
 
 	if ((blk->bfreeoff + rlen) 
@@ -1070,11 +1245,25 @@ blk_check_sstab_space(TABINFO *tabinfo, BUF *bp, char *rp, int rlen,
 			{			
 				Assert (blk->bnextrno == (ins_rnum + 1));
 
+				if (blk->bnextrno != (ins_rnum + 1))
+				{
+					traceprint("The num of row to be inserted should be equal to the nextrownum of block.\n");
+					
+					ex_raise(EX_BUFERR);
+				}
+
 				nextblk = (BLOCK *)((char *)blk + BLOCKSIZE);
 
 				tmprp = ROW_GETPTR_FROM_OFFTAB(nextblk, 0);
 
 				Assert(ROW_IS_OVERFLOW(tmprp));
+
+				if (!(ROW_IS_OVERFLOW(tmprp)))
+				{
+					traceprint("The row should be an overflow row.\n");
+
+					ex_raise(EX_BUFERR);
+				}
 
 				if ((nextblk->bfreeoff + (sizeof(RID))) 
 					< (BLOCKSIZE - BLK_TAILSIZE -
@@ -1109,6 +1298,13 @@ blk_check_sstab_space(TABINFO *tabinfo, BUF *bp, char *rp, int rlen,
 			Assert(blk->bnextrno > 0);
 
 			Assert (!(rtn_stat & BLK_ROW_NEXT_BLK));
+
+			if ((blk->bnextrno <= 0) || (rtn_stat & BLK_ROW_NEXT_BLK))
+			{
+				traceprint("The block should not be empty.\n");
+				
+				ex_raise(EX_BUFERR);
+			}
 		}
 	
 						
@@ -1126,6 +1322,12 @@ blk_check_sstab_space(TABINFO *tabinfo, BUF *bp, char *rp, int rlen,
 				if(tabinfo->t_stat & TAB_INS_SPLITING_SSTAB)
 				{
 					Assert(!(tabinfo->t_stat & TAB_DO_INDEX));
+
+					if (tabinfo->t_stat & TAB_DO_INDEX)
+					{
+						traceprint("It should not hit the split issue in the inde case.\n");
+						ex_raise(EX_BUFERR);
+					}
 					
 					traceprint("Hit the new split on the splitting sstable %s.\n", tabinfo->t_sstab_name);
 
@@ -1143,11 +1345,22 @@ blk_check_sstab_space(TABINFO *tabinfo, BUF *bp, char *rp, int rlen,
 					hkgc_wash_sstab(TRUE);
 				}
 
-				sstab_split(tabinfo, bp, rp, data_insert_needed);
+				if (!sstab_split(tabinfo, bp, rp, 
+						data_insert_needed))
+				{
+					traceprint("SSTABLE_SPLIT: hit fatal err.\n");
+					
+					ex_raise(EX_BUFERR);
+				}
 			}
 			else if (tss->topid & TSS_OP_METASERVER)
 			{
-				tablet_split(tabinfo, bp, rp);
+				if (!tablet_split(tabinfo, bp, rp))
+				{
+					traceprint("TABLET_SPLIT: hit fatal err.\n");
+						
+					ex_raise(EX_BUFERR);
+				}
 			}
 
 			continue;
@@ -1181,6 +1394,14 @@ blk_check_sstab_space(TABINFO *tabinfo, BUF *bp, char *rp, int rlen,
 			{
 				Assert(   (tss->topid & TSS_OP_INSTAB)
 				       || (tss->topid & TSS_OP_UPDATE));
+
+				if (!(   (tss->topid & TSS_OP_INSTAB)
+				      || (tss->topid & TSS_OP_UPDATE)))
+				{
+					traceprint("BLOCK_CHK_SPACE: The logging case can only be in the insert/update case.\n");
+					
+					ex_raise(EX_BUFERR);
+				}
 				
 				log_build(&logrec, LOG_BEGIN, 0, 0, 
 						tabinfo->t_sstab_name, 
@@ -1211,6 +1432,14 @@ blk_check_sstab_space(TABINFO *tabinfo, BUF *bp, char *rp, int rlen,
 			{
 				Assert(   (tss->topid & TSS_OP_INSTAB)
 				       || (tss->topid & TSS_OP_UPDATE));
+
+				if (!(   (tss->topid & TSS_OP_INSTAB)
+				      || (tss->topid & TSS_OP_UPDATE)))
+				{
+					traceprint("BLOCK_CHK_SPACE: The logging case can only be in the insert/update case.\n");
+					
+					ex_raise(EX_BUFERR);
+				}
 				
 				tabinfo->t_insdel_old_ts_lo = 
 					bp->bsstab->bblk->bsstab_insdel_ts_lo;
@@ -1286,6 +1515,14 @@ blk_check_sstab_space(TABINFO *tabinfo, BUF *bp, char *rp, int rlen,
 				{
 					Assert(   (tss->topid & TSS_OP_INSTAB)
 					       || (tss->topid & TSS_OP_UPDATE));
+
+					if (!(   (tss->topid & TSS_OP_INSTAB)
+					      || (tss->topid & TSS_OP_UPDATE)))
+					{
+						traceprint("BLOCK_CHK_SPACE: The logging case can only be in the insert/update case.\n");
+						
+						ex_raise(EX_BUFERR);
+					}
 					
 					tabinfo->t_insdel_old_ts_lo = 
 						bp->bsstab->bblk->bsstab_insdel_ts_lo;
@@ -1329,6 +1566,12 @@ blk_check_sstab_space(TABINFO *tabinfo, BUF *bp, char *rp, int rlen,
 					if(tabinfo->t_stat & TAB_INS_SPLITING_SSTAB)
 					{
 						Assert(!(tabinfo->t_stat & TAB_DO_INDEX));
+
+						if (tabinfo->t_stat & TAB_DO_INDEX)
+						{
+							traceprint("It should not hit the split issue in the inde case.\n");
+							ex_raise(EX_BUFERR);
+						}
 						
 						traceprint("Hit the new split on the splitting sstable %s.\n", tabinfo->t_sstab_name);
 
@@ -1346,11 +1589,22 @@ blk_check_sstab_space(TABINFO *tabinfo, BUF *bp, char *rp, int rlen,
 						hkgc_wash_sstab(TRUE);
 					}
 					
-					sstab_split(tabinfo, bp, rp, data_insert_needed);
+					if (!sstab_split(tabinfo, bp, rp,
+								data_insert_needed))
+					{
+						traceprint("SSTABLE_SPLIT: hit fatal err.\n");
+						
+						ex_raise(EX_BUFERR);
+					}
 				}
 				else if (tss->topid & TSS_OP_METASERVER)
 				{
-					tablet_split(tabinfo, bp, rp);
+					if (!tablet_split(tabinfo, bp, rp))
+					{
+						traceprint("TABLET_SPLIT: hit fatal err.\n");
+						
+						ex_raise(EX_BUFERR);
+					}
 				}
 
 			}

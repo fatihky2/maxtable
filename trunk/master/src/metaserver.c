@@ -789,7 +789,7 @@ exit:
 	return resp;
 }
 
-
+#if 0
 void
 meta_ins_systab(char *systab, char *row)
 {
@@ -828,6 +828,8 @@ meta_ins_systab(char *systab, char *row)
 	MEMFREEHEAP(tabinfo->t_sinfo);
 	MEMFREEHEAP(tabinfo);
 }
+
+#endif
 
 /* 
 ** SYSTABLE tablethdr formate as follows:
@@ -893,6 +895,41 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 	/* Save the table dir for the creating of tablet file. */
 	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
+
+	
+	volatile struct
+	{
+		char	*newrp;
+		char	*tabletschm_newrp;
+		char	*sstab_rp;
+	} copy;
+
+	copy.newrp = NULL;
+	copy.tabletschm_newrp = NULL;
+	copy.sstab_rp = NULL;
+
+	resp = NULL;
+
+	if(ex_handle(EX_ANY, yxue_handler))
+	{
+		if (copy.newrp)
+		{
+			MEMFREEHEAP(copy.newrp);
+		}
+
+		if (copy.tabletschm_newrp)
+		{
+			MEMFREEHEAP(copy.tabletschm_newrp);
+		}
+
+		if (copy.sstab_rp)
+		{
+			MEMFREEHEAP(copy.sstab_rp);
+		}
+
+		ex_delete();
+		ex_raise(EX_ANY);
+	}
 
 	if ((tabidx = meta_table_is_exist(tab_dir)) == -1)
 	{
@@ -1106,6 +1143,8 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 			
 			char	*newrp = (char *)MEMALLOCHEAP(rlen);
 
+			copy.newrp = newrp;
+
 			if (sstab_res)
 			{
 				tablet_upd_col(newrp, rp, ROW_GET_LENGTH(rp, 
@@ -1160,6 +1199,7 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 
 			}
 			MEMFREEHEAP(newrp);
+			copy.newrp = NULL;
 
 			if (tabinfo->t_stat & TAB_TABLET_KEYROW_CHG)
 			{
@@ -1169,6 +1209,8 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 				rlen_c3 = ROW_MINLEN_IN_TABLETSCHM + sizeof(int) 
 							+ keycolen + sizeof(int);
 				tabletschm_newrp = (char *)MEMALLOCHEAP(rlen_c3);
+
+				copy.tabletschm_newrp = tabletschm_newrp;
 
 				/*
 				** TODO: tabletschm_rp may be CHANGED before we 
@@ -1194,18 +1236,25 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 						ROW_MINLEN_IN_TABLETSCHM, &keylen);
 				
 				
-				tablet_schm_del_row(tab_hdr->tab_id, TABLETSCHM_ID,
+				if (!tablet_schm_del_row(tab_hdr->tab_id, TABLETSCHM_ID,
 							tab_tabletschm_dir,
-							key, keylen);
+							key, keylen))
+				{
+					ex_raise(EX_ANY);
+				}
 
-				tablet_schm_ins_row(tab_hdr->tab_id, TABLETSCHM_ID, 
+				if (!tablet_schm_ins_row(tab_hdr->tab_id, TABLETSCHM_ID, 
 							tab_tabletschm_dir, 
 							tabletschm_newrp,
-							tab_hdr->tab_tablet, 0);
+							tab_hdr->tab_tablet, 0))
+				{
+					ex_raise(EX_ANY);
+				}
 
 				tabinfo->t_stat &= ~TAB_TABLET_KEYROW_CHG;
 				
 				MEMFREEHEAP(tabletschm_newrp);
+				copy.tabletschm_newrp = NULL;
 			}
 			
 		}
@@ -1241,6 +1290,7 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 		COLOFFSETENTRYSIZE : 0);
 #endif
 		sstab_rp = MEMALLOCHEAP(sstab_rlen);
+		copy.sstab_rp = sstab_rp;
 
 		sstab_id = meta_get_free_sstab();
 		SSTAB_MAP_SET(sstab_id, SSTAB_USED);
@@ -1281,8 +1331,13 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 		rg_addr = rg_prof->rg_addr;
 		rg_port = rg_prof->rg_port;
 		
-		tablet_crt(tab_hdr, tab_dir, rg_addr, sstab_rp, 
-				tablet_min_rlen, rg_port);
+		if (!tablet_crt(tab_hdr, tab_dir, rg_addr, sstab_rp, 
+				tablet_min_rlen, rg_port))
+		{
+			traceprint("TABLET_CRT: hit err.\n");
+			
+			ex_raise(EX_ANY);
+		}
 
 		/* Set the tablet id for the 1st insert. */
 		tabletid = 1; 
@@ -1296,6 +1351,8 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 		meta_save_rginfo();
 
 		MEMFREEHEAP(sstab_rp);
+
+		copy.sstab_rp = NULL;
 	}
 
 	if (tabhdr_update)
@@ -1418,6 +1475,8 @@ exit:
 	{
 		MEMFREEHEAP(col_buf);
 	}
+
+	ex_delete();
 
 	return resp;
 }
@@ -2651,6 +2710,33 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 	MEMSET(tab_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_dir, MT_META_TABLE, STRLEN(MT_META_TABLE));
 
+	volatile struct
+	{
+		char	*resp_buf;
+		char	*sstab_rp;
+	} copy;
+
+	copy.resp_buf = NULL;
+	copy.sstab_rp = NULL;
+	tabinfo = NULL;
+
+	resp = NULL;
+
+	if(ex_handle(EX_ANY, yxue_handler))
+	{
+		if (copy.resp_buf)
+		{
+			MEMFREEHEAP(copy.resp_buf);
+		}
+
+		if (copy.sstab_rp)
+		{
+			MEMFREEHEAP(copy.sstab_rp);
+		}
+
+		ex_delete();
+		ex_raise(EX_ANY);
+	}
 	
 	str1_to_str2(tab_dir, '/', tab_name);
 
@@ -2675,7 +2761,7 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 	{
 		traceprint("Table %s should be has one tablet at least\n", tab_name);
 		rpc_status |= RPC_TAB_HAS_NO_DATA;
-		ex_raise(EX_ANY);
+		goto exit;
 	}
 
 	if (tab_hdr->tab_stat & TAB_DROPPED)
@@ -2736,7 +2822,7 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 
 	sstab_rp = MEMALLOCHEAP(sstab_rlen);
 
-
+	copy.sstab_rp = sstab_rp;
 
 	int res_sstab_id;
 	res_sstab_id = meta_get_free_sstab();
@@ -2832,6 +2918,9 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 			resp_buf_len = sizeof(INSMETA) + sizeof(IDX_ROOT_SPLIT);
 			
 			resp_buf = MEMALLOCHEAP(resp_buf_len);
+
+			copy.resp_buf = resp_buf;
+			
 			MEMSET(resp_buf, resp_buf_len);
 
 			/* Fill the INSERT_META with the information. */
@@ -2897,6 +2986,8 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 	ri_rgstat_deldata(tss->tcur_rgprof->rg_statefile, ri_sstab);
 	
 	MEMFREEHEAP(sstab_rp);
+
+	copy.sstab_rp = NULL;
 
 	
 	(tab_hdr->tab_sstab)++;
@@ -4257,6 +4348,25 @@ meta_handler(char *req_buf, int fd)
 	tmp_req_buf = req_buf;
 	tss->tmaster_infor = Master_infor;
 	tss->metabackup = MT_META_BACKUP;
+
+	volatile struct
+	{
+		TABINFO	*tabinfo;
+	} copy;
+
+	copy.tabinfo = NULL;
+	tabinfo = NULL;
+
+	resp = NULL;
+
+	if(ex_handle(EX_ANY, yxue_handler))
+	{
+		tabinfo = copy.tabinfo;
+
+		resp = conn_build_resp_byte(RPC_FAIL, 0, NULL);	
+		goto close;
+	}
+
 	
 	if (meta_collect_rg(req_buf))
 	{		
@@ -4300,26 +4410,10 @@ parse_again:
 		return NULL;
 	}
 
-	volatile struct
-	{
-		TABINFO	*tabinfo;
-	} copy;
-
 	command = tss->tcmd_parser;
 	resp_buf_idx = 0;
 	resp_buf_size = 0;
-	copy.tabinfo = NULL;
-	tabinfo = NULL;
-	resp = NULL;
-
-	if(ex_handle(EX_ANY, yxue_handler))
-	{
-		tabinfo = copy.tabinfo;
-
-		resp = conn_build_resp_byte(RPC_FAIL, 0, NULL);	
-		goto close;
-	}
-
+	
 	tabinfo = MEMALLOCHEAP(sizeof(TABINFO));
 	MEMSET(tabinfo, sizeof(TABINFO));
 	
@@ -5367,7 +5461,7 @@ again:
 		{
 			traceprint("Can not get the ranger server for the recovery.\n");
 			V_SPINLOCK(Master_infor->rglist_spinlock);
-			goto again;
+			continue;
 		}
 		
 		if ((fd = conn_open(rg_prof->rg_addr, rg_prof->rg_port)) < 0)

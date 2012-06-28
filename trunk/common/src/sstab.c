@@ -117,7 +117,7 @@ sstab_namebyid(char *old_sstab, char *new_sstab, int new_sstab_id)
 
 
 
-void
+int
 sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp, int data_insert_needed)
 {
 	LOCALTSS(tss);
@@ -138,6 +138,45 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp, int data_insert_needed)
 	LOGREC		*logrec;
 
 
+	volatile struct
+	{
+		BUF	*destbp;
+		TABINFO	*tabinfo;
+		LOGREC	*logrec;
+	} copy;
+
+	copy.destbp = NULL;
+	copy.tabinfo = NULL;
+	copy.logrec = NULL;
+	
+	if(ex_handle(EX_SSTABERR, yxue_handler))
+	{
+		if (copy.destbp)
+		{
+			bufdestroy(copy.destbp->bsstab);
+		}
+
+		if (copy.tabinfo)
+		{
+			if (copy.tabinfo->t_sinfo)
+			{
+				MEMFREEHEAP(copy.tabinfo->t_sinfo);
+			}
+
+			MEMFREEHEAP(copy.tabinfo);
+		}
+
+		if (copy.logrec)
+		{
+			MEMFREEHEAP(copy.logrec);
+		}
+
+		ex_delete();
+
+		return FALSE;
+	}
+	
+
 	
 	ins_nxtsstab = (srcbp->bblk->bblkno > ((BLK_CNT_IN_SSTABLE / 2) - 1))
 			? TRUE : FALSE;
@@ -157,6 +196,7 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp, int data_insert_needed)
 	if (!(srctabinfo->t_stat & TAB_NOLOG_MODEL))
 	{
 	 	logrec = MEMALLOCHEAP(sizeof(LOGREC));
+		copy.logrec = logrec;
 		
 		log_build(logrec, LOG_BEGIN, 0, 0, srctabinfo->t_sstab_name, 
 				NULL, 0, 0, 0, 0, 0, NULL, NULL);
@@ -176,6 +216,8 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp, int data_insert_needed)
 		
 		bufhash(destbuf);
 	}
+
+	copy.destbp = destbuf;
 	
 	srctabinfo->t_stat &= ~TAB_GET_RES_SSTAB;
 	
@@ -279,6 +321,9 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp, int data_insert_needed)
 	bufdirty(destbuf->bsstab);
 	
 	tabinfo = MEMALLOCHEAP(sizeof(TABINFO));
+
+	copy.tabinfo = tabinfo;
+	
 	MEMSET(tabinfo, sizeof(TABINFO));
 
 	tabinfo->t_sinfo = (SINFO *)MEMALLOCHEAP(sizeof(SINFO));
@@ -397,8 +442,11 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp, int data_insert_needed)
 		tabinfo->t_colinfo = srctabinfo->t_colinfo;
 		tabinfo->t_tablet_id = srctabinfo->t_tablet_id;
 		tabinfo->t_index_ts = srctabinfo->t_index_ts;
-		blkins(tabinfo, rp);
-
+		if (!blkins(tabinfo, rp))
+		{
+			ex_raise(EX_SSTABERR);
+		}
+		
 		MEMCPY(&(srctabinfo->t_currid), &(tabinfo->t_currid), sizeof(RID));		
 	}
 #if 0
@@ -429,6 +477,8 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp, int data_insert_needed)
 	}
 
 	tabinfo_pop();
+
+	return TRUE;
 	
 	
 }

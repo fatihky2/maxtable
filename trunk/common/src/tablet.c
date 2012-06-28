@@ -43,7 +43,7 @@ extern	KERNEL	*Kernel;
 
 // char *rp - the row in the tablet (sstabid|sstable row | ranger |key col)
 // int minlen - min length of the row in the tablet
-void
+int
 tablet_crt(TABLEHDR *tablehdr, char *tabledir, char *rg_addr, char *rp, int minlen, int port)
 {
 	char		tab_meta_dir[TABLE_NAME_MAX_LEN];
@@ -53,8 +53,10 @@ tablet_crt(TABLEHDR *tablehdr, char *tabledir, char *rg_addr, char *rp, int minl
 	TABINFO 	tabinfo;
 	SINFO		sinfo;
 	BLK_ROWINFO	blk_rowinfo;
+	int		rtn_stat;
 
 
+	rtn_stat = TRUE;
 	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
 	MEMSET(tablet_name, 32);
 	MEMSET(&tabinfo, sizeof(TABINFO));
@@ -86,7 +88,12 @@ tablet_crt(TABLEHDR *tablehdr, char *tabledir, char *rg_addr, char *rp, int minl
 			tablehdr->tab_tablet);
 	SRCH_INFO_INIT(&sinfo, keycol, keycolen, TABLET_KEY_COLID_INROW, VARCHAR, -1);
 	
-	blkins(&tabinfo, rp);
+	if (!blkins(&tabinfo, rp))
+	{
+		tablehdr->tab_tablet = 0;
+		tabinfo_pop();
+		return FALSE;
+	}
 	
 	
 	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
@@ -101,7 +108,8 @@ tablet_crt(TABLEHDR *tablehdr, char *tabledir, char *rg_addr, char *rp, int minl
 	tablet_schm_bld_row(temprp, rlen, tablehdr->tab_tablet, tablet_name, 
 				rg_addr, keycol, keycolen, port);
 	
-	tablet_schm_ins_row(tablehdr->tab_id, TABLETSCHM_ID, tab_meta_dir, temprp, 0, 0);
+	rtn_stat = tablet_schm_ins_row(tablehdr->tab_id, TABLETSCHM_ID, 
+					tab_meta_dir, temprp, 0, 0);
 
 	
 	session_close( &tabinfo);
@@ -110,6 +118,8 @@ tablet_crt(TABLEHDR *tablehdr, char *tabledir, char *rg_addr, char *rp, int minl
 
 	
 	tabinfo_pop();
+
+	return rtn_stat;
 
 }
 
@@ -148,7 +158,11 @@ tablet_ins_row(TABLEHDR *tablehdr, int tabid, int sstabid, char *tablet_name, ch
 
 	tabinfo.t_split_tabletid = tablehdr->tab_tablet;
 	
-	blkins(&tabinfo, rp);
+	if (!blkins(&tabinfo, rp))
+	{
+		traceprint("TABLET_INSROW: hit err.\n");
+		ex_raise(EX_ANY);
+	}
 
 	session_close(&tabinfo);
 
@@ -240,9 +254,10 @@ tablet_upd_row(TABLEHDR *tablehdr, int tabid, int sstabid, char *tablet_name,
 	SRCH_INFO_INIT(&sinfo, keycol, keycolen, TABLET_KEY_COLID_INROW, 
 		       VARCHAR, -1);
 	
-	blkupdate(&tabinfo, newrp);
-
-	session_close(&tabinfo);
+	if (!blkupdate(&tabinfo, newrp))
+	{
+		ex_raise(EX_ANY);
+	}
 
 	if (tabinfo.t_stat & TAB_TABLET_CRT_NEW)
 	{
@@ -594,7 +609,7 @@ tablet_schm_upd_col(char *newrp, char *oldrp, int colid, char *newcolval, int ne
 }
 
 
-void
+int
 tablet_schm_ins_row(int tabid, int sstabid, char *systab, char *row, 
 			int tabletnum, int flag)
 {
@@ -603,6 +618,10 @@ tablet_schm_ins_row(int tabid, int sstabid, char *systab, char *row,
 	char		*key;
 	int		keylen;
 	BLK_ROWINFO	blk_rowinfo;
+	int		rtn_stat;
+
+
+	rtn_stat = TRUE;
 	
 	tabinfo = MEMALLOCHEAP(sizeof(TABINFO));
 	MEMSET(tabinfo, sizeof(TABINFO));
@@ -631,7 +650,7 @@ tablet_schm_ins_row(int tabid, int sstabid, char *systab, char *row,
 	SRCH_INFO_INIT(tabinfo->t_sinfo, key, keylen, TABLETSCHM_KEY_COLID_INROW, 
 		       VARCHAR, -1);
 			
-	blkins(tabinfo, row);
+	rtn_stat = blkins(tabinfo, row);
 
 	
 	session_close(tabinfo);
@@ -640,18 +659,23 @@ tablet_schm_ins_row(int tabid, int sstabid, char *systab, char *row,
 	MEMFREEHEAP(tabinfo);
 
 	tabinfo_pop();
+
+	return rtn_stat;
 }
 
 
 
 
-void
+int
 tablet_schm_del_row(int tabid, int sstabid, char *systab, char *key, int keylen)
 {
 	TABINFO		*tabinfo;
 	int		minrowlen;
 	BLK_ROWINFO	blk_rowinfo;
+	int		rtn_stat;
 	
+	
+	rtn_stat = TRUE;
 	
 	tabinfo = MEMALLOCHEAP(sizeof(TABINFO));
 	MEMSET(tabinfo, sizeof(TABINFO));
@@ -673,7 +697,7 @@ tablet_schm_del_row(int tabid, int sstabid, char *systab, char *key, int keylen)
 	SRCH_INFO_INIT(tabinfo->t_sinfo, key, keylen, TABLETSCHM_KEY_COLID_INROW,
 		       VARCHAR, -1);
 			
-	blkdel(tabinfo);
+	rtn_stat = blkdel(tabinfo);
 	
 	session_close(tabinfo);
 
@@ -681,6 +705,8 @@ tablet_schm_del_row(int tabid, int sstabid, char *systab, char *key, int keylen)
 	MEMFREEHEAP(tabinfo);
 
 	tabinfo_pop();
+
+	return rtn_stat;
 }
 
 
@@ -929,7 +955,7 @@ tablet_namebyid(TABINFO *tabinfo, char *new_sstab)
 }
 
 
-void
+int
 tablet_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 {
 	LOCALTSS(tss);
@@ -947,6 +973,44 @@ tablet_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 	BLK_ROWINFO	blk_rowinfo;
 
 
+	volatile struct
+	{
+		BUF	*destbp;
+		TABINFO	*tabinfo;
+		char	*temprp;
+	} copy;
+
+	copy.destbp = NULL;
+	copy.tabinfo = NULL;
+	copy.temprp = NULL;
+	
+	if(ex_handle(EX_TABLETERR, yxue_handler))
+	{
+		if (copy.destbp)
+		{
+			bufdestroy(copy.destbp->bsstab);
+		}
+
+		if (copy.tabinfo)
+		{
+			if (copy.tabinfo->t_sinfo)
+			{
+				MEMFREEHEAP(copy.tabinfo->t_sinfo);
+			}
+
+			MEMFREEHEAP(copy.tabinfo);
+		}
+
+		if (copy.temprp)
+		{
+			MEMFREEHEAP(copy.temprp);
+		}
+
+		ex_delete();
+
+		return FALSE;
+	}
+	
 	destbuf = NULL;
 	ins_nxtsstab = (srcbp->bblk->bblkno > ((BLK_CNT_IN_SSTABLE / 2) - 1)) 
 				? TRUE : FALSE;
@@ -966,6 +1030,8 @@ tablet_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 		destbuf = bufgrab(srctabinfo);
 		bufhash(destbuf);
 	}
+
+	copy.destbp = destbuf;
 	
 	blk = destbuf->bblk;
 		
@@ -1002,6 +1068,9 @@ tablet_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 	tablet_nameidx = str01str(srctabinfo->t_sstab_name, "tablet", 
 				 STRLEN(srctabinfo->t_sstab_name));
 	tabinfo = MEMALLOCHEAP(sizeof(TABINFO));
+
+	copy.tabinfo = tabinfo;
+	
 	MEMSET(tabinfo, sizeof(TABINFO));
 
 	tabinfo->t_sinfo = (SINFO *)MEMALLOCHEAP(sizeof(SINFO));
@@ -1026,7 +1095,10 @@ tablet_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 		SRCH_INFO_INIT(tabinfo->t_sinfo, key, keylen, 
 				TABLET_KEY_COLID_INROW, VARCHAR, -1);
 		
-		blkins(tabinfo, rp);
+		if (!blkins(tabinfo, rp))
+		{
+			ex_raise(EX_TABLETERR);
+		}
 	}
 	else
 	{
@@ -1043,6 +1115,8 @@ tablet_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 	
 	char *temprp = (char *)MEMALLOCHEAP(rlen);
 
+	copy.temprp = temprp;
+
 	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_meta_dir, srctabinfo->t_sstab_name, tablet_nameidx);
 	str1_to_str2(tab_meta_dir, '/', "tabletscheme");
@@ -1055,8 +1129,11 @@ tablet_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 			    tablet_keylen, tss->tcur_rgprof->rg_port);
 
 	
-	tablet_schm_ins_row(srctabinfo->t_tabid, TABLETSCHM_ID, tab_meta_dir, 
-				temprp, INVALID_TABLETID, 0);
+	if (!tablet_schm_ins_row(srctabinfo->t_tabid, TABLETSCHM_ID, tab_meta_dir, 
+				temprp, INVALID_TABLETID, 0))
+	{
+		ex_raise(EX_TABLETERR);
+	}
 
 
 	
@@ -1103,6 +1180,8 @@ tablet_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 	
 	MEMFREEHEAP(temprp);
 
+	copy.temprp = NULL;
+
 	if (tabinfo)
 	{
 		if (tabinfo->t_sinfo)
@@ -1114,6 +1193,10 @@ tablet_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 	}
 
 	tabinfo_pop();
+
+	ex_delete();
+	
+	return TRUE;
 	
 }
 
@@ -1138,6 +1221,50 @@ tablet_sharding(TABLEHDR *tablehdr, char *rg_addr, int rg_port,
 	int		rtn_stat;
 
 
+	volatile struct
+	{
+		BUF	*bp;
+		BUF	*destbp;
+		char	*temprp;
+		TABINFO	*tabinfo;
+	} copy;
+
+	copy.bp = NULL;
+	copy.destbp = NULL;
+	copy.temprp = NULL;
+	copy.tabinfo = NULL;
+	
+	if(ex_handle(EX_ANY, yxue_handler))
+	{
+		if (copy.bp)
+		{
+			bufdestroy(copy.bp);
+		}
+
+		if (copy.destbp)
+		{
+			bufdestroy(copy.destbp);
+		}
+
+		if (copy.temprp)
+		{
+			MEMFREEHEAP(copy.temprp);
+		}
+
+		if (copy.tabinfo)
+		{			
+			session_close(copy.tabinfo);
+		
+			MEMFREEHEAP(copy.tabinfo->t_sinfo);
+			MEMFREEHEAP(copy.tabinfo);
+		
+			tabinfo_pop();			
+		}
+
+		ex_delete();
+		ex_raise(EX_ANY);
+	}
+	
 	bp = NULL;
 	destbuf = NULL;
 	rtn_stat = FALSE;
@@ -1148,6 +1275,9 @@ tablet_sharding(TABLEHDR *tablehdr, char *rg_addr, int rg_port,
 	
 
 	srctabinfo = MEMALLOCHEAP(sizeof(TABINFO));
+
+	copy.tabinfo = srctabinfo;
+	
 	MEMSET(srctabinfo, sizeof(TABINFO));
 
 	srctabinfo->t_sinfo = (SINFO *)MEMALLOCHEAP(sizeof(SINFO));
@@ -1171,6 +1301,8 @@ tablet_sharding(TABLEHDR *tablehdr, char *rg_addr, int rg_port,
 		       VARCHAR, -1);
 
 	bp = blk_getsstable(srctabinfo);
+
+	copy.bp = bp;
 
 	blk = bp->bsstab->bblk;
 
@@ -1278,6 +1410,8 @@ tablet_sharding(TABLEHDR *tablehdr, char *rg_addr, int rg_port,
 		destbuf = bufgrab(srctabinfo);
 		bufhash(destbuf);
 	}
+
+	copy.destbp = destbuf;
 	
 	blk = destbuf->bblk;
 		
@@ -1316,6 +1450,8 @@ tablet_sharding(TABLEHDR *tablehdr, char *rg_addr, int rg_port,
 	int rlen = ROW_MINLEN_IN_TABLETSCHM + tablet_keylen + sizeof(int) + sizeof(int);
 	char *temprp = (char *)MEMALLOCHEAP(rlen);
 
+	copy.temprp = temprp;
+
 	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_meta_dir, srctabinfo->t_sstab_name, table_nameidx);
 	str1_to_str2(tab_meta_dir, '/', "tabletscheme");
@@ -1328,8 +1464,11 @@ tablet_sharding(TABLEHDR *tablehdr, char *rg_addr, int rg_port,
 			    rg_port);
 
 	
-	tablet_schm_ins_row(srctabinfo->t_tabid, TABLETSCHM_ID, tab_meta_dir, temprp, 
-			    INVALID_TABLETID, 0);
+	if (!tablet_schm_ins_row(srctabinfo->t_tabid, TABLETSCHM_ID, tab_meta_dir, temprp, 
+			    INVALID_TABLETID, 0))
+	{
+		ex_raise(EX_ANY);
+	}
 
 	
 	(tablehdr->tab_tablet)++;

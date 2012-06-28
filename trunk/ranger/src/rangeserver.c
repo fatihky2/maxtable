@@ -553,7 +553,11 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 				
 		rtn_stat = index_insert(&idxbld, tabinfo, 
 					Range_infor->rg_meta_sysindex);
-		
+
+		/* 
+		** TODO: it should be undo the data insert if the index insert
+		** hit error.
+		*/		
 	}
 
 exit:
@@ -1684,7 +1688,7 @@ rg_selwheretab(TREE *command, SELWHERE *selwhere, TABLEHDR *tab_hdr, COLINFO *co
 		goto exit;
 	}
 
-	signal (SIGPIPE,SIG_IGN);
+//	signal (SIGPIPE,SIG_IGN);
 
 	resp = conn_build_resp_byte(RPC_BIGDATA_CONN, sizeof(int),
 					(char *)(&(Range_infor->bigdataport)));
@@ -1713,6 +1717,7 @@ rg_selwheretab(TREE *command, SELWHERE *selwhere, TABLEHDR *tab_hdr, COLINFO *co
 
 		/* Initialize the context of tablet scanning. */
 		tablet_scanctx = (TABLET_SCANCTX *)MEMALLOCHEAP(sizeof(TABLET_SCANCTX));
+		
 		MEMSET(tablet_scanctx, sizeof(TABLET_SCANCTX));
 
 		tablet_scanctx->andplan = par_get_andplan(command);
@@ -1780,6 +1785,18 @@ rg_selwheretab(TREE *command, SELWHERE *selwhere, TABLEHDR *tab_hdr, COLINFO *co
 			}
 			else
 			{
+				/*Only one tablet needs to be scan. */
+				result = row_col_compare(VARCHAR, 
+						selwhere->righttabletname, 
+						selwhere->rightnamelen, 
+						selwhere->lefttabletname,
+						selwhere->leftnamelen);
+				
+				if (result == EQ)
+				{
+					goto finish;
+				}
+				
 				wanted_tablet = selwhere->righttabletname;
 				wanted_tablet_len = selwhere->rightnamelen;
 			}
@@ -1855,10 +1872,13 @@ rg_selwheretab(TREE *command, SELWHERE *selwhere, TABLEHDR *tab_hdr, COLINFO *co
 						TABLETSCHM_TABLETID_COLOFF_INROW, 
 						ROW_MINLEN_IN_TABLETSCHM, &ign);
 
-					index_range_sstab_scan(tablet_scanctx,
+					if (!index_range_sstab_scan(tablet_scanctx,
 							&(selwhere->idxmeta),
 							tab_name, tab_name_len,
-							tablet_scanctx->tabletid);
+							tablet_scanctx->tabletid))
+					{
+						goto exit;
+					}
 
 					goto next_tablet;
 				}
@@ -2332,10 +2352,13 @@ rg_selcountsum_delupd_tab(TREE *command, SELWHERE *selwhere, TABLEHDR *tab_hdr,
 				
 				if (selwhere->use_idxmeta)
 				{
-					index_range_sstab_scan(tablet_scanctx,
+					if (!index_range_sstab_scan(tablet_scanctx,
 							&(selwhere->idxmeta),
 							tab_name, tab_name_len,
-							tablet_scanctx->tabletid);
+							tablet_scanctx->tabletid))
+					{
+						goto exit;
+					}
 
 					goto next_tablet;
 				}
@@ -2453,6 +2476,7 @@ rg_sstabscan(SSTAB_SCANCTX *scanctx)
 	int     *offset;
 	char    *rp;
 	int	minrowlen;
+	int	andplan_hit;
 
 
 	minrowlen= scanctx->rminlen;
@@ -2478,9 +2502,12 @@ rg_sstabscan(SSTAB_SCANCTX *scanctx)
 
 			Assert(*offset < blk->bfreeoff);
 
-			if (   par_process_orplan(scanctx->orplan, rp, minrowlen)
-			    && par_process_andplan(scanctx->andplan, rp, 
-			    				minrowlen))
+			andplan_hit = par_process_andplan(scanctx->andplan, rp, 
+			    				minrowlen);
+
+			if (   (andplan_hit == PAR_ANDPLAN_HIT)
+			    && par_process_orplan(scanctx->orplan, rp, 
+							minrowlen))
 			{
 				if (!(scanctx->stat & SSTABSCAN_HIT_ROW))
 				{
@@ -2493,6 +2520,13 @@ rg_sstabscan(SSTAB_SCANCTX *scanctx)
 					scanctx->stat |= SSTABSCAN_BLK_IS_FULL;
 					goto finish;
 				}
+			}
+
+			if (andplan_hit == PAR_ANDPLAN_HIT_BOUND)
+			{
+				scanctx->stat |= SSTABSCAN_HIT_BOUND;
+
+				goto finish;
 			}
 		}
 
@@ -2778,12 +2812,21 @@ rg_tabletscan(TABLET_SCANCTX *scanctx)
 scan_cont:			
 			rg_sstabscan(&sstab_scanctx);
 
+			/* 
+			** Jump the last round sending base if it hit the right
+			** bound.
+			*/
+			if (sstab_scanctx.stat & SSTABSCAN_HIT_BOUND)
+			{
+				break;
+			}
+
 			if (!(sstab_scanctx.stat & SSTABSCAN_BLK_IS_FULL))
 			{
 				/* Finding the next sstable to fill the sending block. */
 				bufunkeep(bp->bsstab);
 				bp = NULL;
-				
+	
 				continue;
 			}
 
@@ -2829,11 +2872,16 @@ scan_cont:
 			datablk->bnextrno = 0;
 			datablk->bstat = 0;
 			MEMSET(datablk->bdata, BLOCKSIZE - BLKHEADERSIZE - 4);
-			
+
 			goto scan_cont;
 		}
 
-		if (blk->bnextblkno != -1)
+		/*
+		** Now, the exit has two ways including the endscan tablet and 
+		** hit the right bound. 
+		*/
+		if (   !(sstab_scanctx.stat & SSTABSCAN_HIT_BOUND) 
+		    && (blk->bnextblkno != -1)) 
 		{
 			i = blk->bnextblkno;
 		}
@@ -3264,23 +3312,41 @@ rg_count_data_tablet(TABLET_SCANCTX *scanctx)
 			sstab_scanctx.currow = 0;
 
 			/* Count the row in one sstable. */
-			rg_count_data_sstable(&sstab_scanctx, tabinfo, bp,
+			scan_result = rg_count_data_sstable(&sstab_scanctx, tabinfo, bp,
 						scanctx->totcol);
 
-			/* Buffer unkept. */
-			bufunkeep(bp->bsstab);
-
+			if (!scan_result)
+			{
+				bufdestroy(bp->bsstab);
+			}
+			else
+			{
+				/* Buffer unkept. */
+				bufunkeep(bp->bsstab);
+			}
+			
 			if (   (sstab_scanctx.querytype & DELETEWHERE)
 			    || (sstab_scanctx.querytype & UPDATE))
 			{
 				V_SPINLOCK(BUF_SPIN);
 			}
+
+			if(!scan_result)
+			{
+				goto exit;
+			}
 			
 			bp = NULL;
 
+			if (sstab_scanctx.stat & SSTABSCAN_HIT_BOUND)
+			{
+				break;
+			}
+
 		}
 
-		if (blk->bnextblkno != -1)
+		if (   !(sstab_scanctx.stat & SSTABSCAN_HIT_BOUND) 
+		    && (blk->bnextblkno != -1))
 		{
 			i = blk->bnextblkno;
 		}
@@ -3316,6 +3382,7 @@ rg_count_data_tablet(TABLET_SCANCTX *scanctx)
 	{
 		bufunkeep(bp->bsstab);
 	}
+exit:
 	session_close(tabinfo);
 
 	MEMFREEHEAP(tabinfo->t_sinfo);
@@ -3349,8 +3416,29 @@ rg_count_data_sstable(SSTAB_SCANCTX *scanctx, TABINFO *tabinfo, BUF *bp, int tot
 	int 		log_stat;
 	int		skip_this_row;
 	IDXBLD		idxbld;
+	int		andplan_hit;
 
 
+	volatile struct
+	{
+		char	*newrp;
+	} copy;
+
+	copy.newrp = NULL;
+	
+	if(ex_handle(EX_ANY, yxue_handler))
+	{
+		if (copy.newrp)
+		{
+			MEMFREEHEAP(copy.newrp);
+		}
+
+		ex_delete();
+
+		return FALSE;
+	}
+
+	
 	skip_this_row = FALSE;
 	minrowlen= scanctx->rminlen;
 
@@ -3371,9 +3459,11 @@ scan_block:
 
 			Assert(*offset < blk->bfreeoff);
 
-			if (   par_process_orplan(scanctx->orplan, rp, minrowlen)
-			    && par_process_andplan(scanctx->andplan, rp, 
-			    				minrowlen))
+			andplan_hit = par_process_andplan(scanctx->andplan, rp, 
+			    				minrowlen);
+
+			if (   (andplan_hit == PAR_ANDPLAN_HIT)
+			    && par_process_orplan(scanctx->orplan, rp, minrowlen))
 			{
 				switch (scanctx->querytype)
 				{
@@ -3403,6 +3493,9 @@ scan_block:
 					{
 						newrp = (char *)MEMALLOCHEAP(
 							BLOCKSIZE - BLKHEADERSIZE - 4);
+
+						copy.newrp = newrp;
+						
 						MEMSET(newrp, 
 							BLOCKSIZE - BLKHEADERSIZE - 4);
 
@@ -3572,8 +3665,13 @@ scan_block:
 					
 							idxbld.idx_root_sstab = tabinfo->t_tablet_id;
 
-							index_insert(&idxbld, tabinfo, 
-								Range_infor->rg_meta_sysindex);
+							if (!index_insert(&idxbld, tabinfo, 
+								Range_infor->rg_meta_sysindex))
+							{
+								V_SPINLOCK(BUF_SPIN);
+								
+								ex_raise(EX_ANY);
+							}
 						}
 					}
 
@@ -3581,6 +3679,8 @@ scan_block:
 					{
 						MEMFREEHEAP(newrp);
 					}
+
+					copy.newrp = NULL;
 
 					bufdirty(bp->bsstab);
 					V_SPINLOCK(BUF_SPIN);					
@@ -3613,6 +3713,13 @@ scan_block:
 					goto scan_block;
 				}
 				
+			}
+
+			if (andplan_hit == PAR_ANDPLAN_HIT_BOUND)
+			{
+				scanctx->stat |= SSTABSCAN_HIT_BOUND;
+
+				return TRUE;
 			}
 		}
 
@@ -4064,6 +4171,22 @@ rg_handler(char *req_buf, int fd)
 	tss->tcol_info = col_info;
 	tss->tmeta_hdr = ins_meta;
 	tss->ttab_hdr = tab_hdr;
+
+	volatile struct
+	{
+		TABINFO	*tabinfo;
+	} copy;
+
+	copy.tabinfo = NULL;
+	tabinfo = NULL;
+	
+	if(ex_handle(EX_ANY, yxue_handler))
+	{
+		tabinfo = copy.tabinfo;
+
+		/* TODO: Resp information needs to be built ?. */
+		goto close;
+	}
 	
 	/* 
 	** For performance, We see the Drop Table as a special case to process it. 
@@ -4227,21 +4350,7 @@ rg_handler(char *req_buf, int fd)
 		goto finish;
 	}
 	
-	volatile struct
-	{
-		TABINFO	*tabinfo;
-	} copy;
-
-	copy.tabinfo = NULL;
-	tabinfo = NULL;
 	
-	if(ex_handle(EX_ANY, yxue_handler))
-	{
-		tabinfo = copy.tabinfo;
-		
-		goto close;
-	}
-
 	if (req_op & RPC_REQ_SELECTRANGE_OP)
 	{
 		ins_meta = &(sel_rg->left_range);
@@ -4369,10 +4478,10 @@ rg_handler(char *req_buf, int fd)
 
 close:
 
-	tabinfo_pop();
-	
 	if (tabinfo!= NULL)
 	{
+		tabinfo_pop();
+		
 		MEMFREEHEAP(tabinfo->t_sinfo);
 
 		if (tabinfo->t_insrg)

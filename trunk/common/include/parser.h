@@ -205,6 +205,10 @@ par_dropremov_idx_tab(char *s_str, int querytype);
 int
 par_process_orplan(ORANDPLAN *cmd, char *rp, int minrowlen);
 
+
+#define	PAR_ANDPLAN_NOHIT	0	
+#define	PAR_ANDPLAN_HIT		1	
+#define	PAR_ANDPLAN_HIT_BOUND	2	
 int
 par_process_andplan(ORANDPLAN *cmd, char *rp, int minrowlen);
 

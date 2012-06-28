@@ -2290,7 +2290,6 @@ par_process_orplan(ORANDPLAN *cmd, char *rp, int minrowlen)
 }
 
 
-
 int
 par_process_andplan(ORANDPLAN *cmd, char *rp, int minrowlen)
 {
@@ -2305,14 +2304,15 @@ par_process_andplan(ORANDPLAN *cmd, char *rp, int minrowlen)
 	int		rtn_stat;
 	int		coltype;
 	SRCHCLAUSE	*srchclause;
+	int		colid;
 
 	
 	if (cmd == NULL)
 	{
-		return TRUE;
+		return PAR_ANDPLAN_HIT;
 	}
 
-	rtn_stat = FALSE;
+	rtn_stat = PAR_ANDPLAN_NOHIT;
 		
 	while(cmd)
 	{
@@ -2320,6 +2320,7 @@ par_process_andplan(ORANDPLAN *cmd, char *rp, int minrowlen)
 		
 		coloffset = srchclause->scterms->left->sym.resdom.coloffset;
 		coltype = srchclause->scterms->left->sym.resdom.coltype;
+		colid = srchclause->scterms->left->sym.resdom.colid;
 
 		colp = row_locate_col(rp, coloffset, minrowlen, &length);
 
@@ -2364,6 +2365,12 @@ par_process_andplan(ORANDPLAN *cmd, char *rp, int minrowlen)
 
 				if (result == GR)
 				{
+					
+					if (colid == 1)
+					{
+						rtn_stat = PAR_ANDPLAN_HIT_BOUND;
+					}
+					
 					break;
 				}
 			}
@@ -2375,7 +2382,7 @@ par_process_andplan(ORANDPLAN *cmd, char *rp, int minrowlen)
 
 	if (cmd == NULL)
 	{
-		rtn_stat = TRUE;
+		rtn_stat = PAR_ANDPLAN_HIT;
 	}
 
 	return rtn_stat;
