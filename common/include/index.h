@@ -157,7 +157,7 @@ int
 index_bld_leaf_name(char *tab_meta_dir, char *index_sstab_name, char *tab_name, 
 			char *idx_name, int tablet_num, int sstab_num);
 
-void
+int
 index_range_sstab_scan(TABLET_SCANCTX * tablet_scanctx,IDXMETA * idxmeta,
 				char *tabname, int tabnamelen, int tabletid);
 

@@ -71,6 +71,7 @@ typedef struct sstab_scancontext
 */
 #define	SSTABSCAN_HIT_ROW	0x0001	/* Hit one row at least. */
 #define	SSTABSCAN_BLK_IS_FULL	0x0002	/* The block hit the issue of overload. */
+#define	SSTABSCAN_HIT_BOUND	0x0004	/* It hit the right bound in the sstable scan. */
 
 
 /* Defines for the function rg_get_sstab_tablet(). */

@@ -34,7 +34,7 @@
 extern	TSS	*Tss;
 extern	KERNEL *Kernel;
 
-struct epoll_event events[20];
+struct epoll_event events[EPOLL_SIZE];
 
 MSG_DATA * msg_list_head = NULL;
 MSG_DATA * msg_list_tail = NULL;

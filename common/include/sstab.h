@@ -24,7 +24,7 @@
 void
 sstab_namebyname(char *old_sstab, char *new_sstab);
 
-void
+int
 sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp, int data_insert_needed);
 
 void

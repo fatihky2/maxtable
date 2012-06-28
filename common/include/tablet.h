@@ -67,7 +67,13 @@ struct table_hdr;
 #define TABLETSCHM_KEY_FAKE_COLOFF_INROW	-1
 
 
-void
+
+#define		TABLET_OK		0x0001		
+#define		TABLET_FAIL		0x0002		
+#define		TABLET_CRT_NEW		0x0004		
+
+
+int
 tablet_crt(TABLEHDR *tablehdr, char *tabledir, char *rg_addr, char *rp, int minlen, int port);
 
 int
@@ -91,10 +97,10 @@ void
 tablet_schm_bld_row(char *rp, int rlen, int tabletid, char *tabletname, char *rang_addr, 
 			char *keycol, int keycolen, int port);
 
-void
+int
 tablet_schm_ins_row(int tabid, int sstabid, char *systab, char *row, int tabletnum, int flag);
 
-void
+int
 tablet_schm_del_row(int tabid, int sstabid, char *systab, char *key, int keylen);
 
 char *
@@ -109,7 +115,7 @@ tablet_namebyname(char *old_sstab, char *new_sstab);
 void
 tablet_namebyid(TABINFO *tabinfo, char *new_sstab);
 
-void
+int
 tablet_split(TABINFO *srctabinfo, BUF *srcbp, char *rp);
 
 int

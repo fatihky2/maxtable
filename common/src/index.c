@@ -52,7 +52,6 @@ extern	TSS	*Tss;
 extern	RANGEINFO *Range_infor;
 extern	KERNEL	*Kernel;
 
-int yxue = 0;
 
 static int
 index_bld_sstabnum(int tablet_num, int sstab_index);
@@ -93,8 +92,10 @@ index_ins_row(IDXBLD *idxbld)
 	INSMETA		insmeta;
 	int		idx_sstab_split;
 	int		flag;
+	int		rtn_stat;
 
 
+	rtn_stat = TRUE;
 	
 	MEMSET(&tabinfo, sizeof(TABINFO));
 	MEMSET(&sinfo, sizeof(SINFO));
@@ -229,7 +230,12 @@ index_ins_row(IDXBLD *idxbld)
 	tabinfo.t_insmeta = &insmeta;
 	
 	
-	blkins(&tabinfo, idxbld->idx_rp);
+	if (!blkins(&tabinfo, idxbld->idx_rp))
+	{
+		rtn_stat = FALSE;
+
+		goto exit;
+	}
 
 	if (!first_row_hit)
 	{
@@ -272,17 +278,21 @@ index_ins_row(IDXBLD *idxbld)
 					TABLETSCHM_KEY_FAKE_COLOFF_INROW,
 					ROW_MINLEN_IN_TABLETSCHM, &old_keylen);
 			
-			tablet_schm_del_row(idxbld->idx_meta->idx_id, 
+			rtn_stat = tablet_schm_del_row(idxbld->idx_meta->idx_id, 
 						idxbld->idx_root_sstab, 
 						tab_idxroot_dir, 
 						old_key, old_keylen);
 
-			tablet_schm_ins_row(idxbld->idx_meta->idx_id, 
+			if (rtn_stat)
+			{
+				rtn_stat = tablet_schm_ins_row(
+						idxbld->idx_meta->idx_id, 
 						idxbld->idx_root_sstab, 
 						tab_idxroot_dir, 
 						idxroot_newrp,
 						TRUE, flag);
-
+			}
+			
 			MEMFREEHEAP(idxroot_newrp);
 		}
 
@@ -293,6 +303,11 @@ index_ins_row(IDXBLD *idxbld)
 			   && !(tabinfo.t_stat & TAB_SKIP_SSTAB_REGIEST))
 			? TRUE : FALSE;
 
+	if (!rtn_stat)
+	{
+		goto exit;
+	}
+	
 	if (idx_sstab_split)
 	{
 		Assert(tabinfo.t_insrg);
@@ -329,7 +344,7 @@ index_ins_row(IDXBLD *idxbld)
 			       ? 0 : 1;
 
 		
-		tablet_schm_ins_row(idxbld->idx_meta->idx_id, 
+		rtn_stat = tablet_schm_ins_row(idxbld->idx_meta->idx_id, 
 					idxbld->idx_root_sstab, tab_idxroot_dir,
 					temprp, has_idxsstab, flag);
 
@@ -339,6 +354,7 @@ index_ins_row(IDXBLD *idxbld)
 	}
 	
 
+exit:
 	if (idx_sstab_split)
 	{
 		if (tabinfo.t_insrg->new_sstab_key)
@@ -362,7 +378,7 @@ index_ins_row(IDXBLD *idxbld)
 	
 	idxbld->idx_stat &= ~IDXBLD_FIRST_DATAROW_IN_TABLET;
 
-	return TRUE;
+	return rtn_stat;
 }
 
 
@@ -1401,6 +1417,7 @@ index__get_count_or_sum(SSTAB_SCANCTX *scanctx, char *tabname, int tab_name_len,
 	char		sstab_full_path[TABLE_NAME_MAX_LEN];
 	char		*colval;
 	int		ign;
+	int		andplan_ret;
 	
 	
 	tabinfo = MEMALLOCHEAP(sizeof(TABINFO));
@@ -1467,10 +1484,12 @@ index__get_count_or_sum(SSTAB_SCANCTX *scanctx, char *tabname, int tab_name_len,
 
 			rp = (char *)blk + ridarry[i].roffset;
 
-			if (   par_process_orplan(scanctx->orplan, rp,
-						datarow_minlen)
-			    && par_process_andplan(scanctx->andplan, rp, 
-			    			datarow_minlen))
+			andplan_ret = par_process_andplan(scanctx->andplan, rp,
+							datarow_minlen);
+
+			if (   (andplan_ret == PAR_ANDPLAN_HIT)
+			    && par_process_orplan(scanctx->orplan, rp,
+						datarow_minlen))
 			{
 				switch (scanctx->querytype)
 				{
@@ -1548,13 +1567,52 @@ index__range_delete_update(SSTAB_SCANCTX *scanctx, char *tabname, int tab_name_l
 	int		oldroffset;
 	LOGREC		logrec;
 	int		skip_this_row;
+	int		andplan_hit;
 	
 
+	volatile struct
+	{
+		BUF	*bp;
+		TABINFO	*tabinfo;
+		char	*newrp;
+	} copy;
+
+	copy.bp = NULL;
+	copy.tabinfo = NULL;
+	copy.newrp = NULL;
+	
+	if(ex_handle(EX_ANY, yxue_handler))
+	{
+		if (copy.bp)
+		{
+			
+			bufdestroy(copy.bp->bsstab);
+		}
+
+		if (copy.newrp)
+		{
+			MEMFREEHEAP(copy.newrp);
+		}
+
+		if (copy.tabinfo)
+		{
+			MEMFREEHEAP(copy.tabinfo->t_sinfo);
+			MEMFREEHEAP(copy.tabinfo);
+		}
+
+		ex_delete();
+
+		ex_raise(EX_ANY);
+	}
+	
 	delete_hit = FALSE;
 	restart = FALSE;
 	skip_this_row = FALSE;
 	newrp = NULL;
 	tabinfo = MEMALLOCHEAP(sizeof(TABINFO));
+
+	copy.tabinfo = tabinfo;
+	
 	MEMSET(tabinfo, sizeof(TABINFO));
 	tabinfo->t_sinfo = (SINFO *)MEMALLOCHEAP(sizeof(SINFO));
 	tabinfo->t_rowinfo = &blk_rowinfo;
@@ -1621,6 +1679,8 @@ index__range_delete_update(SSTAB_SCANCTX *scanctx, char *tabname, int tab_name_l
 			
 			bp = blk_getsstable(tabinfo);
 
+			copy.bp = bp;
+
 			datarow_minlen = bp->bblk->bminlen;
 
 			bp += ridarry[i].block_id;
@@ -1632,10 +1692,12 @@ index__range_delete_update(SSTAB_SCANCTX *scanctx, char *tabname, int tab_name_l
 			oldroffset = ridarry[i].roffset;
 			rp = (char *)blk + oldroffset;
 
-			if (   par_process_orplan(scanctx->orplan, rp,
-						datarow_minlen)
-			    && par_process_andplan(scanctx->andplan, rp, 
-			    			datarow_minlen))
+			andplan_hit = par_process_andplan(scanctx->andplan, rp,
+			    			datarow_minlen);
+			
+			if (   (andplan_hit == PAR_ANDPLAN_HIT) 
+			    && par_process_orplan(scanctx->orplan, rp,
+						datarow_minlen))
 			{
 				int	j;
 				int	log_stat;
@@ -1657,6 +1719,9 @@ index__range_delete_update(SSTAB_SCANCTX *scanctx, char *tabname, int tab_name_l
 				{
 					newrp = (char *)MEMALLOCHEAP(BLOCKSIZE 
 								- BLKHEADERSIZE - 4);
+
+					copy.newrp = newrp;
+					
 					MEMSET(newrp, BLOCKSIZE - BLKHEADERSIZE - 4);
 
 					row_rebld_row(rp, newrp, 
@@ -1692,6 +1757,8 @@ index__range_delete_update(SSTAB_SCANCTX *scanctx, char *tabname, int tab_name_l
 						skip_this_row = TRUE;
 
 						bufunkeep(bp->bsstab);
+
+						copy.bp = NULL;
 				
 						break;
 					}
@@ -1714,7 +1781,6 @@ index__range_delete_update(SSTAB_SCANCTX *scanctx, char *tabname, int tab_name_l
 				
 				bufpredirty(bp->bsstab);
 
-				yxue++;
 				
 				tabinfo->t_cur_rowp = rp;
 
@@ -1817,16 +1883,25 @@ index__range_delete_update(SSTAB_SCANCTX *scanctx, char *tabname, int tab_name_l
 			
 					idxbld.idx_root_sstab = tabinfo->t_tablet_id;
 
-					index_insert(&idxbld, tabinfo, 
-						Range_infor->rg_meta_sysindex);
+					if (!index_insert(&idxbld, tabinfo, 
+						Range_infor->rg_meta_sysindex))
+					{
+						traceprint("UPDATE: index update hit err, the row maybe deleted.\n");
+						ex_raise(EX_ANY);
+					}
 				}
 
 				if (newrp)
 				{
 					MEMFREEHEAP(newrp);
 				}
+
+				copy.newrp = NULL;
+				
 				bufdirty(bp->bsstab);
 				bufunkeep(bp->bsstab);
+
+				copy.bp = NULL;
 				
 				delete_hit = TRUE;
 
@@ -1837,6 +1912,8 @@ index__range_delete_update(SSTAB_SCANCTX *scanctx, char *tabname, int tab_name_l
 			(scanctx->ridnum)++;
 
 			bufunkeep(bp->bsstab);
+
+			copy.bp = NULL;
 		}
 
 		if (restart || skip_this_row)
@@ -1893,6 +1970,25 @@ index__range_delupd_sstab_scan(TABLET_SCANCTX *tablet_scanctx, IDXMETA *idxmeta,
 	int		start_scan_row;
 
 
+	volatile struct
+	{
+		BUF	*bp;
+	} copy;
+
+	copy.bp = NULL;
+	
+	if(ex_handle(EX_ANY, yxue_handler))
+	{
+		if (copy.bp)
+		{
+			bufunkeep(copy.bp->bsstab);
+		}
+
+		ex_delete();
+
+		return FALSE;
+	}
+	
 	bp = NULL;
 	rtn_stat = TRUE;
 
@@ -1935,12 +2031,14 @@ start_scan:
 	{
 		bp = blk_getsstable(tabinfo);
 
+		copy.bp = bp;
 		rnum = 0;
 	}
 	else
 	{
 		bp = blkget(tabinfo);
-	
+
+		copy.bp = bp;
 	
 		if (tabinfo->t_stat & TAB_RETRY_LOOKUP)
 		{
@@ -1955,7 +2053,7 @@ start_scan:
 		    || (tabinfo->t_rowinfo->rsstabid != bp->bsstab->bsstabid))
 		{
 			traceprint("Hit a buffer error!\n");
-			bufunkeep(bp->bsstab);
+			
 			Assert(0);
 			ex_raise(EX_ANY);
 		}
@@ -2062,6 +2160,8 @@ start_scan:
 		{
 						
 			bufunkeep(bp->bsstab);
+
+			copy.bp = NULL;
 			
 #if 0
 			IDXBLD	idxbld;			
@@ -2124,7 +2224,11 @@ nextblk:
 			
 			bufunkeep(bp->bsstab);
 
+			copy.bp = NULL;
+
 			bp = blk_getsstable(tabinfo);
+
+			copy.bp = bp;
 
 			Assert(tabinfo->t_sstab_id == bp->bsstab->bsstabid);
 		}
@@ -2404,7 +2508,7 @@ done:
 	return rtn_stat;
 }
 
-void
+int
 index_range_sstab_scan(TABLET_SCANCTX * tablet_scanctx,IDXMETA * idxmeta,
 				char *tabname, int tabnamelen, int tabletid)
 {
@@ -2415,8 +2519,10 @@ index_range_sstab_scan(TABLET_SCANCTX * tablet_scanctx,IDXMETA * idxmeta,
 	IDX_ROOT_SRCH	*root_srchctx;
 	IDX_ROOT_SRCH	t_root_srchctx;
 	char		tab_meta_dir[TABLE_NAME_MAX_LEN];
+	int		rtn_stat;
 
 
+	rtn_stat = FALSE;
 	MEMSET(&t_idx_range_ctx, sizeof(IDX_RANGE_CTX));
 	idx_range_ctx = &t_idx_range_ctx;
 
@@ -2455,7 +2561,7 @@ index_range_sstab_scan(TABLET_SCANCTX * tablet_scanctx,IDXMETA * idxmeta,
 		if (!index_srch_root(root_srchctx))
 		{
 			
-			return;
+			return rtn_stat;
 		}
 
 		if (k == 0)
@@ -2478,7 +2584,7 @@ index_range_sstab_scan(TABLET_SCANCTX * tablet_scanctx,IDXMETA * idxmeta,
 
 	if (tablet_scanctx->querytype == SELECTWHERE)
 	{
-		index__range_sstab_scan(tablet_scanctx, idxmeta, idx_range_ctx,
+		rtn_stat = index__range_sstab_scan(tablet_scanctx, idxmeta, idx_range_ctx,
 					tablet_scanctx->tabdir);
 	}
 	else if (   (tablet_scanctx->querytype == DELETEWHERE)
@@ -2486,7 +2592,7 @@ index_range_sstab_scan(TABLET_SCANCTX * tablet_scanctx,IDXMETA * idxmeta,
 	{
 		P_SPINLOCK(BUF_SPIN);
 		
-		index__range_delupd_sstab_scan(tablet_scanctx, idxmeta,
+		rtn_stat = index__range_delupd_sstab_scan(tablet_scanctx, idxmeta,
 					idx_range_ctx, tablet_scanctx->tabdir);
 
 		V_SPINLOCK(BUF_SPIN);
@@ -2496,11 +2602,11 @@ index_range_sstab_scan(TABLET_SCANCTX * tablet_scanctx,IDXMETA * idxmeta,
 		Assert(   (tablet_scanctx->querytype == SELECTCOUNT)
 		       || (tablet_scanctx->querytype == SELECTSUM));
 
-		index__count_sstab_scan(tablet_scanctx, idxmeta, idx_range_ctx,
+		rtn_stat = index__count_sstab_scan(tablet_scanctx, idxmeta, idx_range_ctx,
 					tablet_scanctx->tabdir);
 	}
 	
-	return;
+	return rtn_stat;
 
 }
 
@@ -2858,6 +2964,7 @@ index_get_datarow(SSTAB_SCANCTX *scanctx, char *tabname, int tab_name_len, int t
 	char		*indexrp;
 	int		datarow_minlen;
 	char		sstab_full_path[TABLE_NAME_MAX_LEN];
+	int		andplan_hit;
 
 	
 	tabinfo = MEMALLOCHEAP(sizeof(TABINFO));
@@ -2924,10 +3031,12 @@ index_get_datarow(SSTAB_SCANCTX *scanctx, char *tabname, int tab_name_len, int t
 
 			rp = (char *)blk + ridarry[i].roffset;
 
-			if (   par_process_orplan(scanctx->orplan, rp,
-						datarow_minlen)
-			    && par_process_andplan(scanctx->andplan, rp, 
-			    			datarow_minlen))
+			andplan_hit = par_process_andplan(scanctx->andplan, rp, 
+			    			datarow_minlen);
+
+			if (   (andplan_hit == PAR_ANDPLAN_HIT)
+			    && par_process_orplan(scanctx->orplan, rp,
+						datarow_minlen))
 			{
 				if (!(scanctx->stat & SSTABSCAN_HIT_ROW))
 				{
@@ -3104,7 +3213,12 @@ index_insert(IDXBLD *idxbld, TABINFO *tabinfo,	META_SYSINDEX *meta_sysidx)
 			idxbld->idx_rp = (char *)index_rp;
 			idxbld->idx_rlen = index_rlen;
 
-			index_ins_row(idxbld);
+			if (!index_ins_row(idxbld))
+			{
+				BUF_RELEASE_RESERVED(index_rp);
+
+				return FALSE;
+			}
 
 			
 			if (idxbld->idx_stat & IDXBLD_SSTAB_SPLIT)

@@ -74,7 +74,10 @@ int
 yxue_handler(int exce_num);
 
 
-# define	EX_ANY		0
+#define	EX_ANY		0
+#define	EX_BUFERR	1 
+#define	EX_TABLETERR	2
+#define	EX_SSTABERR	3
 
 
 # ifdef __cplusplus
