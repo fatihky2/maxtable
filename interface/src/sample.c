@@ -135,8 +135,7 @@ exitcrt:
 			memset(cmd , 0, 4096);
 
 			/* Insert 10000 data rows into table */
-			for(i = 1; i < 100000; i++)
-//			for(i = 1001; i < 1100; i++)
+			for(i = 1; i < 1000; i++)
 //			for(i = 1101; i < 71100; i++)
 			{
 //				sprintf(cmd, "insert into maxtab(aaaa%d, bbbb20, %d, %s%d, %s%d, %s%d, %s%d, %s%d, %s%d)", i,i,c,i,d, i,e, i,f,i,g,i,h,i);
@@ -240,7 +239,7 @@ exitinstxt:
 			memset(cmd, 0, 256);
 			//sprintf(cmd, "selectwhere maxtab where id1(aaaa1, *) and id2(bbbb35, bbbb46)");
 			//sprintf(cmd, "selectwhere maxtab where id2(bbbb39, bbbb39) and id4(cccccc39, cccccc39)");
-			sprintf(cmd, "selectwhere maxtab where id2(bbbb60, bbbb70)");
+			sprintf(cmd, "selectwhere maxtab where id2(bbbb1, bbbb9999)");
 			//sprintf(cmd, "selectwhere maxtab where id1(aaaa1, aaaa999999)");
 //			sprintf(cmd, "selectwhere maxtab where id1(aaaa20, aaaa30)");
 //			sprintf(cmd, "selectwhere maxtab where id2(bbbb2000, bbbb2000)");

@@ -1160,6 +1160,7 @@ tablet_split(TABINFO *srctabinfo, BUF *srcbp, char *rp)
 	if (system(cmd_str))
 #endif
 	{
+		traceprint("TABLET_SPLIT: File copying hit error!\n");
 		status = FALSE;		
 	}
 
@@ -1500,6 +1501,8 @@ finish:
 	MEMFREEHEAP(srctabinfo);
 
 	tabinfo_pop();
+
+	ex_delete();
 
 	return rtn_stat;
 	

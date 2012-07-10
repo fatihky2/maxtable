@@ -51,12 +51,14 @@ typedef struct tss
 
 	
 	int		tstat;  	
+	int		tlogbeg_off;	
 	struct tree     *tcmd_parser;
 
 	RPCREQ		trecvbuf;	
 	char		*tsendbuf;	
 
 	short		topid;		
+	char		pad[6];
 
 	
 	EXC_PROC	texcproc;	
@@ -84,6 +86,8 @@ typedef struct tss
 
 #define TSS_PARSER_ERR		0x0001
 #define TSS_DEBUG		0x0002
+#define	TSS_BEGIN_LOGGING	0x0004	
+#define	TSS_LOGGING_SCOPE	0x0008	
 
 
 #define DEBUG_TEST(tss)		((tss)->tstat & TSS_DEBUG)

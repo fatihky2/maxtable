@@ -49,10 +49,6 @@ extern KERNEL	*Kernel;
 RG_LOGINFO	*Rg_loginfo = NULL;
 
 
-#define	LOG_FILE_SIZE		(16 * SSTABLE_SIZE)
-
-
-#define	LOG_BUF_RESERV_MAX	2
 
 
 typedef struct log_buf
@@ -73,9 +69,6 @@ typedef struct log_recov
 	char		*redo_start_off;
 }LOG_RECOV;
 
-
-static int
-log__get_last_logoffset(LOGREC *logrec);
 
 static void
 log__find_undoend(char *log_off, int log_beg_hit, LOG_RECOV *log_recov);
@@ -256,6 +249,13 @@ log_put(LOGREC *logrec, char *rp, int rlen)
 
 	PUT_TO_BUFFER(logbuf, idx, logrec, sizeof(LOGREC));
 
+	if (tss->tstat & TSS_BEGIN_LOGGING)
+	{
+		tss->tstat &= ~TSS_BEGIN_LOGGING;
+
+		tss->tlogbeg_off = Rg_loginfo->logoffset;
+	}
+
 	Rg_loginfo->logoffset += logbuflen;
 
 	if (Rg_loginfo->logoffset > LOG_FILE_SIZE)
@@ -276,7 +276,13 @@ log_put(LOGREC *logrec, char *rp, int rlen)
 		OPEN(Rg_loginfo->logfd, Rg_loginfo->logdir, 
 				(O_CREAT | O_APPEND | O_RDWR |O_TRUNC));
 
-		Rg_loginfo->logoffset = 0;
+		Rg_loginfo->logoffset = logbuflen;
+
+		if (!(tss->tstat & TSS_BEGIN_LOGGING))
+		{
+			
+			tss->tstat |= TSS_LOGGING_SCOPE;
+		}
 	}
 
 	if (Rg_loginfo->logoffset > LOG_FILE_SIZE)
@@ -311,6 +317,7 @@ log_put(LOGREC *logrec, char *rp, int rlen)
 		if (system(cmd_str))
 #endif
 		{
+			traceprint("LOG_PUT: File copying hit error!\n");
 			status = FALSE;
 			goto exit;
 		}
@@ -404,6 +411,7 @@ log_undo_split(LOGREC	*logrec, char *rgip, int rgport)
 
 	if (system(cmd_str))
 	{
+		traceprint("LOG_UNDO_SPLIT: File copying hit error!\n");
 		status = FALSE;
 		goto exit;
 	}
@@ -614,7 +622,7 @@ pre_logfile:
 	offset = READ(log_recov.log_buf[log_recov.buf_idxcur].fd, logfilebuf,
 								LOG_FILE_SIZE);
 
-	offset = log__get_last_logoffset((LOGREC *)logfilebuf);
+	offset = log_get_last_logoffset((LOGREC *)logfilebuf);
 
 	Assert(offset < LOG_FILE_SIZE);
 
@@ -878,8 +886,6 @@ log__recov_undo(char *logfilebuf, int freeoff, char *log_undo_end, char *rg_ip,
 			int rg_port)
 {
 	int		tmp;
-	char		*rp;
-	int		rlen;
 	LOGREC		*logrec;
 
 
@@ -895,73 +901,7 @@ log__recov_undo(char *logfilebuf, int freeoff, char *log_undo_end, char *rg_ip,
 		Assert(strncasecmp(((LOGHDR *)logrec)->logmagic, MT_LOG,
 						STRLEN(MT_LOG)) == 0);
 
-		switch (((LOGHDR *)logrec)->opid)
-		{
-		    case LOG_DATA_SSTAB_SPLIT:
-
-			
-			undo_split(logrec, rg_ip, rg_port);
-			break;
-
-		    case LOG_BLK_SPLIT:
-
-			
-			undo_split(logrec, rg_ip, rg_port);
-			break;
-			
-		    case LOG_INDEX_SSTAB_SPLIT:
-
-			
-			undo_split(logrec, rg_ip, rg_port);
-
-		    	break;
-			
-		    case LOG_UPDRID:
-
-			
-			undo_updrid(logrec);
-
-			
-		    	break;
-
-		    case LOG_INDEX_INSERT:
-		    case LOG_INDEX_DELETE:
-
-			rp = (char *)logrec + sizeof(LOGREC) -
-					((LOGHDR *)logrec)->loglen;
-			rlen = *(int *)rp;
-			rp += sizeof(int);
-
-			undo_index_insdel(logrec, rp);
-			
-		    	break;
-			
-		    case LOG_DATA_INSERT:
-		    case LOG_DATA_DELETE:
-
-		 	rp = (char *)logrec + sizeof(LOGREC) -
-					((LOGHDR *)logrec)->loglen;
-			rlen = *(int *)rp;
-			rp += sizeof(int);
-
-		    	undo_data_insdel(logrec, rp);
-
-			break;
-			
-		    case LOG_BEGIN:
-		    case LOG_END:
-		    	break;
-			
-		    case CHECKPOINT_BEGIN:
-		    case LOG_SKIP:
-		    	break;
-			
-		    default:
-		    	traceprint("Hit error log type(%d).\n", ((LOGHDR *)logrec)->opid);
-			Assert(0);
-		    	break;
-		}
-
+		log_undo((LOGHDR *)logrec, rg_ip, rg_port);
 
 		tmp -= ((LOGHDR *)logrec)->loglen;
 		
@@ -1289,8 +1229,8 @@ log_recov_rg(char *rgip, int rgport)
 	return TRUE;
 }
 
-static int
-log__get_last_logoffset(LOGREC *logrec)
+int
+log_get_last_logoffset(LOGREC *logrec)
 {
 	int	rlen;
 	char	*rp;
@@ -1360,5 +1300,82 @@ log__get_last_logoffset(LOGREC *logrec)
 	}
 
 	return logoffset;
+}
+
+void
+log_undo(LOGHDR *logrec, char *rgip, int rgport)
+{
+	char	*rp;
+	int	rlen;
+
+	
+	switch (logrec->opid)
+	{
+	    case LOG_DATA_SSTAB_SPLIT:
+
+		
+		undo_split((LOGREC *)logrec, rgip, rgport);
+		break;
+
+	    case LOG_BLK_SPLIT:
+
+		
+		undo_split((LOGREC *)logrec, rgip, rgport);
+		break;
+		
+	    case LOG_INDEX_SSTAB_SPLIT:
+
+		
+		undo_split((LOGREC *)logrec, rgip, rgport);
+
+	    	break;
+		
+	    case LOG_UPDRID:
+
+		
+		undo_updrid((LOGREC *)logrec);
+
+		
+	    	break;
+
+	    case LOG_INDEX_INSERT:
+	    case LOG_INDEX_DELETE:
+
+		rp = (char *)logrec + sizeof(LOGREC) -
+				logrec->loglen;
+		rlen = *(int *)rp;
+		rp += sizeof(int);
+
+		undo_index_insdel((LOGREC *)logrec, rp);
+		
+	    	break;
+		
+	    case LOG_DATA_INSERT:
+	    case LOG_DATA_DELETE:
+
+	 	rp = (char *)logrec + sizeof(LOGREC) -
+				logrec->loglen;
+		rlen = *(int *)rp;
+		rp += sizeof(int);
+
+	    	undo_data_insdel((LOGREC *)logrec, rp);
+
+		break;
+		
+	    case LOG_BEGIN:
+	    case LOG_END:
+	    	break;
+		
+	    case CHECKPOINT_BEGIN:
+	    case LOG_SKIP:
+	    	break;
+		
+	    default:
+	    	traceprint("Hit error log type(%d).\n", logrec->opid);
+		Assert(0);
+	    	break;
+	}
+
+	return;
 }
 

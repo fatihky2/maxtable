@@ -263,6 +263,8 @@ nextsstab:
 	}
 
 finish:
+
+	ex_delete();
 	
 	return (bp->bsstab + blkidx);
 }
@@ -1222,8 +1224,9 @@ blk_check_sstab_space(TABINFO *tabinfo, BUF *bp, char *rp, int rlen,
 		return rtn_stat;
 	}
 
+	
 	if (   (tabinfo->t_stat & TAB_INS_INDEX) 
-		    && (!(tabinfo->t_sinfo->sistate & SI_NODATA)))
+	    && (!(tabinfo->t_sinfo->sistate & SI_NODATA)))
 	{
 		if ((blk->bfreeoff + (sizeof(RID))) 
 				< (BLOCKSIZE - BLK_TAILSIZE -

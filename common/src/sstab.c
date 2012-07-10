@@ -417,10 +417,9 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp, int data_insert_needed)
 
 		log_put(logrec, NULL, 0);
 
-		if (!(srctabinfo->t_stat & TAB_INS_INDEX))
-		{
-			hkgc_wash_sstab(TRUE);
-		}
+		
+		hkgc_wash_sstab(TRUE);
+		
 	}	
 	
 	if (data_insert_needed && ins_nxtsstab)
@@ -477,6 +476,8 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp, int data_insert_needed)
 	}
 
 	tabinfo_pop();
+
+	ex_delete();
 
 	return TRUE;
 	

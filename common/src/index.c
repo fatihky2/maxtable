@@ -1941,6 +1941,8 @@ finish:
 
 	tabinfo_pop();
 
+	ex_delete();
+
 	return delete_hit;
 }
 
@@ -2252,6 +2254,8 @@ nextblk:
 end_scan:
 			
 	bufunkeep(bp->bsstab);
+
+	ex_delete();
 	
 	return rtn_stat;
 }
