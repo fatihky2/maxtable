@@ -54,6 +54,7 @@
 #include "ranger/rangeserver.h"
 #include "index.h"
 #include "timestamp.h"
+#include "rollback.h"
 
 
 extern TSS	*Tss;
@@ -557,7 +558,15 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 		/* 
 		** TODO: it should be undo the data insert if the index insert
 		** hit error.
-		*/		
+		*/
+
+		if (!rtn_stat)
+		{
+			traceprint("Index inserting hit fatal error!\n");
+
+			ex_raise(EX_ANY);
+		}
+		
 	}
 
 exit:
@@ -3735,6 +3744,8 @@ scan_block:
 		scanctx->currow = 0;
 	}
 
+	ex_delete();
+	
 	return TRUE;
 }
 
@@ -4184,6 +4195,7 @@ rg_handler(char *req_buf, int fd)
 	{
 		tabinfo = copy.tabinfo;
 
+		rollback_rg();
 		/* TODO: Resp information needs to be built ?. */
 		goto close;
 	}

@@ -183,6 +183,13 @@ typedef struct logfile
 #define	SPLIT_LOG	1
 
 
+
+#define	LOG_FILE_SIZE		(16 * SSTABLE_SIZE)
+
+
+#define	LOG_BUF_RESERV_MAX	2
+
+
 void
 log_build(LOGREC *logrec, int logopid, unsigned int oldts, unsigned int newts,
 		char *oldsstab, char *newsstab, int minrowlen, int tabid,
@@ -204,6 +211,11 @@ log_recovery(char *insdellogfile, char *rg_ip, int rg_port);
 int
 log_recov_rg(char *rgip, int rgport);
 
+void
+log_undo(LOGHDR *logrec, char *rgip, int rgport);
+
+int
+log_get_last_logoffset(LOGREC *logrec);
 
 
 #endif

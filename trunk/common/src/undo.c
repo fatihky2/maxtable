@@ -114,6 +114,7 @@ undo_split(LOGREC *logrec, char *rgip, int rgport)
 
 	if (system(cmd_str))
 	{
+		traceprint("UNDO_SPLIT: File copying hit error!\n");
 		status = FALSE;
 		goto exit;
 	}

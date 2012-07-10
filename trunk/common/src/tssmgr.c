@@ -57,7 +57,8 @@ tss_init(TSS *tss)
 {
 	tss->texcptr = &tss->texcproc;
 
-	tss->tstat = 0;
+	
+	tss->tstat = TSS_BEGIN_LOGGING;
 	
 #ifdef DEBUG
 	DEBUG_SET(tss);

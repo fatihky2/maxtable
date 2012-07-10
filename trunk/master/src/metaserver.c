@@ -1073,11 +1073,11 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 		sstab_id = *(int *)row_locate_col(rp, TABLET_SSTABID_COLOFF_INROW, 
 						  ROW_MINLEN_IN_TABLET, &namelen);
 
-		char *testcol;
-		testcol = row_locate_col(rp, TABLET_RESSSTABID_COLOFF_INROW, 
+		char *pres_sstab_id;
+		pres_sstab_id = row_locate_col(rp, TABLET_RESSSTABID_COLOFF_INROW, 
 					ROW_MINLEN_IN_TABLET, &namelen);
 		
-		res_sstab_id = *(int *)testcol;
+		res_sstab_id = *(int *)pres_sstab_id;
 
 		/*
 		** Check if the reserved sstable id has been used by last 
@@ -2734,6 +2734,7 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 			MEMFREEHEAP(copy.sstab_rp);
 		}
 
+		traceprint("Add sstable hit error!\n");
 		ex_delete();
 		ex_raise(EX_ANY);
 	}
@@ -3016,6 +3017,8 @@ exit:
 	{
 		MEMFREEHEAP(resp_buf);
 	}
+
+	ex_delete();
 
 	return resp;
 
@@ -4363,7 +4366,10 @@ meta_handler(char *req_buf, int fd)
 	{
 		tabinfo = copy.tabinfo;
 
-		resp = conn_build_resp_byte(RPC_FAIL, 0, NULL);	
+		resp = conn_build_resp_byte(RPC_FAIL, 0, NULL);
+
+		ex_delete();
+		
 		goto close;
 	}
 
