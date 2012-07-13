@@ -1367,6 +1367,7 @@ log_undo(LOGHDR *logrec, char *rgip, int rgport)
 	    	break;
 		
 	    case CHECKPOINT_BEGIN:
+	    case CHECKPOINT_COMMIT:
 	    case LOG_SKIP:
 	    	break;
 		

@@ -40,13 +40,13 @@ ex_init(TSS * new_tss)
 }
 
 int
-ex_handle(int exce_num, EXC_FUNC_PTR handler)
+ex_install(int exce_num, EXC_FUNC_PTR handler)
 {
 	LOCALTSS(tss);
-	int 		setjmp_ret;
+	int 		rtn_stat;
 	EXC_MANAGE	*exp1;
 			
-	setjmp_ret = -1;
+	rtn_stat = FALSE;
 	exp1 = &(tss->texcproc.exp_manage);
 
 	if ((exp1->ex_top + 1) < (tss->texcproc.exp_stack + EX_BACKOUT_STACKSIZE))
@@ -54,10 +54,10 @@ ex_handle(int exce_num, EXC_FUNC_PTR handler)
 		(exp1->ex_top)++;
 		exp1->ex_top->exc_number = exce_num;
 		exp1->ex_top->exc_func = handler;
-		setjmp_ret = setjmp(exp1->ex_top->exc_buf);
+		rtn_stat = TRUE;
 	}
 
-	return setjmp_ret;
+	return rtn_stat;
 }
 
 int 
@@ -76,7 +76,7 @@ ex_backout_cleanup(EXCEPT *ex_elem)
 	exp1 = &(tss->texcproc.exp_manage);
 	exp1->ex_top = ex_elem;
 
-	longjmp(ex_elem->exc_buf,1);
+	longjmp(ex_elem->exc_buf, 1);
 }
 
 int

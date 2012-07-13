@@ -37,6 +37,7 @@
 
 
 extern TSS		*Tss;
+extern KERNEL		*Kernel;
 extern RANGEINFO 	*Range_infor;
 extern	RG_LOGINFO	*Rg_loginfo;
 
@@ -53,6 +54,7 @@ rollback_rg()
 	int	offset;
 	char	*logfilebuf;
 	LOGREC	*logrec;
+	char	logfile[TABLE_NAME_MAX_LEN];
 	
 
 	if (tss->tstat & TSS_BEGIN_LOGGING)
@@ -62,7 +64,15 @@ rollback_rg()
 		return TRUE;
 	}
 
+	P_SPINLOCK(BUF_SPIN);
+	
 	logfilebuf = (char *)malloc(LOG_FILE_SIZE);
+
+	CLOSE(Rg_loginfo->logfd);
+
+	log_get_latest_rglogfile(logfile, Range_infor->rg_ip, Range_infor->port);
+
+	OPEN(Rg_loginfo->logfd, logfile, (O_RDWR));
 	
 	if (tss->tstat & TSS_LOGGING_SCOPE)
 	{
@@ -79,8 +89,10 @@ rollback_rg()
 		log_end = offset;
 
 		while (log_end > log_beg)
-		{					
-			logrec = (LOGREC *)(logfilebuf + log_end - sizeof(LOGREC));
+		{	
+			log_end -= sizeof(LOGREC);
+			
+			logrec = (LOGREC *)(logfilebuf + log_end);
 
 			log_undo((LOGHDR *)logrec, Range_infor->rg_ip, Range_infor->port);
 					
@@ -91,12 +103,9 @@ rollback_rg()
 			log_end -= ((LOGHDR *)logrec)->loglen;		
 		}
 
-		char	logfile[TABLE_NAME_MAX_LEN];
+		
 		char	prelogfile[TABLE_NAME_MAX_LEN];
 		
-
-		log_get_latest_rglogfile(logfile, Range_infor->rg_ip, Range_infor->port);
-
 		int idxpos = str1nstr(logfile, "/log\0", STRLEN(logfile));
 	
 		int logfilenum = m_atoi(logfile + idxpos, 
@@ -137,7 +146,9 @@ rollback_rg()
 	log_end = offset;
 
 	while (log_end > log_beg)
-	{				
+	{
+//		log_end -= sizeof(LOGREC);
+		
 		logrec = (LOGREC *)(logfilebuf + log_end - sizeof(LOGREC));
 
 		log_undo((LOGHDR *)logrec, Range_infor->rg_ip, Range_infor->port);
@@ -146,7 +157,7 @@ rollback_rg()
 		** Insert and Delete log's length will be greater than the 
 		** sizeof(LOGREC) because it includes the row length. 
 		*/
-		log_end -= ((LOGHDR *)logrec)->loglen;	
+		log_end -= ((LOGHDR *)logrec)->loglen;
 	}
 
 	if (tss->tstat & TSS_LOGGING_SCOPE)
@@ -156,6 +167,8 @@ rollback_rg()
 
 	free(logfilebuf);
 
+	V_SPINLOCK(BUF_SPIN);
+	
 	return TRUE;
 
 }

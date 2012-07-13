@@ -564,6 +564,9 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 		{
 			traceprint("Index inserting hit fatal error!\n");
 
+
+			V_SPINLOCK(BUF_SPIN);
+
 			ex_raise(EX_ANY);
 		}
 		
