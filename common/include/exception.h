@@ -62,7 +62,7 @@ void
 ex_init(struct tss * new_tss);
 
 int
-ex_handle(int exce_num, EXC_FUNC_PTR handler);
+ex_install(int exce_num, EXC_FUNC_PTR handler);
 
 int
 ex_raise(int exce_num);
@@ -78,6 +78,11 @@ yxue_handler(int exce_num);
 #define	EX_BUFERR	1 
 #define	EX_TABLETERR	2
 #define	EX_SSTABERR	3
+
+
+#define	ex_handle(exce_num, handler)					\
+		(!(   ex_install((exce_num), (handler))			\
+		  && (setjmp((&(Tss->texcproc.exp_manage))->ex_top->exc_buf) == 0)))
 
 
 # ifdef __cplusplus
