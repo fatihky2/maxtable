@@ -135,8 +135,8 @@ exitcrt:
 			memset(cmd , 0, 4096);
 
 			/* Insert 10000 data rows into table */
-			for(i = 1; i < 1000; i++)
-//			for(i = 1101; i < 11100; i++)
+//			for(i = 1; i < 1000; i++)
+			for(i = 1101; i < 3100; i++)
 			{
 //				sprintf(cmd, "insert into maxtab(aaaa%d, bbbb20, %d, %s%d, %s%d, %s%d, %s%d, %s%d, %s%d)", i,i,c,i,d, i,e, i,f,i,g,i,h,i);
 				sprintf(cmd, "insert into maxtab(%d, bbbb%d, 1, %s%d, %s%d, %s%d, %s%d, %s%d, %s%d)", i,i,c,i,d, i,e, i,f,i,g,i,h,i);

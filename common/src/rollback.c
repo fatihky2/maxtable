@@ -89,10 +89,8 @@ rollback_rg()
 		log_end = offset;
 
 		while (log_end > log_beg)
-		{	
-			log_end -= sizeof(LOGREC);
-			
-			logrec = (LOGREC *)(logfilebuf + log_end);
+		{			
+			logrec = (LOGREC *)(logfilebuf + log_end - sizeof(LOGREC));
 
 			log_undo((LOGHDR *)logrec, Range_infor->rg_ip, Range_infor->port);
 					
