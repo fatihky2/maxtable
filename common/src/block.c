@@ -1370,7 +1370,11 @@ blk_check_sstab_space(TABINFO *tabinfo, BUF *bp, char *rp, int rlen,
 		}
 
 		nextblk = (BLOCK *) ((char *)blk + BLOCKSIZE);
+
 		
+		DIRTYUNLINK(bp->bsstab);
+		bufwrite(bp->bsstab);
+			
 		
 		if (nextblk->bnextrno == 0)
 		{
@@ -1429,10 +1433,12 @@ blk_check_sstab_space(TABINFO *tabinfo, BUF *bp, char *rp, int rlen,
 				blk = nextblk;
 			}
 
+			
 			if (   data_insert_needed
 			    && (tss->topid & TSS_OP_RANGESERVER)
 			    && (!(tss->tstat & TSS_OP_RECOVERY))
-			    && (!(tabinfo->t_stat & TAB_NOLOG_MODEL)))
+			    && (!(tabinfo->t_stat & TAB_NOLOG_MODEL))
+			    && (!(tabinfo->t_stat & TAB_INS_INDEX)))
 			{
 				Assert(   (tss->topid & TSS_OP_INSTAB)
 				       || (tss->topid & TSS_OP_UPDATE));
@@ -1459,20 +1465,19 @@ blk_check_sstab_space(TABINFO *tabinfo, BUF *bp, char *rp, int rlen,
 						tabinfo->t_insdel_new_ts_lo,
 						tabinfo->t_sstab_name, 
 						tabinfo->t_sstab_name,
-						0, 0, 0, 0, 0, NULL, NULL);
+						0, tabinfo->t_tabid, 
+						tabinfo->t_sstab_id, 0, 0, 
+						NULL, NULL);
 				
 				log_put(&logrec, NULL, 0);				
 				
 
-				
-				if(!(tabinfo->t_stat & TAB_INS_INDEX))
-				{				
-					log_build(&logrec, LOG_END, 0, 0,
-						tabinfo->t_sstab_name,
-						NULL, 0, 0, 0, 0, 0, NULL, NULL);
+				log_build(&logrec, LOG_END, 0, 0,
+					tabinfo->t_sstab_name,
+					NULL, 0, 0, 0, 0, 0, NULL, NULL);
 
-					log_put(&logrec, NULL, 0);
-				}
+				log_put(&logrec, NULL, 0);
+				
 				
 				DIRTYUNLINK(bp->bsstab);
 				bufwrite(bp->bsstab);
@@ -1516,7 +1521,8 @@ blk_check_sstab_space(TABINFO *tabinfo, BUF *bp, char *rp, int rlen,
 				if (   data_insert_needed
 				    && (tss->topid & TSS_OP_RANGESERVER)
 				    && (!(tss->tstat & TSS_OP_RECOVERY))
-				    && (!(tabinfo->t_stat & TAB_NOLOG_MODEL)))
+				    && (!(tabinfo->t_stat & TAB_NOLOG_MODEL))
+				    && (!(tabinfo->t_stat & TAB_INS_INDEX)))
 				{
 					Assert(   (tss->topid & TSS_OP_INSTAB)
 					       || (tss->topid & TSS_OP_UPDATE));
@@ -1543,19 +1549,19 @@ blk_check_sstab_space(TABINFO *tabinfo, BUF *bp, char *rp, int rlen,
 							tabinfo->t_insdel_new_ts_lo,
 							tabinfo->t_sstab_name, 
 							tabinfo->t_sstab_name,
-							0, 0, 0, 0, 0, NULL, NULL);
+							0, tabinfo->t_tabid, 
+							tabinfo->t_sstab_id, 0,
+							0, NULL, NULL);
 					
 					log_put(&logrec, NULL, 0);
 
-					if(!(tabinfo->t_stat & TAB_INS_INDEX))
-					{
-						log_build(&logrec, LOG_END, 0, 0,
-							tabinfo->t_sstab_name,
-							NULL, 0, 0, 0, 0, 0, NULL, NULL);
-
-						log_put(&logrec, NULL, 0);
-					}
 					
+					log_build(&logrec, LOG_END, 0, 0,
+						tabinfo->t_sstab_name,
+						NULL, 0, 0, 0, 0, 0, NULL, NULL);
+
+					log_put(&logrec, NULL, 0);
+										
 					 
 					DIRTYUNLINK(bp->bsstab);
 					bufwrite(bp->bsstab);

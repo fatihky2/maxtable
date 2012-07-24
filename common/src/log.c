@@ -17,6 +17,7 @@
 ** along with Maxtable. If not, see <http://www.gnu.org/licenses/>.
 */
 
+
 #include "global.h"
 #include "strings.h"
 #include "master/metaserver.h"
@@ -82,6 +83,10 @@ log__recov_undo(char *logfilebuf, int freeoff, char *log_undo_end,
 		char *rg_ip, int rg_port);
 
 
+
+
+
+
 void
 log_build(LOGREC *logrec, int logopid, unsigned int oldts, unsigned int newts, 
 	char *oldsstab, char *newsstab, int minrowlen, int tabid, int sstabid,
@@ -116,6 +121,10 @@ log_build(LOGREC *logrec, int logopid, unsigned int oldts, unsigned int newts,
 		MEMCPY(logrec->logsplit.oldsstabname, oldsstab,SSTABLE_NAME_MAX_LEN);
 	
 		MEMCPY(logrec->logsplit.newsstabname, newsstab,SSTABLE_NAME_MAX_LEN);
+		
+		logrec->logsplit.tabid = tabid;
+		
+		logrec->logsplit.newsstabno = sstabid;
 
 		break;
 	    case LOG_BLK_SPLIT:
@@ -127,6 +136,11 @@ log_build(LOGREC *logrec, int logopid, unsigned int oldts, unsigned int newts,
 		MEMCPY(logrec->logsplit.oldsstabname, oldsstab,SSTABLE_NAME_MAX_LEN);
 	
 		MEMCPY(logrec->logsplit.newsstabname, newsstab,SSTABLE_NAME_MAX_LEN);
+
+		logrec->logsplit.tabid = tabid;
+		
+		logrec->logsplit.newsstabno = sstabid;
+		
 	    	break;
 		
 	    case LOG_DATA_INSERT:

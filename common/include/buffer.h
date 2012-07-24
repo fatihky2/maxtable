@@ -181,6 +181,10 @@ bufkeep(BUF *bp);
 void
 bufunkeep(BUF *bp);
 
+BUF *
+buf_search(int sstabno, int tabid);
+
+
 
 
 #endif

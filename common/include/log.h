@@ -130,6 +130,8 @@ typedef struct logsplit
 
 	char		oldsstabname[SSTABLE_NAME_MAX_LEN];
 	char		newsstabname[SSTABLE_NAME_MAX_LEN];
+	int		newsstabno;	
+	int		tabid;
 }LOGSPLIT;
 
 
