@@ -378,11 +378,13 @@ sstab_split(TABINFO *srctabinfo, BUF *srcbp, char *rp, int data_insert_needed)
 	{
 		Assert(logrec);
 		
-		log_build(logrec , (srctabinfo->t_stat & TAB_INS_INDEX) 
+		log_build(logrec, (srctabinfo->t_stat & TAB_INS_INDEX) 
 				  ? LOG_INDEX_SSTAB_SPLIT : LOG_DATA_SSTAB_SPLIT, 
 				srcbp->bsstab->bblk->bsstab_split_ts_lo, 0,
 				srctabinfo->t_sstab_name, destbuf->bsstab_name,
-				0, 0, 0, 0, 0, NULL, NULL);
+				0, srctabinfo->t_tabid, 
+				destbuf->bsstab->bblk->bsstabnum, 0, 0, NULL,
+				NULL);
 		
 		log_put(logrec, NULL, 0);
 	}

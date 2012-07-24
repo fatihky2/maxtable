@@ -292,6 +292,31 @@ bufsearch(TABINFO *tabinfo)
 	return (NULL);
 }
 
+
+
+BUF *
+buf_search(int sstabno, int tabid)
+{
+	BUF	*bufptr;			
+	BUF	**hashptr;				
+	
+
+	
+	hashptr = BUFHASH(sstabno, tabid);
+
+	for (bufptr = *hashptr; bufptr; bufptr = bufptr->bhash)
+	{
+		if (   (bufptr->bsstabid == sstabno) 
+		    && (bufptr->btabid = tabid))
+		{			
+			return (bufptr);
+		}
+	}
+
+	return (NULL);
+}
+
+
 int
 bufhashsize()
 {

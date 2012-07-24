@@ -138,6 +138,14 @@ undo_split(LOGREC *logrec, char *rgip, int rgport)
 		ri_rgstat_deldata(rgstate, new_sstab);
 	}
 
+	BUF *bp = buf_search(logrec->logsplit.newsstabno,
+				logrec->logsplit.tabid);
+
+	if (bp)
+	{
+		bufdestroy(bp);
+	}
+	
 exit:			
 	return status;
 }
@@ -429,8 +437,7 @@ undo_data_insdel(LOGREC *logrec, char *rp)
 			offtab[-i] = offtab[-(i + 1)];	
 		}
 
-		bp->bsstab->bblk->bsstab_insdel_ts_lo = 
-			mtts_increment(bp->bsstab->bblk->bsstab_insdel_ts_lo);
+		bp->bsstab->bblk->bsstab_insdel_ts_lo = loginsdel->oldts;
 		
 		BLK_GET_NEXT_ROWNO(bp->bblk)--;
 
@@ -581,8 +588,7 @@ undo_index_insdel(LOGREC *logrec, char *rp)
 			BLK_GET_NEXT_ROWNO(bp->bblk)++;
 		}
 					
-		bp->bsstab->bblk->bsstab_insdel_ts_lo = mtts_increment(
-					bp->bsstab->bblk->bsstab_insdel_ts_lo);
+		bp->bsstab->bblk->bsstab_insdel_ts_lo = loginsdel->oldts;
 
 		bufdirty(bp);
 			
@@ -685,8 +691,7 @@ undo_index_insdel(LOGREC *logrec, char *rp)
 
 		bufdirty(bp->bsstab);
 
-		bp->bsstab->bblk->bsstab_insdel_ts_lo = mtts_increment(
-					bp->bsstab->bblk->bsstab_insdel_ts_lo);
+		bp->bsstab->bblk->bsstab_insdel_ts_lo = loginsdel->oldts;
 			
 		tabinfo->t_sinfo->sistate &= ~SI_DEL_DATA;	
 		
