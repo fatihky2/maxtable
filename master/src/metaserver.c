@@ -2942,6 +2942,7 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 			idx_root_split.idx_srcroot_id = tabletid;
 			idx_root_split.idx_destroot_id = tab_hdr->tab_tablet - 1;
 			idx_root_split.idx_tabid = tab_hdr->tab_id;
+			idx_root_split.idx_ts = tab_hdr->index_ts;
 
 			MEMSET(idx_root_split.idx_tabname, TABLE_NAME_MAX_LEN);
 
@@ -3628,7 +3629,7 @@ exit:
 
 
 char *
-meta_sharding(TREE *command)
+meta_sharding(TREE *command, int sharding_table)
 {
 	char		*tab_name;
 	int		tab_name_len;
@@ -3639,6 +3640,8 @@ meta_sharding(TREE *command)
 	int		rpc_status;
 	int		tabidx;
 	int		tablet_is_sharding;
+	int		resp_buf_len;
+	char		*resp_buf;
 
 
 	Assert(command);
@@ -3647,6 +3650,8 @@ meta_sharding(TREE *command)
 	tablet_is_sharding = FALSE;
 	resp = NULL;
 	rpc_status = 0;
+	resp_buf_len = 0;
+	resp_buf = NULL;
 	tab_name = command->sym.command.tabname;
 	tab_name_len = command->sym.command.tabname_len;
 
@@ -3665,6 +3670,13 @@ meta_sharding(TREE *command)
 	TABLEHDR		*tab_hdr;
 	
 	tab_hdr = &(Master_infor->meta_sysobj->sysobject[tabidx]);
+
+	if (tab_hdr->has_index && sharding_table)
+	{
+		traceprint("Table %s can not be sharding because it has at least one index! You can use the 'sharding tablet' to replace it.\n", tab_name);
+
+		goto exit;
+	}
 	
 	MEMSET(tab_tabletschm_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_tabletschm_dir, tab_dir, STRLEN(tab_dir));
@@ -3690,16 +3702,30 @@ meta_sharding(TREE *command)
 		{
 			break;
 		}
+
+		tabletname = row_locate_col(rp, 
+					TABLETSCHM_TABLETNAME_COLOFF_INROW,
+					ROW_MINLEN_IN_TABLETSCHM, &ign);
+
+		if (!sharding_table)
+		{
+			Assert((command->left) && (command->left->right));
+			
+			/* Check if it's the needed tablet to be sharding. */
+			if (strncasecmp(tabletname, 
+					command->left->right->sym.constant.value,
+					command->left->right->sym.constant.len) != 0)
+			{
+				rowno++;
+				continue;
+			}
+		}
 		
 		rg_addr = row_locate_col(rp, TABLETSCHM_RGADDR_COLOFF_INROW,
 					ROW_MINLEN_IN_TABLETSCHM, &ign);
 		
 		rg_port = *(int *)row_locate_col(rp, 
 					TABLETSCHM_RGPORT_COLOFF_INROW,
-					ROW_MINLEN_IN_TABLETSCHM, &ign);
-
-		tabletname = row_locate_col(rp, 
-					TABLETSCHM_TABLETNAME_COLOFF_INROW,
 					ROW_MINLEN_IN_TABLETSCHM, &ign);
 
 		tabletid = *(int *)row_locate_col(rp, 
@@ -3709,7 +3735,57 @@ meta_sharding(TREE *command)
 		tablet_is_sharding = tablet_sharding(tab_hdr, rg_addr, rg_port,
 					tab_dir, tab_hdr->tab_id, tabletname, 
 					tabletid);
+		if (!sharding_table)
+		{
+			if (tab_hdr->has_index && 
+			    index_root_crt_empty(tab_hdr->tab_id, tab_name,
+					tab_hdr->tab_tablet - 1,
+					tabletid,					
+					Master_infor->meta_sysindex))
+			{
+				int	buf_idx;
+				IDX_ROOT_SPLIT	idx_root_split;
+				
+				/* Get the meta data for the column. */
+				resp_buf_len = sizeof(INSMETA) + sizeof(IDX_ROOT_SPLIT);
+				
+				resp_buf = MEMALLOCHEAP(resp_buf_len);
 
+				MEMSET(resp_buf, resp_buf_len);
+
+				/* Fill the INSERT_META with the information. */
+				buf_idx = 0;
+
+				/* ranger address. */
+				MEMCPY((resp_buf + buf_idx), rg_addr, STRLEN(rg_addr));
+				buf_idx += RANGE_ADDR_MAX_LEN;
+
+				/* ranger port. */
+				*(int *)(resp_buf + buf_idx) = rg_port;
+				buf_idx += sizeof(int);
+
+				/* ranger state. */
+				*(int *)(resp_buf + buf_idx) = RANGER_IS_ONLINE;
+				buf_idx += sizeof(int);
+
+				idx_root_split.idx_srcroot_id = tabletid;
+				idx_root_split.idx_destroot_id = tab_hdr->tab_tablet - 1;
+				idx_root_split.idx_tabid = tab_hdr->tab_id;
+				idx_root_split.idx_ts = tab_hdr->index_ts;
+
+				MEMSET(idx_root_split.idx_tabname, TABLE_NAME_MAX_LEN);
+
+				MEMCPY(idx_root_split.idx_tabname, tab_name, 
+								STRLEN(tab_name));
+
+				MEMCPY((resp_buf + sizeof(INSMETA)), &idx_root_split, 
+							sizeof(IDX_ROOT_SPLIT));
+				
+			}
+			
+			break;
+		}
+		
 		if (tablet_is_sharding)
 		{
 			rowno += 2;
@@ -3727,12 +3803,18 @@ exit:
 	if (rtn_stat)
 	{
 		rpc_status |= RPC_SUCCESS;
-		resp = conn_build_resp_byte(rpc_status, 0, NULL);
+		resp = conn_build_resp_byte(rpc_status, resp_buf_len, resp_buf);
 	}
 	else
 	{
 		rpc_status |= RPC_FAIL;
 		resp = conn_build_resp_byte(rpc_status, 0, NULL);
+	}
+
+	
+	if (resp_buf != NULL)
+	{
+		MEMFREEHEAP(resp_buf);
 	}
 	
 	return resp;
@@ -4545,8 +4627,12 @@ parse_again:
 	    	resp = meta_rebalancer(command);
 	    	break;
 		
-	    case SHARDING:
-	    	resp = meta_sharding(command);
+	    case SHARDINGTABLE:
+	    	resp = meta_sharding(command, TRUE);
+		break;
+		
+	    case SHARDINGTABLET:
+	    	resp = meta_sharding(command, FALSE);
 		break;
 
 	    default:

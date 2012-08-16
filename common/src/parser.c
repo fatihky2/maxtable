@@ -297,9 +297,15 @@ parser_open(char *s_str, int s_strlen)
 	    	rtn_stat = par_dropremovrebalanmcc_tab(s_str + s_idx, REBALANCE);
 	    	break;
 		
-	    case SHARDING:
-	    	rtn_stat = par_dropremovrebalanmcc_tab(s_str + s_idx, SHARDING);
+	    case SHARDINGTABLE:
+	    	rtn_stat = par_dropremovrebalanmcc_tab(s_str + s_idx, SHARDINGTABLE);
 	    	break;
+
+	    
+	    case SHARDINGTABLET:	   
+		rtn_stat = par_seldel_tab((s_str + s_idx), SHARDINGTABLET);
+	    
+		break;
 
 	    case SELECTWHERE:
 	    	tss->topid |= TSS_OP_SELWHERE;
@@ -596,6 +602,7 @@ double_parse:
 	   || (!strncasecmp("drop", start, len))
 	   || (!strncasecmp("remove", start, len))
 	   || (!strncasecmp("mcc", start, len))
+	   || (!strncasecmp("sharding", start, len))
 	   || (!strncasecmp("update", start, len)))
 	{
 		start[len++] = ' ';
@@ -916,8 +923,6 @@ par_seldel_tab(char *s_str, int querytype)
 
 	return TRUE;
 }
-
-
 
 
 int 
@@ -1778,7 +1783,7 @@ par_col_info(char *cmd, int cmd_len, int querytype, char *blob_data, int blob_da
 		}
 		else if (   (querytype == INSERT) || (querytype == ADDSERVER) 
 			 || (querytype == SELECT) || (querytype == ADDSSTAB) 
-			 || (querytype == DELETE))
+			 || (querytype == DELETE) || (querytype == SHARDINGTABLET))
 		{
 			command = tss->tcmd_parser;
 

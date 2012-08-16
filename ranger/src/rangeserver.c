@@ -5008,10 +5008,17 @@ rg_idxroot_split(IDX_ROOT_SPLIT *idx_root_split)
 	
 	rtn_stat	= TRUE;
 	split_num	= 0;
-	meta_sysidx	= Range_infor->rg_meta_sysindex;
-	idx_meta	= meta_sysidx->idx_meta;
+	
 	destblk		= NULL;
 
+	if (idx_root_split->idx_ts != Range_infor->rg_meta_sysindex->idx_ver)
+	{
+		meta_load_sysindex((char *)Range_infor->rg_meta_sysindex);
+	}
+
+	meta_sysidx	= Range_infor->rg_meta_sysindex;
+	idx_meta	= meta_sysidx->idx_meta;
+	
 	MEMSET(tabname, TABLE_NAME_MAX_LEN);
 	MEMCPY(tabname, MT_RANGE_TABLE, STRLEN(MT_RANGE_TABLE));
 
