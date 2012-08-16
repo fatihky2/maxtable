@@ -49,16 +49,17 @@ typedef struct tokens
 #define	MCCTABLE	12
 #define SELECTWHERE	13
 #define MCCRANGER	14
-#define SHARDING	15
+#define SHARDINGTABLE	15
 #define	SELECTCOUNT	16
 #define SELECTSUM	17
 #define	DROPINDEX	18
 #define	REMOVEINDEX	19
 #define	DELETEWHERE	20
 #define	UPDATE		21
+#define	SHARDINGTABLET	22
 	
 
-#define MAXSI_FIXED_TOKENS	21
+#define MAXSI_FIXED_TOKENS	22
 
 int
 token_validate(char *token);

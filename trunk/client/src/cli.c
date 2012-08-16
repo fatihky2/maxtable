@@ -220,17 +220,23 @@ conn_again:
 		int	sendbp_idx = 0;
 		
 		PUT_TO_BUFFER(send_buf, sendbp_idx, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
+
+		if (send_rg_bp)
+		{
+			PUT_TO_BUFFER(send_buf, sendbp_idx, send_rg_bp, send_buf_size);
+
+			send_buf_size = STRLEN(cli_str);
+
+			MEMFREEHEAP(send_rg_bp);
+			send_rg_bp = NULL;
+		}
+		
 		PUT_TO_BUFFER(send_buf, sendbp_idx, &send_buf_size, sizeof(int));
 		/* Set the information header with the MAGIC. */
 		PUT_TO_BUFFER(send_buf, sendbp_idx, cli_str, send_buf_size);
 		
 		//if ((Cli_infor->cli_status == CLI_CONN_REGION) && (meta_only == FALSE) && send_rg_bp)
-		if (send_rg_bp)
-		{
-			MEMFREEHEAP(send_rg_bp);
-			send_rg_bp = NULL;
-		}
-
+		
 		Assert(sendbp_idx < LINE_BUF_SIZE);
 		
 		tcp_put_data(sockfd, send_buf, sendbp_idx);
@@ -492,9 +498,42 @@ conn_again:
 			meta_only = TRUE;
 		    	break;
 			
-		    case SHARDING:
-		    	meta_again = FALSE;
+		    case SHARDINGTABLE:
+		       	meta_again = FALSE;
 			meta_only = TRUE;
+		    	break;
+
+		    case SHARDINGTABLET:
+		    	if (CLI_IS_CONN2MASTER(Cli_infor))
+			{
+				resp_ins = (INSMETA *)resp->result;
+
+				MEMCPY(Cli_infor->cli_ranger_ip, 
+				       resp_ins->i_hdr.rg_info.rg_addr, 
+				       RANGE_ADDR_MAX_LEN);
+
+				Cli_infor->cli_ranger_port = 
+					resp_ins->i_hdr.rg_info.rg_port;
+
+				/* Override the UNION part for this reques. */
+				MEMCPY(resp->result, RPC_IDXROOT_SPLIT_MAGIC, RPC_MAGIC_MAX_LEN);
+
+				send_buf_size = resp->result_length;
+				send_rg_bp = MEMALLOCHEAP(send_buf_size);
+				MEMSET(send_rg_bp, send_buf_size);
+
+				send_rg_bp_idx = 0;
+				PUT_TO_BUFFER(send_rg_bp, send_rg_bp_idx, 
+					      resp->result, resp->result_length);
+				
+				meta_again = FALSE;
+
+				meta_only = FALSE;
+			}
+			else if (!meta_again)
+			{
+				meta_only = TRUE;			
+			}
 		    	break;
 		
 		    default:
@@ -886,7 +925,8 @@ conn_again:
 	    	meta_only = TRUE;
 	    	break;
 
-	    case SHARDING:
+	    case SHARDINGTABLE:
+	    case SHARDINGTABLET:
 	    	meta_again = FALSE;
 		meta_only = TRUE;
 	    	break;

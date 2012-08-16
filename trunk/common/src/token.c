@@ -37,13 +37,14 @@ TOKENS  MT_Tokens[] =
 	{MCCTABLE,	"mcc checktable"},
 	{SELECTWHERE,	"selectwhere"},
 	{MCCRANGER,	"mcc checkranger"},
-	{SHARDING,	"sharding"},
+	{SHARDINGTABLE,	"sharding table"},
 	{SELECTCOUNT,	"selectcount"},
 	{SELECTSUM,	"selectsum"},
 	{DROPINDEX,	"drop index"},
 	{REMOVEINDEX,	"remove index"},
 	{DELETEWHERE,	"deletewhere"},
-	{UPDATE,	"update set"}
+	{UPDATE,	"update set"},
+	{SHARDINGTABLET,"sharding tablet"}
 };
 
 int

@@ -208,7 +208,7 @@ typedef struct table_hdr
 					** table, It must be keep consistency 
 					** with 'idx_ver' in sysindex.
 					*/
-	int	has_index;		/* Flag if table has one index. */
+	int	has_index;		/* Flag if table has at least one index. */
 } TABLEHDR;
 
 /*
@@ -375,7 +375,7 @@ typedef struct idx_root_split
 	int	idx_srcroot_id;
 	int	idx_destroot_id;
 	int	idx_tabid;
-	int	pad;
+	int	idx_ts;		/* Index version. */
 	char	idx_tabname[TABLE_NAME_MAX_LEN];
 }IDX_ROOT_SPLIT;
 
