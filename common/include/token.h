@@ -57,9 +57,10 @@ typedef struct tokens
 #define	DELETEWHERE	20
 #define	UPDATE		21
 #define	SHARDINGTABLET	22
+#define	MCCSSTAB	23
 	
 
-#define MAXSI_FIXED_TOKENS	22
+#define MAXSI_FIXED_TOKENS	23
 
 int
 token_validate(char *token);

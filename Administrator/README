@@ -1,0 +1,4 @@
+1. mcc: use this binary to check if the data of the whole user table is valid 
+and the result will be printed on the ranger server.
+
+./mcc checksstab table_name

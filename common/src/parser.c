@@ -286,6 +286,10 @@ parser_open(char *s_str, int s_strlen)
 		
 	    case MCCTABLE:
 	    	rtn_stat = par_dropremovrebalanmcc_tab(s_str + s_idx, MCCTABLE);
+		break;
+		
+	    case MCCSSTAB:
+	    	rtn_stat = par_dropremovrebalanmcc_tab(s_str + s_idx, MCCSSTAB);
 	    	break;
 		
 	    case MCCRANGER:

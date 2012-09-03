@@ -236,26 +236,26 @@ rg_dropidx(TREE *command)
 	rtn_stat = FALSE;
 	
 
-	/* Index name*/
+	
 	idx_name = command->sym.command.tabname;
 	idx_name_len = command->sym.command.tabname_len;
 
-	/* Table name locate at the sub-command ON. */
+	
 	tab_name = (command->right)->sym.command.tabname;
 	tab_name_len = (command->right)->sym.command.tabname_len;
 
-	/* The full path of meta table. */
+	
 	MEMSET(tab_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_dir, MT_META_TABLE, STRLEN(MT_META_TABLE));
 	str1_to_str2(tab_dir, '/', tab_name);
 
-	/* The full path of ranger table. */
+	
 	MEMSET(tab_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_dir, MT_RANGE_TABLE, STRLEN(MT_RANGE_TABLE));
 	str1_to_str2(tab_dir, '/', tab_name);
 
 	
-	/* Check if table is exist. */
+	
 	if ((tabidx = rg_table_is_exist(tab_dir)) == -1)
 	{
 		if (STAT(tab_dir, &st) != 0)
@@ -264,19 +264,19 @@ rg_dropidx(TREE *command)
 			goto exit;
 		}
 
-		/* If hit the error, it has printed the information in caller. */
+		
 		tabidx = rg_table_regist(tab_dir);
 	}
 
 
 	char	tab_meta_dir[TABLE_NAME_MAX_LEN];
 
-	/* Build the full path for the tabletscheme file. */
+	
 	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
 	str1_to_str2(tab_meta_dir, '/', idx_name);
 	
-	/* Make the directory to save the state of ranger servers. */
+	
 	if (STAT(tab_meta_dir, &st) != 0)
 	{
 		traceprint("Index %s on table %s is not exist.\n", idx_name, tab_name);
@@ -332,7 +332,7 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 	char		*rp;
 	int		rp_idx;
 	int		rlen;
-	char		col_off_tab[COL_OFFTAB_MAX_SIZE];	/* Max of var-column is 16 */
+	char		col_off_tab[COL_OFFTAB_MAX_SIZE];	
 	int		col_off_idx;
 	int		col_offset;
 	char		*col_val;
@@ -385,10 +385,7 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 	
 	if (DEBUG_TEST(tss))
 	{
-		/* 
-		** sstable name = "tablet name _ sstable_id", so sstable name
-		** is unique in one table. 
-		*/
+		
 		traceprint("ins_meta->sstab_name =%s \n", ins_meta->sstab_name);
 	}
 
@@ -401,12 +398,12 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 	MEMSET(ins_meta->sstab_name, SSTABLE_NAME_MAX_LEN);
 	MEMCPY(ins_meta->sstab_name, tab_dir, STRLEN(tab_dir));
 
-	/* sstable checking is for the key propagation to the tablet. */
+	
 	if (!rg_sstable_is_exist(tab_dir, tabidx))
 	{
 		if (STAT(tab_dir, &st) != 0)
 		{
-			/* Flag if it's the first insertion. */
+			
 			ins_meta->status |= INS_META_1ST;
 		}
 		else
@@ -424,7 +421,7 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 	rlen = BLOCKSIZE - BLK_TAILSIZE - BLKHEADERSIZE - sizeof(int);
 	rp = MEMALLOCHEAP(rlen);
 
-	/* Begin to build row. */
+	
 	row_build_hdr(rp, 0, 0, ins_meta->varcol_num);
 
 	col_offset = sizeof(ROWFMT);
@@ -441,10 +438,7 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 
 		if (col_offset == tabinfo->t_key_coloff)
 		{
-			/* 
-			** Fill search information for the searching in the 
-			** block.
-			*/
+			
 			tabinfo->t_sinfo->sicolval = col_val;
 			tabinfo->t_sinfo->sicollen = col_len;
 			tabinfo->t_sinfo->sicolid = tabinfo->t_key_colid;
@@ -489,16 +483,13 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 				ex_raise(EX_ANY);
 			}
 			
-			/* 
-			** col_offset will increase until it's an invalid one,
-			** and then we start to parse the var-col case.
-			*/
 			
-			/* Var-col case. */	
+			
+				
 
 			if (col_num > 0)
 			{
-				/* Row length */
+				
 				rp_idx += sizeof(int);
 				col_offset = -1;
 			}
@@ -533,7 +524,7 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 
 	rtn_stat = blkins(tabinfo, rp);
 
-	/* Update index. */
+	
 	if (rtn_stat && (tabinfo->t_has_index))
 	{
 		MEMSET(&idxbld, sizeof(IDXBLD));
@@ -555,10 +546,7 @@ rg_instab(TREE *command, TABINFO *tabinfo)
 		rtn_stat = index_insert(&idxbld, tabinfo, 
 					Range_infor->rg_meta_sysindex);
 
-		/* 
-		** TODO: it should be undo the data insert if the index insert
-		** hit error.
-		*/
+		
 
 		if (!rtn_stat)
 		{
@@ -598,11 +586,11 @@ exit:
 		PUT_TO_BUFFER(resp_buf, i, &tabinfo->t_insmeta->res_sstab_id,
 				sizeof(int));
 		
-		/* Brifly solution for the unsigned int. */
+		
 		PUT_TO_BUFFER(resp_buf, i, &tabinfo->t_insmeta->ts_low,
 				sizeof(int));
 		
-		/* split sstable id. */
+		
 		PUT_TO_BUFFER(resp_buf, i, &tabinfo->t_insmeta->sstab_id,
 				sizeof(int));
 		
@@ -738,7 +726,7 @@ rg_seldeltab(TREE *command, TABINFO *tabinfo)
 			tabinfo->t_tabid, tabinfo->t_sstab_id);
 	SRCH_INFO_INIT(tabinfo->t_sinfo, keycol, keycolen, 1, VARCHAR, -1);
 
-	/* Case delete data.*/
+	
 	if (tabinfo->t_stat & TAB_DEL_DATA)
 	{
 		P_SPINLOCK(BUF_SPIN);
@@ -781,7 +769,7 @@ rg_seldeltab(TREE *command, TABINFO *tabinfo)
 	}
 	else
 	{
-		/* Case select data. */
+		
 		bp = blkget(tabinfo);
 //		offset = blksrch(tabinfo, bp);
 
@@ -803,17 +791,17 @@ rg_seldeltab(TREE *command, TABINFO *tabinfo)
 		rnum = tabinfo->t_rowinfo->rnum;
 	}
 	
-	/* The selecting value is not exist. */
+	
 	if (tabinfo->t_sinfo->sistate & SI_NODATA)
 	{
-		/* Just return a NULL sucess. */
+		
 		rtn_stat = TRUE;
 		goto exit;
 	}
 
 	if (!(tabinfo->t_stat & TAB_DEL_DATA))
 	{
-		/* TODO: rp, rlen just be the future work setting. */
+		
 		char *rp = ROW_GETPTR_FROM_OFFTAB(bp->bblk, rnum);
 		
 		// char	*filename = meta_get_coldata(bp, offset, sizeof(ROWFMT));
@@ -822,7 +810,7 @@ rg_seldeltab(TREE *command, TABINFO *tabinfo)
 		
 		//value = row_locate_col(rp, -1, bp->bblk->bminlen, &rlen);
 
-		/* Building the response information. */
+		
 		col_buf = MEMALLOCHEAP(rlen);
 		
 		MEMSET(col_buf, rlen);
@@ -847,12 +835,12 @@ exit:
 		}
 		else if (tabinfo->t_stat & TAB_DEL_DATA)
 		{
-			/* Just return a SUCCESS. */
+			
 			resp = conn_build_resp_byte(RPC_SUCCESS, 0, NULL);
 		}
 		else
 		{
-			/* Send to client, just send the sstable name. */
+			
 			resp = conn_build_resp_byte(RPC_SUCCESS, rlen, col_buf);
 		}
 	}
@@ -883,7 +871,7 @@ exit:
 }
 
 
-/* Single node operation for the whole range query. */
+
 char *
 rg_selrangetab(TREE *command, TABINFO *tabinfo, int fd)
 {
@@ -966,7 +954,7 @@ rg_selrangetab(TREE *command, TABINFO *tabinfo, int fd)
 		traceprint("tab_dir =%s \n", tab_dir);
 	}
 
-	/* Left key ID is the '1' that's not the true column ID. */
+	
 	keycol = par_get_colval_by_colid(command, 1, &keycolen);
 
 	if ((keycolen == 1) && (!strncasecmp("*", keycol, keycolen)))
@@ -977,7 +965,7 @@ rg_selrangetab(TREE *command, TABINFO *tabinfo, int fd)
 	char	*right_rangekey;
 	int	right_keylen;
 
-	/* Right key ID is the '2'. */
+	
 	right_rangekey = par_get_colval_by_colid(command, 2, &right_keylen);
 
 	if ((right_keylen == 1) && (!strncasecmp("*", right_rangekey, 
@@ -1097,7 +1085,7 @@ rg_selrangetab(TREE *command, TABINFO *tabinfo, int fd)
 			
 			rgsel_cont.cur_rowpos = rgsel_cont.first_rowpos;
 	
-			/* Stamp the status code. */
+			
 			if (srchinfo.brownum < (bp->bblk->bnextrno - 1))
 			{
 				rgsel_cont.end_rowpos = srchinfo.brownum;
@@ -1116,11 +1104,7 @@ rg_selrangetab(TREE *command, TABINFO *tabinfo, int fd)
 				}
 				else
 				{
-					/*
-					** If there's only one row with DELETE 
-					** flag in one sstable. the deleted row 
-					** will not return to client. 
-					*/
+					
 					if (srchinfo.bcomp == LE)
 					{
 						rgsel_cont.end_rowpos = 
@@ -1151,7 +1135,7 @@ rg_selrangetab(TREE *command, TABINFO *tabinfo, int fd)
 		conn_destroy_resp_byte(resp);	
 
 		
-		/* TODO: placeholder for the TCP/IP check. */
+		
 		MEMSET(resp_cli, 8);
 		n = conn_socket_read(connfd,resp_cli, 8);
 
@@ -1163,7 +1147,7 @@ rg_selrangetab(TREE *command, TABINFO *tabinfo, int fd)
 
 		if (!data_cont)
 		{
-			/* We already hit all the data. */
+			
 			break;
 		}
 		
@@ -1202,7 +1186,7 @@ nextblk:
 
 			conn_destroy_resp_byte(resp);	
 
-			/* TODO: placeholder for the TCP/IP check. */
+			
 			MEMSET(resp_cli, 8);
 			n = conn_socket_read(connfd,resp_cli, 8);
 
@@ -1252,34 +1236,7 @@ exit:
 
 
 
-/*
-** This routine will execeute the range query from the sstab_left to the 
-** sstab_right.
-**
-** Parameters:
-**	tabinfo		- (IN) table information.
-**	sstab_left		- (IN) the sstable that's the left bound of 
-**			         range query.
-**	sstab_right	- (IN) the sstable that's the right bound of range
-**			         query.
-**	connfd		- (IN) socket id of the connection to transfer the 
-**			-        big data.
-**	key_left		- (IN) the left key of this range user specified.
-**	keylen_left	- (IN) the length of the left key.
-**	key_right		- (IN) the right key of this range user specified.
-**	keylen_right	- (IN) the length of right key.
-**	left_expand	- (IN) flag if the left bound is *.
-**	right_expand	- (IN) flag if the right bound is *. 
-**	tabdir		- (IN) full path of table in the ranger server.
-**	data_cont	- (OUT) flag if it hit the last sstable.
-** 
-** Returns:
-**	True if success, or false.
-** 
-** Side Effects
-**	None
-** 
-*/
+
 static int
 rg__selrangetab(TABINFO *tabinfo, char *sstab_left, char *sstab_right, int connfd,
 		char *key_left, int keylen_left, char *key_right, int keylen_right,
@@ -1303,12 +1260,12 @@ rg__selrangetab(TABINFO *tabinfo, char *sstab_left, char *sstab_right, int connf
 	rtn_stat = TRUE;
 
 	
-	/* Get the full path for the left bound. */
+	
 	MEMSET(tab_left_sstab_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_left_sstab_dir, tabdir, STRLEN(tabdir));
 	str1_to_str2(tab_left_sstab_dir, '/', sstab_left);
 
-	/* Get the full path for the right bound. */
+	
 	MEMSET(tab_right_sstab_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_right_sstab_dir, tabdir, STRLEN(tabdir));
 	str1_to_str2(tab_right_sstab_dir, '/', sstab_right);	
@@ -1363,7 +1320,7 @@ rg__selrangetab(TABINFO *tabinfo, char *sstab_left, char *sstab_right, int connf
 	char	resp_cli[8];	
 	
 
-	/* Get the 1st left boud for this tablet range. */
+	
 	rgsel_cont.first_rowpos = rnum;
 
 	Assert(rnum < bp->bblk->bnextrno);
@@ -1371,7 +1328,7 @@ rg__selrangetab(TABINFO *tabinfo, char *sstab_left, char *sstab_right, int connf
 	int	n;
 	
 
-	/* Working for the range query. */
+	
 	while (TRUE)
 	{		
 		if (right_expand)
@@ -1405,7 +1362,7 @@ rg__selrangetab(TABINFO *tabinfo, char *sstab_left, char *sstab_right, int connf
 			
 			rgsel_cont.cur_rowpos = rgsel_cont.first_rowpos;
 	
-			/* Stamp the status code. */
+			
 			if (srchinfo.brownum < (bp->bblk->bnextrno - 1))
 			{
 				rgsel_cont.end_rowpos = srchinfo.brownum;
@@ -1449,13 +1406,13 @@ rg__selrangetab(TABINFO *tabinfo, char *sstab_left, char *sstab_right, int connf
 		
 		resp_size = conn_get_resp_size((RPCRESP *)resp);
 
-		/* Send the result to the client. */
+		
 		tcp_put_data(connfd, resp, resp_size);
 
 		conn_destroy_resp_byte(resp);	
 
 		
-		/* TODO: placeholder for the TCP/IP check. */
+		
 		MEMSET(resp_cli, 8);
 		n = conn_socket_read(connfd,resp_cli, 8);
 
@@ -1468,7 +1425,7 @@ rg__selrangetab(TABINFO *tabinfo, char *sstab_left, char *sstab_right, int connf
 
 		if (!(*data_cont))
 		{
-			/* Data is DATA_DONE and we already hit all the data. */
+			
 			goto done;
 		}
 		
@@ -1479,7 +1436,7 @@ nextblk:
 		}
 		else if (bp->bsstab->bblk->bnextsstabnum != -1)
 		{
-			/* Hit the right bound. */
+			
 			if (!row_col_compare(VARCHAR,tabinfo->t_sstab_name,
 						STRLEN(tabinfo->t_sstab_name),
 						tab_right_sstab_dir,
@@ -1531,73 +1488,48 @@ done:
 }
 
 
-/* 
-** This routine will execute the query with some conditions, such as the where
-** clause, range query (key range). 
-**
-** Parameters:
-** 	command	- (IN) the command user specified.
-**	selwhere		- (IN) the meta information from metaserver
-**	tab_hdr		- (IN) table header information read from 
-**			         the sysobjects.
-**	colinfo		- (IN) column information.
-**	fd		- (IN) the socket id of the connection between 
-**			         the ranger and client.
-** 
-** Returns:
-**	the ptr to the response information.
-** 
-** Side Effects:
-**	None.
-** 
-*/
+
 char *
 rg_selwheretab(TREE *command, SELWHERE *selwhere, TABLEHDR *tab_hdr, COLINFO *colinfo,int fd)
 {
-	char		*tab_name;	/* Ptr to the table name. */
-	int		tab_name_len;	/* Name length. */
+	char		*tab_name;	
+	int		tab_name_len;	
 	char		tab_dir[TABLE_NAME_MAX_LEN];
-					/* The full path of table in the meta
-					** server.
-					*/
+					
 	char		tab_meta_dir[TABLE_NAME_MAX_LEN];
-					/* Save the full path of table meta. */
-	int		fd1;		/* The id of openning file. */
-	int		rtn_stat;	/* Return state. */
+					
+	int		fd1;		
+	int		rtn_stat;	
 		
-	char		*resp;		/* Response information. */
-	int		resp_size;	/* The size of response information*/
-	char		*rp;		/* Ptr to the row. */
-	int		namelen;	/* Name length. */
-	char		*rg_addr;	/* The address of ranger server. */
-	int		rg_port;	/* Ranger port. */
-	TABLET_SCANCTX	*tablet_scanctx;/* The context of tablet scanning. */
-	RANGE_QUERYCTX	rgsel_cont;	/* The context of range query. */
+	char		*resp;		
+	int		resp_size;	
+	char		*rp;		
+	int		namelen;	
+	char		*rg_addr;	
+	int		rg_port;	
+	TABLET_SCANCTX	*tablet_scanctx;
+	RANGE_QUERYCTX	rgsel_cont;	
 	char		rg_tab_dir[TABLE_NAME_MAX_LEN];
-					/* The full path of table in the ranger 
-					** server.
-					*/
-	int		tabidx;		/* The index of the table information 
-					** in the Ranger_infor.
-					*/
+					
+	int		tabidx;		
 	int		querytype;
 
 
 	Assert(command);
 
-	/* Initialization. */
+	
 	rtn_stat	= FALSE;
 	tablet_scanctx 	= NULL;
 	tab_name	= command->sym.command.tabname;
 	tab_name_len 	= command->sym.command.tabname_len;
 	querytype	= command->sym.command.querytype;
 
-	/* The full path of meta table. */
+	
 	MEMSET(tab_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_dir, MT_META_TABLE, STRLEN(MT_META_TABLE));
 	str1_to_str2(tab_dir, '/', tab_name);
 
-	/* The full path of ranger table. */
+	
 	MEMSET(rg_tab_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(rg_tab_dir, MT_RANGE_TABLE, STRLEN(MT_RANGE_TABLE));
 	str1_to_str2(rg_tab_dir, '/', tab_name);
@@ -1606,7 +1538,7 @@ rg_selwheretab(TREE *command, SELWHERE *selwhere, TABLEHDR *tab_hdr, COLINFO *co
 	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
 
-	/* Check if table is exist. */
+	
 	if ((tabidx = rg_table_is_exist(rg_tab_dir)) == -1)
 	{
 		if (STAT(rg_tab_dir, &st) != 0)
@@ -1615,7 +1547,7 @@ rg_selwheretab(TREE *command, SELWHERE *selwhere, TABLEHDR *tab_hdr, COLINFO *co
 			goto exit;
 		}
 
-		/* If hit the error, it has printed the information in caller. */
+		
 		tabidx = rg_table_regist(rg_tab_dir);
 	}
 
@@ -1644,7 +1576,7 @@ rg_selwheretab(TREE *command, SELWHERE *selwhere, TABLEHDR *tab_hdr, COLINFO *co
 	str1_to_str2(tab_meta_dir, '/', "tabletscheme");
 		
 
-	/* Read the file tabletscheme. */
+	
 	char	*tablet_schm_bp = NULL;
 	
 	OPEN(fd1, tab_meta_dir, (O_RDONLY));
@@ -1671,80 +1603,87 @@ rg_selwheretab(TREE *command, SELWHERE *selwhere, TABLEHDR *tab_hdr, COLINFO *co
 	int		ign;
 	char		*tablet_bp;	
 
-	/* The tablet to be interested. */
+	
 	char		*wanted_tablet;
 
 	int		wanted_tablet_len;
 
-	/* Check if we got the first tablet. */
+	
 	int		leftbegin = FALSE;
-	/* Check if we got the last tablet. */	
+		
 	int 		rightend = FALSE;
 
-	/* For selectrange. */
+	
 	int		left_expand;
 	int		right_expand; 
 	char		*key_left;
 	char		*key_right;
 	int		keycolen_left;
 	int		keycolen_right;
+	int		connfd;
+	int 		listenfd;
 
 
 	tablet_bp = NULL;
 
-	/* Create the socket fot the transferring of bigdata. */
-	int listenfd = conn_socket_open(Range_infor->bigdataport);
-
-	if (!listenfd)
+	
+	if (querytype != MCCSSTAB)
 	{
-		goto exit;
-	}
-
-//	signal (SIGPIPE,SIG_IGN);
-
-	resp = conn_build_resp_byte(RPC_BIGDATA_CONN, sizeof(int),
-					(char *)(&(Range_infor->bigdataport)));
-	resp_size = conn_get_resp_size((RPCRESP *)resp);
-
-	/* Send the connection information to the client. */
-	tcp_put_data(fd, resp, resp_size);
-	conn_destroy_resp_byte(resp);
-
-	int	connfd;
-
-	connfd = conn_socket_accept(listenfd);
-
-	if (connfd < 0)
-	{
-		traceprint("hit socket accept issue\n");
-		goto exit;
-	}
 		
-	if ((querytype == SELECTWHERE) || (querytype == DELETEWHERE))
-	{
-		if (!par_fill_colinfo(tab_hdr->tab_col, colinfo, command))
+		listenfd = conn_socket_open(Range_infor->bigdataport);
+
+		if (!listenfd)
 		{
 			goto exit;
 		}
 
-		/* Initialize the context of tablet scanning. */
+	//	signal (SIGPIPE,SIG_IGN);
+
+		resp = conn_build_resp_byte(RPC_BIGDATA_CONN, sizeof(int),
+						(char *)(&(Range_infor->bigdataport)));
+		resp_size = conn_get_resp_size((RPCRESP *)resp);
+
+		
+		tcp_put_data(fd, resp, resp_size);
+		conn_destroy_resp_byte(resp);
+
+		connfd = conn_socket_accept(listenfd);
+
+		if (connfd < 0)
+		{
+			traceprint("hit socket accept issue\n");
+			goto exit;
+		}
+	}
+	
+	if (   (querytype == SELECTWHERE) || (querytype == DELETEWHERE)
+	    || (querytype == MCCSSTAB))
+	{
+		if (   (querytype != MCCSSTAB) 
+		    && (!par_fill_colinfo(tab_hdr->tab_col, colinfo, command)))
+		{
+			goto exit;
+		}
+
+		
 		tablet_scanctx = (TABLET_SCANCTX *)MEMALLOCHEAP(sizeof(TABLET_SCANCTX));
 		
 		MEMSET(tablet_scanctx, sizeof(TABLET_SCANCTX));
 
-		tablet_scanctx->andplan = par_get_andplan(command);
-		tablet_scanctx->orplan = par_get_orplan(command);
-		tablet_scanctx->connfd = connfd;
+		if (querytype != MCCSSTAB)
+		{
+			tablet_scanctx->andplan = par_get_andplan(command);
+			tablet_scanctx->orplan = par_get_orplan(command);
+			tablet_scanctx->connfd = connfd;
+		}
+		
 		tablet_scanctx->querytype = querytype;
 	}
 	else if (querytype == SELECTRANGE)
 	{
 		left_expand = right_expand = FALSE;
 
-		/*
-		** Left range: left key ID is the '1' that's not the true 
-		** column ID, it's just a index of column in the query clause.
-		*/
+		
 		key_left = par_get_colval_by_colid(command, 1, &keycolen_left);
 
 		if ((keycolen_left == 1) && (!strncasecmp("*", key_left, keycolen_left)))
@@ -1753,7 +1692,7 @@ rg_selwheretab(TREE *command, SELWHERE *selwhere, TABLEHDR *tab_hdr, COLINFO *co
 		}
 		
 		
-		/* Right range: right key ID is the '2'. */
+		
 		key_right = par_get_colval_by_colid(command, 2, &keycolen_right);
 
 		if ((keycolen_right == 1) && (!strncasecmp("*", key_right, 
@@ -1772,7 +1711,7 @@ rg_selwheretab(TREE *command, SELWHERE *selwhere, TABLEHDR *tab_hdr, COLINFO *co
 
 	SSTAB_GET_RESERVED(tablet_bp);
 	
-	/* Working for the query. */
+	
 	while (TRUE)
 	{
 		blk = (BLOCK *)(tablet_schm_bp + i * BLOCKSIZE);
@@ -1789,66 +1728,60 @@ rg_selwheretab(TREE *command, SELWHERE *selwhere, TABLEHDR *tab_hdr, COLINFO *co
 					TABLETSCHM_TABLETNAME_COLOFF_INROW,
 					ROW_MINLEN_IN_TABLETSCHM, &namelen);
 
-			/* Get the left or right range of key. */
-			if (!leftbegin)
+			if (querytype != MCCSSTAB)
 			{
-				wanted_tablet = selwhere->lefttabletname;
-				wanted_tablet_len = selwhere->leftnamelen;
-			}
-			else
-			{
-				/*Only one tablet needs to be scan. */
-				result = row_col_compare(VARCHAR, 
-						selwhere->righttabletname, 
-						selwhere->rightnamelen, 
-						selwhere->lefttabletname,
-						selwhere->leftnamelen);
+				
+				if (!leftbegin)
+				{
+					wanted_tablet = selwhere->lefttabletname;
+					wanted_tablet_len = selwhere->leftnamelen;
+				}
+				else
+				{
+					
+					result = row_col_compare(VARCHAR, 
+							selwhere->righttabletname, 
+							selwhere->rightnamelen, 
+							selwhere->lefttabletname,
+							selwhere->leftnamelen);
+					
+					if (result == EQ)
+					{
+						goto finish;
+					}
+					
+					wanted_tablet = selwhere->righttabletname;
+					wanted_tablet_len = selwhere->rightnamelen;
+				}
+
+				
+				result = row_col_compare(VARCHAR, tabletname, 
+							STRLEN(tabletname), 
+							wanted_tablet,
+							wanted_tablet_len);
+				
+				
+				if ((result != EQ) && (leftbegin == FALSE))
+				{
+					continue;
+				}
 				
 				if (result == EQ)
-				{
-					goto finish;
+				{	
+					if (leftbegin == TRUE)
+					{
+						
+						rightend = TRUE;
+					}
+					else if (leftbegin == FALSE)
+					{
+						
+						leftbegin = TRUE;
+					}
 				}
-				
-				wanted_tablet = selwhere->righttabletname;
-				wanted_tablet_len = selwhere->rightnamelen;
-			}
-
-			/* Check if it got the left or right tablet. */
-			result = row_col_compare(VARCHAR, tabletname, 
-						STRLEN(tabletname), 
-						wanted_tablet,
-						wanted_tablet_len);
-			
-			/* 
-			** Continue to the scan if it still not hit the first 
-			** tablet that locates at the range of key. 
-			*/
-			if ((result != EQ) && (leftbegin == FALSE))
-			{
-				continue;
 			}
 			
-			if (result == EQ)
-			{	
-				if (leftbegin == TRUE)
-				{
-					/* 
-					** Hit the right side of range, that's
-					** to say, hit the last tablet. 
-					*/
-					rightend = TRUE;
-				}
-				else if (leftbegin == FALSE)
-				{
-					/*
-					** Hit the left side of the range, 
-					** that's to say, hit the fisrt tablet.
-					*/
-					leftbegin = TRUE;
-				}
-			}
-
-			/* Check if this tablet locates at this ranger server. */
+			
 			rg_addr = row_locate_col(rp, 
 					TABLETSCHM_RGADDR_COLOFF_INROW,
 					ROW_MINLEN_IN_TABLETSCHM, &ign);
@@ -1869,7 +1802,8 @@ rg_selwheretab(TREE *command, SELWHERE *selwhere, TABLEHDR *tab_hdr, COLINFO *co
 					
 			if (result == EQ)
 			{
-				if (selwhere->use_idxmeta)
+				if (   (querytype != MCCSSTAB) 
+				    && (selwhere->use_idxmeta))
 				{
 					Assert(querytype == SELECTWHERE);
 
@@ -1878,7 +1812,7 @@ rg_selwheretab(TREE *command, SELWHERE *selwhere, TABLEHDR *tab_hdr, COLINFO *co
 					tablet_scanctx->rminlen = 
 							tab_hdr->tab_row_minlen;
 
-					/* The id of tablet based on index. */
+					
 					tablet_scanctx->tabletid = 
 						*(int *)row_locate_col(rp, 
 						TABLETSCHM_TABLETID_COLOFF_INROW, 
@@ -1895,19 +1829,13 @@ rg_selwheretab(TREE *command, SELWHERE *selwhere, TABLEHDR *tab_hdr, COLINFO *co
 					goto next_tablet;
 				}
 							
-				/* 
-				** We got the tablet that locates at the current
-				** ranger server.
-				*/
+				
 				MEMSET(tab_tablet_dir, TABLE_NAME_MAX_LEN);
 				MEMCPY(tab_tablet_dir, tab_dir, STRLEN(tab_dir));
 				str1_to_str2(tab_tablet_dir, '/', tabletname);  
 			
 				
-				/* 
-				** Read the file tablet and get the information
-				** of each row.
-				*/
+				
 				OPEN(fd1, tab_tablet_dir, (O_RDONLY));
 
 				if (fd1 < 0)
@@ -1920,7 +1848,8 @@ rg_selwheretab(TREE *command, SELWHERE *selwhere, TABLEHDR *tab_hdr, COLINFO *co
 
 				CLOSE(fd1);
 
-				if (querytype == SELECTWHERE)
+				if (   (querytype == SELECTWHERE) 
+				    || (querytype == MCCSSTAB))
 				{
 					tablet_scanctx->tablet = tablet_bp;
 					tablet_scanctx->keycolid = 
@@ -1930,10 +1859,7 @@ rg_selwheretab(TREE *command, SELWHERE *selwhere, TABLEHDR *tab_hdr, COLINFO *co
 					tablet_scanctx->tabdir = rg_tab_dir;
 					tablet_scanctx->tabid = tab_hdr->tab_id;
 
-					/* 
-					** Scan the tablet and get the sstabname
-					** for the every row to be wanted. 
-					*/
+					
 					if (!rg_tabletscan(tablet_scanctx))
 					{
 						goto exit;
@@ -1951,7 +1877,7 @@ rg_selwheretab(TREE *command, SELWHERE *selwhere, TABLEHDR *tab_hdr, COLINFO *co
 
 					flag |= RG_TABLET_LEFT_BOUND;
 					
-					/* Check if left key is in this scope. */
+					
 					if (!rg_get_sstab_tablet(tablet_bp, key_left, 
 							keycolen_left, &sstab, &namelen,
 							&sstabid, flag))
@@ -1972,7 +1898,7 @@ rg_selwheretab(TREE *command, SELWHERE *selwhere, TABLEHDR *tab_hdr, COLINFO *co
 					MEMSET(&tabinfo,sizeof(TABINFO));
 					MEMSET(&psinfo, sizeof(SINFO));
 
-					/* TODO: it needs to re-get the length of fixed column. */
+					
 					MEMCPY(sstab_left, sstab, STRLEN(sstab));
 					
 					tabinfo.t_tabid = tab_hdr->tab_id;
@@ -1989,7 +1915,7 @@ rg_selwheretab(TREE *command, SELWHERE *selwhere, TABLEHDR *tab_hdr, COLINFO *co
 
 					flag |= RG_TABLET_RIGHT_BOUND;
 
-					/* It must get the one right sstab. */
+					
 					if (!rg_get_sstab_tablet(tablet_bp, key_right, 
 						keycolen_right, &sstab, &namelen, &sstabid,
 						flag))
@@ -2019,7 +1945,7 @@ rg_selwheretab(TREE *command, SELWHERE *selwhere, TABLEHDR *tab_hdr, COLINFO *co
 				
 			}
 next_tablet:
-			if (rightend)
+			if ((querytype != MCCSSTAB) && rightend)
 			{
 				goto finish;
 			}		       
@@ -2036,63 +1962,70 @@ next_tablet:
 	}
 
 finish:
-	
-	rgsel_cont.status = DATA_EMPTY;
 
- 	resp = conn_build_resp_byte(RPC_SUCCESS, sizeof(RANGE_QUERYCTX) - 
-					BLOCKSIZE, (char *)&rgsel_cont);
-
-	resp_size = conn_get_resp_size((RPCRESP *)resp);
-	  
-	tcp_put_data(connfd, resp, resp_size);			
-
-	conn_destroy_resp_byte(resp);	
-
-	char	resp_cli[8];
-	MEMSET(resp_cli, 8);
-	int n = conn_socket_read(connfd, resp_cli, 8);
-
-	if (n != 8)
+	if (querytype != MCCSSTAB)
 	{
-		/* 
-		** Here got the end of this session, so it should be a normal
-		** case.
-		*/
-		rtn_stat = TRUE;
-		
-		traceprint("Socket read error 3.\n");
-		goto exit;
+		rgsel_cont.status = DATA_EMPTY;
+
+	 	resp = conn_build_resp_byte(RPC_SUCCESS, sizeof(RANGE_QUERYCTX) - 
+						BLOCKSIZE, (char *)&rgsel_cont);
+
+		resp_size = conn_get_resp_size((RPCRESP *)resp);
+		  
+		tcp_put_data(connfd, resp, resp_size);			
+
+		conn_destroy_resp_byte(resp);	
+
+		char	resp_cli[8];
+		MEMSET(resp_cli, 8);
+		int n = conn_socket_read(connfd, resp_cli, 8);
+
+		if (n != 8)
+		{
+			
+			rtn_stat = TRUE;
+			
+			traceprint("Socket read error 3.\n");
+			goto exit;
+		}
 	}
 	
 	rtn_stat = TRUE;
 
 exit:
-	conn_socket_close(connfd);
+	if (querytype != MCCSSTAB)
+	{
+		conn_socket_close(connfd);
 
-	conn_socket_close(listenfd);
+		conn_socket_close(listenfd);
+	}
 	
 	if (rtn_stat)
 	{
-		/* 
-		** This case stands for the success for this session. The client
-		** has been close the accept. 
-		*/
-		resp = conn_build_resp_byte(RPC_SKIP_SEND, 0, NULL);
+		
+		if (querytype == MCCSSTAB)
+		{
+			resp = conn_build_resp_byte(RPC_SUCCESS, 0, NULL);
+		}
+		else
+		{
+			resp = conn_build_resp_byte(RPC_SKIP_SEND, 0, NULL);
+		}
 	}
 	else
 	{
-		/* 
-		** Exption case need to be send to the client and the client
-		** can accept this RPC and use it to make sure this session
-		** is failed.
-		*/
+		
 		resp = conn_build_resp_byte(RPC_FAIL, 0, NULL);
 	}
 
 	if (tablet_scanctx)
 	{
-		par_release_orandplan(tablet_scanctx->andplan);
-		par_release_orandplan(tablet_scanctx->orplan);
+		
+		if (querytype != MCCSSTAB)
+		{
+			par_release_orandplan(tablet_scanctx->andplan);
+			par_release_orandplan(tablet_scanctx->orplan);
+		}
 
 		MEMFREEHEAP(tablet_scanctx);
 	}
@@ -2112,7 +2045,7 @@ exit:
 }
 
 
-/* Clone from rg_selwheretab(). */
+
 char *
 rg_selcountsum_delupd_tab(TREE *command, SELWHERE *selwhere, TABLEHDR *tab_hdr,
 				COLINFO *colinfo, int fd)
@@ -2132,8 +2065,8 @@ rg_selcountsum_delupd_tab(TREE *command, SELWHERE *selwhere, TABLEHDR *tab_hdr,
 	char		rg_tab_dir[TABLE_NAME_MAX_LEN];
 	int		tabidx;
 	int		querytype;
-	int		rowcnt;		/* The # of row to be wanted. */
-	int		sum_value;	/* For the SELECTSUM. */
+	int		rowcnt;		
+	int		sum_value;	
 	char		*tablet_bp = NULL;
 
 
@@ -2228,21 +2161,21 @@ rg_selcountsum_delupd_tab(TREE *command, SELWHERE *selwhere, TABLEHDR *tab_hdr,
 	int		ign;
 	
 
-	/* The tablet to be interested. */
+	
 	char		*wanted_tablet;
 	int		wanted_tablet_len;
 
-	/* Check if we got the first tablet. */
+	
 	int		leftbegin = FALSE;
-	/* Check if we got the last tablet. */	
+		
 	int 		rightend = FALSE;
 
-	/* For selectrange. */
+	
 		
-	/* Initialization. */
+	
 	if (!par_fill_colinfo(tab_hdr->tab_col, colinfo, command))
 	{
-		/* Error infor has been printed in the par_fill_colinfo(). */
+		
 		goto exit;
 	}
 
@@ -2262,7 +2195,7 @@ rg_selcountsum_delupd_tab(TREE *command, SELWHERE *selwhere, TABLEHDR *tab_hdr,
 
 	SSTAB_GET_RESERVED(tablet_bp);
 	
-	/* Working for the query. */
+	
 	while (TRUE)
 	{
 		blk = (BLOCK *)(tablet_schm_bp + i * BLOCKSIZE);
@@ -2279,12 +2212,7 @@ rg_selcountsum_delupd_tab(TREE *command, SELWHERE *selwhere, TABLEHDR *tab_hdr,
 					TABLETSCHM_TABLETNAME_COLOFF_INROW,
 					ROW_MINLEN_IN_TABLETSCHM, &namelen);
 
-			/* 
-			** Note: use the original data (don't use the strlen()) 
-			** from meta server because the tabletname string 
-			** may be dirty by the net  connection, such as the
-			** tail zero lost.
-			*/
+			
 			if (!leftbegin)
 			{
 				wanted_tablet = selwhere->lefttabletname;
@@ -2296,7 +2224,7 @@ rg_selcountsum_delupd_tab(TREE *command, SELWHERE *selwhere, TABLEHDR *tab_hdr,
 				wanted_tablet_len = selwhere->rightnamelen;
 			}
 			
-			/* Check if it got the left or right tablet. */
+			
 			result = row_col_compare(VARCHAR, tabletname, 
 						STRLEN(tabletname), 
 						wanted_tablet,
@@ -2312,23 +2240,17 @@ rg_selcountsum_delupd_tab(TREE *command, SELWHERE *selwhere, TABLEHDR *tab_hdr,
 			{	
 				if (leftbegin == TRUE)
 				{
-					/* 
-					** Hit the right side of range, that's
-					** to say, hit the last tablet. 
-					*/
+					
 					rightend = TRUE;
 				}
 				else if (leftbegin == FALSE)
 				{
-					/*
-					** Hit the left side of the range, 
-					** that's to say, hit the fisrt tablet.
-					*/
+					
 					leftbegin = TRUE;
 				}
 			}
 
-			/* Check if this tablet locates at this range. */
+			
 			rg_addr = row_locate_col(rp, 
 					TABLETSCHM_RGADDR_COLOFF_INROW,
 					ROW_MINLEN_IN_TABLETSCHM, &ign);
@@ -2375,10 +2297,7 @@ rg_selcountsum_delupd_tab(TREE *command, SELWHERE *selwhere, TABLEHDR *tab_hdr,
 					goto next_tablet;
 				}
 				
-				/* 
-				** We got the tablet that locates at the current
-				** ranger server.
-				*/
+				
 				MEMSET(tab_tablet_dir, TABLE_NAME_MAX_LEN);
 				MEMCPY(tab_tablet_dir, tab_dir, STRLEN(tab_dir));
 				str1_to_str2(tab_tablet_dir, '/', tabletname);  
@@ -2397,10 +2316,7 @@ rg_selcountsum_delupd_tab(TREE *command, SELWHERE *selwhere, TABLEHDR *tab_hdr,
 				
 				tablet_scanctx->tablet = tablet_bp;
 				
-				/* 
-				** Scan the tablet and get the sstabname
-				** for the every row to be wanted. 
-				*/
+				
 				if (!rg_count_data_tablet(tablet_scanctx))
 				{
 					goto exit;
@@ -2479,21 +2395,37 @@ exit:
 }
 
 
-/* Get the row for the OR and AND clause in the query plan. */
+
 static int
 rg_sstabscan(SSTAB_SCANCTX *scanctx)
 {	
 	BLOCK	*blk;
 	BLOCK	*datablk;
 	int     *offset;
-	char    *rp;
+	char    *currp;		
+	char	*curcol;	
+	char	*lastcol;		
+	int	curcolen;	
+	int	lastcolen;	
 	int	minrowlen;
 	int	andplan_hit;
+	int	querytype;
+	int	rtn_stat;
+	int	result;
+	int	rowcnt;
 
 
-	minrowlen= scanctx->rminlen;
-	datablk= (BLOCK *)(scanctx->rgsel->data);	
+	rtn_stat	= TRUE;
+	lastcol		= NULL;
+	rowcnt		= 0;
+	querytype	= scanctx->querytype;
+	minrowlen	= scanctx->rminlen;
 
+	if (querytype != MCCSSTAB)
+	{
+		datablk= (BLOCK *)(scanctx->rgsel->data);	
+	}
+	
 	while (TRUE)
 	{
 		blk = (BLOCK *)(scanctx->sstab + scanctx->curblk * BLOCKSIZE);
@@ -2505,40 +2437,70 @@ rg_sstabscan(SSTAB_SCANCTX *scanctx)
 		for(; scanctx->currow < blk->bnextrno; (scanctx->currow)++, 
 							offset--)
 		{
-			rp = (char *)blk + *offset;
+			currp = (char *)blk + *offset;
 			
-                        if (ROW_IS_DELETED(rp))
+                        if (ROW_IS_DELETED(currp))
                         {
                                 continue;
                         }
 
 			Assert(*offset < blk->bfreeoff);
-
-			andplan_hit = par_process_andplan(scanctx->andplan, rp, 
-			    				minrowlen);
-
-			if (   (andplan_hit == PAR_ANDPLAN_HIT)
-			    && par_process_orplan(scanctx->orplan, rp, 
-							minrowlen))
+			
+			if (querytype == MCCSSTAB)
 			{
-				if (!(scanctx->stat & SSTABSCAN_HIT_ROW))
-				{
-					scanctx->stat |= SSTABSCAN_HIT_ROW;
-				}
+				curcol = row_locate_col(currp, -1, minrowlen, 
+							&curcolen);
+
+				rowcnt++;
 				
-				if (!(blk_appendrow(datablk, rp, 
-						ROW_GET_LENGTH(rp, minrowlen))))
+				if (lastcol != NULL)
 				{
-					scanctx->stat |= SSTABSCAN_BLK_IS_FULL;
+					
+					result = row_col_compare(VARCHAR, 
+							curcol, curcolen,
+							lastcol, lastcolen);
+
+					if (result != GR)
+					{
+						traceprint("Current key column (value = %s ; len = %d) should be greater than the last key column (value = %s, len = %d)\n", curcol, curcolen, lastcol, lastcolen);
+
+						rtn_stat = FALSE;
+						goto finish;
+					}					
+				}
+
+				lastcol = curcol;
+				lastcolen = curcolen;
+			}
+			else
+			{
+
+				andplan_hit = par_process_andplan(scanctx->andplan, 
+								currp, minrowlen);
+
+				if (   (andplan_hit == PAR_ANDPLAN_HIT)
+				    && par_process_orplan(scanctx->orplan, currp, 
+								minrowlen))
+				{
+					if (!(scanctx->stat & SSTABSCAN_HIT_ROW))
+					{
+						scanctx->stat |= SSTABSCAN_HIT_ROW;
+					}
+					
+					if (!(blk_appendrow(datablk, currp, 
+						ROW_GET_LENGTH(currp, minrowlen))))
+					{
+						scanctx->stat |= SSTABSCAN_BLK_IS_FULL;
+						goto finish;
+					}
+				}
+
+				if (andplan_hit == PAR_ANDPLAN_HIT_BOUND)
+				{
+					scanctx->stat |= SSTABSCAN_HIT_BOUND;
+
 					goto finish;
 				}
-			}
-
-			if (andplan_hit == PAR_ANDPLAN_HIT_BOUND)
-			{
-				scanctx->stat |= SSTABSCAN_HIT_BOUND;
-
-				goto finish;
 			}
 		}
 
@@ -2555,12 +2517,17 @@ rg_sstabscan(SSTAB_SCANCTX *scanctx)
 	}
 
 finish:	
+
+	if (querytype == MCCSSTAB)
+	{		
+		traceprint("SStable (id = %d) has %d rows.\n", scanctx->sstab_id, rowcnt);
+	}
 	
-	return TRUE;
+	return rtn_stat;
 }
 
 
-/* Get the sstable name from the tablet file. */
+
 static int
 rg_get_sstab_tablet(char *tabletbp, char *key, int keylen, char **sstabname, 
 				int *namelen, int *sstabid, int flag)
@@ -2586,7 +2553,7 @@ rg_get_sstab_tablet(char *tabletbp, char *key, int keylen, char **sstabname,
 	
 	if (blk->bfreeoff == BLKHEADERSIZE)
 	{
-		/* Error case 1. */
+		
 		return FALSE;
 	}
 
@@ -2600,7 +2567,7 @@ rg_get_sstab_tablet(char *tabletbp, char *key, int keylen, char **sstabname,
 		{
 			rp = (char *)blk + *offset;
 
-			/* Skip the deleted row. */
+			
 			if (ROW_IS_DELETED(rp))
 			{
 				continue;
@@ -2609,12 +2576,12 @@ rg_get_sstab_tablet(char *tabletbp, char *key, int keylen, char **sstabname,
 			Assert(*offset < blk->bfreeoff);
 
 
-			/* Get the first row of this tablet. */
+			
 			if (flag & RG_TABLET_1ST_SSTAB)
 			{
 				goto finish;
 			}
-			/* Get the last row of this tablet. */
+			
 			else if (flag & RG_TABLET_LAST_SSTAB)
 			{
 				break;;
@@ -2628,26 +2595,21 @@ rg_get_sstab_tablet(char *tabletbp, char *key, int keylen, char **sstabname,
 
 			if (result != LE)
 			{
-				/* Return for the case GR or EQ. */
+				
 				if (result == GR)
 				{
 					if (lastrp == NULL)
 					{
 						if (flag & RG_TABLET_RIGHT_BOUND)
 						{
-							/* 
-							** Error case 2: if the 1st key 
-							** is greater than the input key, 
-							** it flags this tablet is not in this 
-							** range. 
-							*/
+							
 							return FALSE;
 						}
 						else
 						{
 							Assert(flag & RG_TABLET_LEFT_BOUND);
 
-							/* Return the 1st sstable. */
+							
 							goto finish;
 						}
 					}
@@ -2663,20 +2625,20 @@ rg_get_sstab_tablet(char *tabletbp, char *key, int keylen, char **sstabname,
 
 		if (flag & RG_TABLET_LAST_SSTAB)
 		{
-			/* Hit the last block that has data. */
+			
 			if (blk->bfreeoff == BLKHEADERSIZE)
 			{
 				blk = last_blk;
 				goto finish;
 			}
 
-			/* Save the previous block. */
+			
 			last_blk = blk;
 		}
 	
 		if (blk->bnextblkno != -1)
 		{
-			/* Continue. */
+			
 			i = blk->bnextblkno;
 		}
 		else
@@ -2690,10 +2652,7 @@ finish:
 
 	if (flag & RG_TABLET_LAST_SSTAB)
 	{
-		/* 
-		** Get the last row.
-		** TODO: it should check if this row is deleted.
-		*/
+		
 		Assert(blk != NULL);
 		int *offtab = ROW_OFFSET_PTR(blk);
 		rp = (char *)blk + offtab[-(blk->bnextrno - 1)];
@@ -2736,6 +2695,7 @@ rg_tabletscan(TABLET_SCANCTX *scanctx)
 	BUF		*bp;
 	int		scan_result;
 	BLOCK		*datablk;
+	int		querytype;
 				
 
 	scan_result = FALSE;
@@ -2750,14 +2710,17 @@ rg_tabletscan(TABLET_SCANCTX *scanctx)
 	sstab_scanctx.rgsel	= &rgsel_cont;
 	sstab_scanctx.stat	= 0;
 	bp = NULL;
+	querytype = sstab_scanctx.querytype = scanctx->querytype;
 
-	/* initialization of sending data buffer. */
-	datablk= (BLOCK *)(sstab_scanctx.rgsel->data);
-	datablk->bfreeoff = BLKHEADERSIZE;
-	datablk->bnextrno = 0;
-	datablk->bstat = 0;
-	MEMSET(datablk->bdata, BLOCKSIZE - BLKHEADERSIZE - 4);
-	
+	if (querytype != MCCSSTAB)
+	{
+		
+		datablk= (BLOCK *)(sstab_scanctx.rgsel->data);
+		datablk->bfreeoff = BLKHEADERSIZE;
+		datablk->bnextrno = 0;
+		datablk->bstat = 0;
+		MEMSET(datablk->bdata, BLOCKSIZE - BLKHEADERSIZE - 4);
+	}
 
 	tabinfo = MEMALLOCHEAP(sizeof(TABINFO));
 	MEMSET(tabinfo, sizeof(TABINFO));
@@ -2780,7 +2743,7 @@ rg_tabletscan(TABLET_SCANCTX *scanctx)
 		{
 			rp = (char *)blk + *offset;
 
-			/* Skip the deleted row. */
+			
 			if (ROW_IS_DELETED(rp))
 			{
 				continue;
@@ -2820,29 +2783,32 @@ rg_tabletscan(TABLET_SCANCTX *scanctx)
 			sstab_scanctx.sstab = (char *)(bp->bblk);
 			sstab_scanctx.curblk = 0;
 			sstab_scanctx.currow = 0;
+			sstab_scanctx.sstab_id = sstabid;
 
 scan_cont:			
-			rg_sstabscan(&sstab_scanctx);
+			if (!rg_sstabscan(&sstab_scanctx))
+			{
+				traceprint("SStab scan hit error\n");
+				goto exit;
+			}
 
-			/* 
-			** Jump the last round sending base if it hit the right
-			** bound.
-			*/
+			
 			if (sstab_scanctx.stat & SSTABSCAN_HIT_BOUND)
 			{
 				break;
 			}
 
-			if (!(sstab_scanctx.stat & SSTABSCAN_BLK_IS_FULL))
+			if (   (querytype != MCCSSTAB)
+			    || !(sstab_scanctx.stat & SSTABSCAN_BLK_IS_FULL))
 			{
-				/* Finding the next sstable to fill the sending block. */
+				
 				bufunkeep(bp->bsstab);
 				bp = NULL;
 	
 				continue;
 			}
 
-			/* Fill the structure to sign the client. */
+			
 			rgsel_cont.cur_rowpos = 0;
 			rgsel_cont.first_rowpos = 0;
 			rgsel_cont.end_rowpos = BLK_GET_NEXT_ROWNO(datablk) - 1;
@@ -2854,16 +2820,13 @@ scan_cont:
 		
 			resp_size = conn_get_resp_size((RPCRESP *)resp);
 
-			/* Send the result to the client. */
+			
 			tcp_put_data(scanctx->connfd, resp, resp_size);			
 
 			conn_destroy_resp_byte(resp);	
 
 			
-			/*
-			** TODO: placeholder for the TCP/IP check.
-			** Read the response from the client.
-			*/
+			
 			MEMSET(resp_cli, 8);
 			int n = conn_socket_read(scanctx->connfd, resp_cli, 8);
 
@@ -2875,10 +2838,7 @@ scan_cont:
 
 			Assert(sstab_scanctx.stat & SSTABSCAN_BLK_IS_FULL);
 
-			/* 
-			** It's a new round of sending data and continue to 
-			** search and send data in the previous sstable. 
-			*/
+			
 			sstab_scanctx.stat = 0;
 			datablk->bfreeoff = BLKHEADERSIZE;
 			datablk->bnextrno = 0;
@@ -2888,10 +2848,7 @@ scan_cont:
 			goto scan_cont;
 		}
 
-		/*
-		** Now, the exit has two ways including the endscan tablet and 
-		** hit the right bound. 
-		*/
+		
 		if (   !(sstab_scanctx.stat & SSTABSCAN_HIT_BOUND) 
 		    && (blk->bnextblkno != -1)) 
 		{
@@ -2899,10 +2856,10 @@ scan_cont:
 		}
 		else
 		{
-			/* Sending the last block of data in one Tablet. */
+			
 			if (sstab_scanctx.stat & SSTABSCAN_HIT_ROW)
 			{
-				/* Fill the structure to sign the client. */
+				
 				rgsel_cont.cur_rowpos = 0;
 				rgsel_cont.first_rowpos = 0;
 				rgsel_cont.end_rowpos = BLK_GET_NEXT_ROWNO(datablk) - 1;
@@ -2914,13 +2871,13 @@ scan_cont:
 			
 				resp_size = conn_get_resp_size((RPCRESP *)resp);
 
-				/* Send the result to the client. */
+				
 				tcp_put_data(scanctx->connfd, resp, resp_size);			
 
 				conn_destroy_resp_byte(resp);	
 
 				
-				/* TODO: placeholder for the TCP/IP check. */
+				
 				MEMSET(resp_cli, 8);
 				int n = conn_socket_read(scanctx->connfd,
 							resp_cli, 8);
@@ -2953,7 +2910,7 @@ exit:
 }
 
 
-/* Clone from the rg_tabletscan. */
+
 static int
 rg_crtidx_tablet(TABLET_SCANCTX *scanctx, IDXBLD *idxbld)
 {
@@ -2990,7 +2947,7 @@ rg_crtidx_tablet(TABLET_SCANCTX *scanctx, IDXBLD *idxbld)
 	sstab_scanctx.stat	= 0;
 	bp = NULL;
 
-	/* initialization of sending data buffer. */
+	
 	datablk= (BLOCK *)(sstab_scanctx.rgsel->data);
 	datablk->bfreeoff = BLKHEADERSIZE;
 	datablk->bnextrno = 0;
@@ -3021,7 +2978,7 @@ rg_crtidx_tablet(TABLET_SCANCTX *scanctx, IDXBLD *idxbld)
 		{
 			rp = (char *)blk + *offset;
 
-			/* Skip the deleted row. */
+			
 			if (ROW_IS_DELETED(rp))
 			{
 				continue;
@@ -3056,7 +3013,7 @@ rg_crtidx_tablet(TABLET_SCANCTX *scanctx, IDXBLD *idxbld)
 			SRCH_INFO_INIT(tabinfo->t_sinfo, NULL, 0,
 					scanctx->keycolid, VARCHAR, -1);
 
-			/* Get the buffer for the data sstable. */
+			
 			bp = blk_getsstable(tabinfo);	
 
 			sstab_scanctx.sstab = (char *)(bp->bblk);
@@ -3104,7 +3061,7 @@ exit:
 
 
 
-/* Clone from rg_sstabscan. */
+
 static int
 rg_crtidx_sstab(SSTAB_SCANCTX *scanctx, IDXBLD *idxbld)
 {	
@@ -3114,7 +3071,7 @@ rg_crtidx_sstab(SSTAB_SCANCTX *scanctx, IDXBLD *idxbld)
 	int     	*offset;
 	char    	*rp;
 	int		minrowlen;
-	char 		*index_rp;	/* Max row length. */
+	char 		*index_rp;	
 	int		index_rlen;
 	int		col_idx;
 	int		col_map;
@@ -3132,7 +3089,7 @@ rg_crtidx_sstab(SSTAB_SCANCTX *scanctx, IDXBLD *idxbld)
 	col_map		= idxbld->idx_meta->idx_col_map;
 	col_info	= tss->tcol_info;
 
-	/* Get the index of column based on index.*/
+	
 	INDEX_MAP_GET_COLUMN_NUM(col_map,col_idx);
 
 	coloffset	= col_info[col_idx].col_offset;
@@ -3153,7 +3110,7 @@ rg_crtidx_sstab(SSTAB_SCANCTX *scanctx, IDXBLD *idxbld)
 
 			Assert(*offset < blk->bfreeoff);
 			
-			/* Column based on index. */
+			
 			keycol = row_locate_col(rp, coloffset, minrowlen, 
 						&keycolen);
 
@@ -3162,13 +3119,11 @@ rg_crtidx_sstab(SSTAB_SCANCTX *scanctx, IDXBLD *idxbld)
 				keycolen = TYPE_GET_LEN(coltype);
 			}
 			
-			/*
-			** sizeof(ROWFMT) + 2 * sizeof(int) + keycolen + sizeof(RID) + 2 * COLOFFSETENTRYSIZE
-			*/
+			
 			index_rlen = sizeof(ROWFMT) + 2 * sizeof(int) + keycolen
 					+ sizeof(RID) + 2 * COLOFFSETENTRYSIZE;
 
-			/* Build index row and insert into index sstable. */
+			
 			index_rp = MEMALLOCHEAP(index_rlen);
 
 			Assert(index_rlen < BLOCKSIZE);
@@ -3204,7 +3159,7 @@ rg_crtidx_sstab(SSTAB_SCANCTX *scanctx, IDXBLD *idxbld)
 }
 
 
-/* Clone from the rg_tabletscan(). */
+
 static int
 rg_count_data_tablet(TABLET_SCANCTX *scanctx)
 {
@@ -3245,7 +3200,7 @@ rg_count_data_tablet(TABLET_SCANCTX *scanctx)
 	sstab_scanctx.sum_coloff= scanctx->sum_coloff;
 	bp = NULL;
 
-	/* Initialize the context of tabinfor. */
+	
 	tabinfo = MEMALLOCHEAP(sizeof(TABINFO));
 	MEMSET(tabinfo, sizeof(TABINFO));
 	tabinfo->t_sinfo = (SINFO *)MEMALLOCHEAP(sizeof(SINFO));
@@ -3260,16 +3215,16 @@ rg_count_data_tablet(TABLET_SCANCTX *scanctx)
 	
 	while (TRUE)
 	{
-		/* Skill to the next block of tablet. */
+		
 		blk = (BLOCK *)(scanctx->tablet + i * BLOCKSIZE);
 
-		/* Do the processing row by row*/
+		
 		for(rowno = 0, offset = ROW_OFFSET_PTR(blk); 
 			       rowno < blk->bnextrno; rowno++, offset--)
 		{
 			rp = (char *)blk + *offset;
 
-			/* Skip the deleted row. */
+			
 			if (ROW_IS_DELETED(rp))
 			{
 				continue;
@@ -3277,7 +3232,7 @@ rg_count_data_tablet(TABLET_SCANCTX *scanctx)
 
 			Assert(*offset < blk->bfreeoff);
 
-			/* Locate the information of data sstab. */
+			
 			sstabname = row_locate_col(rp,
 					TABLET_SSTABNAME_COLOFF_INROW, 
 					ROW_MINLEN_IN_TABLET, &namelen);
@@ -3301,7 +3256,7 @@ rg_count_data_tablet(TABLET_SCANCTX *scanctx)
 				P_SPINLOCK(BUF_SPIN);
 			}
 			
-			/* Initialize the searching context. */
+			
 			MEMSET(tabinfo->t_sinfo, sizeof(SINFO));
 			MEMSET(tabinfo->t_rowinfo, sizeof(BLK_ROWINFO));
 			
@@ -3323,7 +3278,7 @@ rg_count_data_tablet(TABLET_SCANCTX *scanctx)
 			sstab_scanctx.curblk = 0;
 			sstab_scanctx.currow = 0;
 
-			/* Count the row in one sstable. */
+			
 			scan_result = rg_count_data_sstable(&sstab_scanctx, tabinfo, bp,
 						scanctx->totcol);
 
@@ -3333,7 +3288,7 @@ rg_count_data_tablet(TABLET_SCANCTX *scanctx)
 			}
 			else
 			{
-				/* Buffer unkept. */
+				
 				bufunkeep(bp->bsstab);
 			}
 			
@@ -3364,7 +3319,7 @@ rg_count_data_tablet(TABLET_SCANCTX *scanctx)
 		}
 		else
 		{
-			/* Sending the last block of data in one Tablet. */
+			
 			break;
 		}
 	}
@@ -3407,8 +3362,8 @@ exit:
 
 
 
-/* Clone from rg_sstabscan(). */
-/* Get the row for the OR and AND clause in the query plan. */
+
+
 static int
 rg_count_data_sstable(SSTAB_SCANCTX *scanctx, TABINFO *tabinfo, BUF *bp, int totcol)
 {	
@@ -3456,7 +3411,7 @@ rg_count_data_sstable(SSTAB_SCANCTX *scanctx, TABINFO *tabinfo, BUF *bp, int tot
 
 	while (TRUE)
 	{
-		/* Skill to the next block. */
+		
 		blk = (BLOCK *)(scanctx->sstab + scanctx->curblk * BLOCKSIZE);
 
 scan_block:
@@ -3481,7 +3436,7 @@ scan_block:
 				{
 				    case SELECTCOUNT:
 				
-					/* Count the row. */
+					
 					(scanctx->rowcnt)++;
 					break;
 					
@@ -3537,16 +3492,11 @@ scan_block:
 						{
 							Assert (0);
 
-							/* TODO: ex_raise(). */
+							
 						}
 						else if (blk_stat == UPDATE_SKIP_THIS_ROW)
 						{
-							/*
-							** TODO: the length of the row 
-							** to be update must be less
-							** than or equal to the original
-							** length.
-							*/
+							
 							traceprint(" the length (%d) of the row to be update must be less than or equal to the original length (%d).", newrlen, rlen);
 
 							skip_this_row = TRUE;
@@ -3558,7 +3508,7 @@ scan_block:
 							 || (blk_stat == UPDATE_IN_NEXT_BLK)
 							 || (blk_stat == UPDATE_BLK_CHANGED))
 						{
-							/* Re-get the index row. */
+							
 							restart = TRUE;
 							MEMFREEHEAP(newrp);
 							bufunkeep(bp->bsstab);
@@ -3720,7 +3670,7 @@ scan_block:
 
 				if (scanctx->querytype == DELETEWHERE)
 				{
-					/* Adjust the sail to re-sailing in this block. */
+					
 					scanctx->currow = 0;
 					goto scan_block;
 				}
@@ -3813,6 +3763,11 @@ rg_get_meta(char *req_buf, INSMETA **ins_meta, SELRANGE **sel_rg, IDXMETA **idxm
 	{
 		*idxmeta = (IDXMETA *)req_buf;
 	}
+
+	if (rtn_stat & RPC_REQ_MCCSSTAB_OP)
+	{
+		*tab_hdr = (TABLEHDR *)(req_buf + sizeof(SELWHERE));
+	}
 	
 	return rtn_stat;	
 }
@@ -3878,26 +3833,26 @@ rg_crtidx(TREE *command, IDXMETA *idxmeta, TABLEHDR *tab_hdr, COLINFO *colinfo, 
 	logrec = NULL;
 	buf_spin = FALSE;
 
-	/* Index name*/
+	
 	idx_name = command->sym.command.tabname;
 	idx_name_len = command->sym.command.tabname_len;
 
-	/* Table name locate at the sub-command ON. */
+	
 	tab_name = (command->right)->sym.command.tabname;
 	tab_name_len = (command->right)->sym.command.tabname_len;
 
-	/* The full path of meta table. */
+	
 	MEMSET(tab_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_dir, MT_META_TABLE, STRLEN(MT_META_TABLE));
 	str1_to_str2(tab_dir, '/', tab_name);
 
-	/* The full path of ranger table. */
+	
 	MEMSET(rg_tab_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(rg_tab_dir, MT_RANGE_TABLE, STRLEN(MT_RANGE_TABLE));
 	str1_to_str2(rg_tab_dir, '/', tab_name);
 
 	
-	/* Check if table is exist. */
+	
 	if ((tabidx = rg_table_is_exist(rg_tab_dir)) == -1)
 	{
 		if (STAT(tab_dir, &st) != 0)
@@ -3906,7 +3861,7 @@ rg_crtidx(TREE *command, IDXMETA *idxmeta, TABLEHDR *tab_hdr, COLINFO *colinfo, 
 			goto exit;
 		}
 
-		/* If hit the error, it has printed the information in caller. */
+		
 		tabidx = rg_table_regist(rg_tab_dir);
 	}
 
@@ -3934,25 +3889,25 @@ rg_crtidx(TREE *command, IDXMETA *idxmeta, TABLEHDR *tab_hdr, COLINFO *colinfo, 
 	char	tab_meta_dir[TABLE_NAME_MAX_LEN];
 	int	fd1;
 
-	/* Build the full path for the tabletscheme file. */
+	
 	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_meta_dir, rg_tab_dir, STRLEN(rg_tab_dir));
 	str1_to_str2(tab_meta_dir, '/', idx_name);
 	
-	/* Make the directory to save the state of ranger servers. */
+	
 	if (STAT(tab_meta_dir, &st) != 0)
 	{
 		traceprint("The meta for the index %s on table %s has not been built.\n", idx_name, tab_name);
 		goto exit;
 	}
 	
-	/* Build the full path for the tabletscheme file. */
+	
 	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
 	str1_to_str2(tab_meta_dir, '/', "tabletscheme");
 		
 
-	/* Read the file tabletscheme. */
+	
 		
 	OPEN(fd1, tab_meta_dir, (O_RDONLY));
 
@@ -3977,7 +3932,7 @@ rg_crtidx(TREE *command, IDXMETA *idxmeta, TABLEHDR *tab_hdr, COLINFO *colinfo, 
 	int		ign;
 	
 
-	/* For selectrange. */
+	
 	char		*rp;
 	char		*rg_addr;
 	int		rg_port;
@@ -3992,10 +3947,10 @@ rg_crtidx(TREE *command, IDXMETA *idxmeta, TABLEHDR *tab_hdr, COLINFO *colinfo, 
 
 	SSTAB_GET_RESERVED(tablet_bp);
 
-	/* Insert the begin log for this index creating. */
+	
 	
 
-	/* Working for the query. */
+	
 	while (TRUE)
 	{
 		blk = (BLOCK *)(tablet_schm_bp + i * BLOCKSIZE);
@@ -4014,7 +3969,7 @@ rg_crtidx(TREE *command, IDXMETA *idxmeta, TABLEHDR *tab_hdr, COLINFO *colinfo, 
 
 			
 
-			/* Check if this tablet locates at this ranger server. */
+			
 			rg_addr = row_locate_col(rp, 
 					TABLETSCHM_RGADDR_COLOFF_INROW,
 					ROW_MINLEN_IN_TABLETSCHM, &ign);
@@ -4036,18 +3991,12 @@ rg_crtidx(TREE *command, IDXMETA *idxmeta, TABLEHDR *tab_hdr, COLINFO *colinfo, 
 					
 			if (result == EQ)
 			{
-				/* 
-				** We got the tablet that locates at the current
-				** ranger server.
-				*/
+				
 				MEMSET(tab_tablet_dir, TABLE_NAME_MAX_LEN);
 				MEMCPY(tab_tablet_dir, tab_dir, STRLEN(tab_dir));
 				str1_to_str2(tab_tablet_dir, '/', tabletname);	
 
-				/* 
-				** Read the file tablet and get the information
-				** of each row.
-				*/
+				
 				OPEN(fd1, tab_tablet_dir, (O_RDONLY));
 
 				if (fd1 < 0)
@@ -4070,10 +4019,7 @@ rg_crtidx(TREE *command, IDXMETA *idxmeta, TABLEHDR *tab_hdr, COLINFO *colinfo, 
 
 				idxbld.idx_tab_name = rg_tab_dir;
 
-				/* 
-				** The root id of index on the tablet is same 
-				** with the id of tablet. 
-				*/
+				
 				idxbld.idx_root_sstab = *(int *)row_locate_col(rp, 
 					TABLETSCHM_TABLETID_COLOFF_INROW,
 					ROW_MINLEN_IN_TABLETSCHM, &namelen);
@@ -4115,19 +4061,12 @@ exit:
 	
 	if (rtn_stat)
 	{
-		/* 
-		** This case stands for the success for this session. The client
-		** has been close the accept. 
-		*/
+		
 		resp = conn_build_resp_byte(RPC_SUCCESS, 0, NULL);
 	}
 	else
 	{
-		/* 
-		** Exption case need to be send to the client and the client
-		** can accept this RPC and use it to make sure this session
-		** is failed.
-		*/
+		
 		resp = conn_build_resp_byte(RPC_FAIL, 0, NULL);
 	}
 
@@ -4181,7 +4120,7 @@ rg_handler(char *req_buf, int fd)
 		return NULL;
 	}
 
-	/* Initialize the meta data for build RESDOM. */
+	
 	tss->tcol_info = col_info;
 	tss->tmeta_hdr = ins_meta;
 	tss->ttab_hdr = tab_hdr;
@@ -4199,14 +4138,11 @@ rg_handler(char *req_buf, int fd)
 		tabinfo = copy.tabinfo;
 
 		rollback_rg();
-		/* TODO: Resp information needs to be built ?. */
+		
 		goto close;
 	}
 	
-	/* 
-	** For performance, We see the Drop Table as a special case to process it. 
-	** Maybe there are still some better solution.
-	*/
+	
 	if (req_op & RPC_REQ_DROPTAB_OP)
 	{
 		if (!parser_open(req_buf + RPC_MAGIC_MAX_LEN + sizeof(int), 
@@ -4290,7 +4226,32 @@ rg_handler(char *req_buf, int fd)
 		
 		goto finish;
 	}
-	/* Rebalancer case. */
+	else if (req_op & RPC_REQ_MCCSSTAB_OP)
+	{
+		if (DEBUG_TEST(tss))
+		{
+			traceprint("I got here - mcc checksstable\n");
+		}
+		
+		req_buf += sizeof(SELWHERE) + sizeof(TABLEHDR);
+		
+		if (!parser_open(req_buf + sizeof(int), *(int *)(req_buf)))
+		{
+			parser_close();
+			tss->tstat |= TSS_PARSER_ERR;
+			traceprint("PARSER ERR: Please input the command again by the 'help' signed.\n");
+			return NULL;
+		}
+
+		command = tss->tcmd_parser;
+		
+		Assert(command->sym.command.querytype == MCCSSTAB);
+
+		resp = rg_selwheretab(command, NULL, tab_hdr, NULL, fd);
+		
+		goto finish;
+	}
+	
 	else if (req_op & RPC_REQ_REBALANCE_OP)
 	{
 		return rg_rebalancer((REBALANCE_DATA *)(req_buf - RPC_MAGIC_MAX_LEN));
@@ -4300,23 +4261,20 @@ rg_handler(char *req_buf, int fd)
 		req_buf += RPC_MAGIC_MAX_LEN;
 		return rg_recovery((char *)req_buf, *(int *)(req_buf + RANGE_ADDR_MAX_LEN));
 	}
-	/* process with heart beat */
+	
 	else if (req_op & RPC_REQ_M2RHEARTBEAT_OP)
 	{
 		traceprint("\n$$$$$$ rg recv heart beat. \n");
 	
 		Assert(rg_heartbeat(req_buf));
-		/* 
-		** to be fixed here
-		** maybe more info will be added here in the future
-		*/
+		
 		resp = conn_build_resp_byte(RPC_SUCCESS, 0, NULL);
 
 		traceprint("\n$$$$$$ rg sent heart beat. \n");
 
 		return resp;
 	}
-	/* process with rsync notify */
+	
 	else if (req_op & RPC_REQ_M2RNOTIFY_OP)
 	{
 		Assert(rg_rsync(req_buf));
@@ -4325,7 +4283,7 @@ rg_handler(char *req_buf, int fd)
 
 		return resp;
 	}
-	/* process with map reduce req */
+	
 	else if (req_op & RPC_REQ_MAPRED_GET_DATAPORT_OP)
 	{
 		return rg_mapred_setup(req_buf);
@@ -4609,7 +4567,7 @@ rg_setup(char *conf_path)
 	conf_get_value_by_key(port, conf_path, CONF_RG_PORT);
 	conf_get_value_by_key(Range_infor->rg_ip, conf_path, CONF_RG_IP);
 
-	/* Get the IP and Port of metaserver. */
+	
 	conf_get_value_by_key(Range_infor->rg_meta_ip, conf_path, CONF_META_IP);
 	conf_get_value_by_key(metaport, conf_path, CONF_META_PORT);
 	Range_infor->rg_meta_port = m_atoi(metaport, STRLEN(metaport));
@@ -4639,7 +4597,7 @@ rg_setup(char *conf_path)
 		MKDIR(status, MT_RANGE_TABLE, 0755);
 	}
 
-	/* Make the directory to save the state of ranger servers. */
+	
 	if (STAT(MT_RANGE_STATE, &st) != 0)
 	{
 		MKDIR(status, MT_RANGE_STATE, 0755);
@@ -4651,7 +4609,7 @@ rg_setup(char *conf_path)
 
 	char	rgname[64];
 
-	/* Build the array for the range logging directory. */
+	
 	MEMSET(Range_infor->rglogfiledir, 256);
 	MEMCPY(Range_infor->rglogfiledir, LOG_FILE_DIR, STRLEN(LOG_FILE_DIR));
 
@@ -4675,7 +4633,7 @@ rg_setup(char *conf_path)
 	{
 		sprintf(Rg_loginfo->logdir, "%s0", Rg_loginfo->logdir);
 
-		/* Long open. */
+		
 		OPEN(fd, Rg_loginfo->logdir, (O_CREAT | O_APPEND | O_RDWR |O_TRUNC));
 //		CLOSE(fd);
 		Rg_loginfo->logfd = fd;
@@ -4695,7 +4653,7 @@ rg_setup(char *conf_path)
 	Range_infor->rginsdellognum = m_atoi(Rg_loginfo->logdir + idxpos, 
 					STRLEN(Rg_loginfo->logdir) - idxpos);
 
-	/* Build the array for the ranger backup directory. */
+	
 	MEMSET(Range_infor->rgbackup, 256);
 	MEMCPY(Range_infor->rgbackup, BACKUP_DIR, STRLEN(BACKUP_DIR));
 
@@ -4707,7 +4665,7 @@ rg_setup(char *conf_path)
 		return FALSE;
 	}
 
-	/* Build the array for the range state directory. */
+	
 	if (!ri_get_rgstate(Range_infor->rgstatefile,Range_infor->rg_ip, 
 				Range_infor->port))
 	{
@@ -4720,7 +4678,7 @@ rg_setup(char *conf_path)
 	}
 	else
 	{
-		/* Load the index meta information into the ranger context. */
+		
 		meta_load_sysindex((char *)Range_infor->rg_meta_sysindex);
 	}
 
@@ -4734,7 +4692,7 @@ rg_boot()
 	startup(Range_infor->port, TSS_OP_RANGESERVER, rg_handler);
 }
 
-/* Regist its ranger information to the metaserver. */
+
 static void
 rg_regist()
 {
@@ -4745,7 +4703,7 @@ rg_regist()
 	
 	sockfd = conn_open(Range_infor->rg_meta_ip, Range_infor->rg_meta_port);
 
-	/* REQUEST magic number and RG2MASTER magic number. */
+	
 	MEMSET(send_buf, 2 * RPC_MAGIC_MAX_LEN + RANGE_ADDR_MAX_LEN + RANGE_PORT_MAX_LEN);
 
 	int idx = 0;
@@ -4978,7 +4936,7 @@ exit:
 
 }
 
-/* We should maintaince the log to recovery the exception during the index root split. */
+
 static char *
 rg_idxroot_split(IDX_ROOT_SPLIT *idx_root_split)
 {
@@ -5053,14 +5011,14 @@ rg_idxroot_split(IDX_ROOT_SPLIT *idx_root_split)
 			src_tabinfo = &psrc_tabinfo;
 			src_tabinfo->t_sinfo = &psrc_sinfo;			
 
-			/* Get the src index root. */
+			
 			TABINFO_INIT(src_tabinfo, idx_src_root_name, 
 						NULL, 0, 
 						src_tabinfo->t_sinfo, -1, 0,
 						idx_meta->idx_id,
 						idx_root_split->idx_srcroot_id);
 
-			/* Don't need the key if we just get the sstable. */
+			
 			SRCH_INFO_INIT(src_tabinfo->t_sinfo, NULL, 0, 1,
 								VARCHAR, -1);
 
@@ -5085,14 +5043,14 @@ rg_idxroot_split(IDX_ROOT_SPLIT *idx_root_split)
 			dest_tabinfo = &pdest_tabinfo;
 			dest_tabinfo->t_sinfo = &pdest_sinfo;
 			
-			/* Get the dest index root. */
+			
 			TABINFO_INIT(dest_tabinfo, idx_dest_root_name,
 						NULL, 0, 
 						dest_tabinfo->t_sinfo, -1, 0,
 						idx_meta->idx_id,
 						idx_root_split->idx_destroot_id);
 
-			/* Don't need the key if we just get the sstable. */
+			
 			SRCH_INFO_INIT(dest_tabinfo->t_sinfo, NULL, 0,	1,
 								VARCHAR, -1);
 
@@ -5127,10 +5085,7 @@ rg_idxroot_split(IDX_ROOT_SPLIT *idx_root_split)
 				metablk->bnextrno = 0;
 				metablk->bstat = 0;
 	
-				/* 
-				** Just for testing to have a clear overview look, in production, 
-				** we can omit it. 
-				*/
+				
 				MEMSET(metablk->bdata, BLOCKSIZE - BLKHEADERSIZE - 4);
 	
 				if(metablk->bnextblkno == -1)
@@ -5635,10 +5590,7 @@ rg_table_is_exist(char *tabname)
 }
 
 
-/* 
-** SSTABLE exist checking just temp solution, because the insertion may not hit the same
-** sstable in the batch inserting.
-*/
+
 static int
 rg_sstable_is_exist(char *sstabname, int tabidx)
 {
@@ -5697,7 +5649,7 @@ rg_table_unregist(char *tabname)
 	int	j;
 
 
-	/* Table register is not start yet. */
+	
 	if (Range_infor->rg_systab.tabnum == 0)
 	{
 		return TRUE;
@@ -5714,15 +5666,15 @@ rg_table_unregist(char *tabname)
 		}
 	}
 
-	/* This table does not start to register. */
+	
 	if (j == -1)
 	{
 		return TRUE;
 	}
 
-	/* Here we have got this table in the register slot. */
 	
-	/* Foward the information of unregisted table. */
+	
+	
 	for(i = j; (i + 1) < Range_infor->rg_systab.tabnum; i++)
 	{
 		MEMCPY(Range_infor->rg_systab.rg_tabdir[i], 
@@ -5734,7 +5686,7 @@ rg_table_unregist(char *tabname)
 			STRLEN(Range_infor->rg_systab.rg_sstab[i+1]));
 	}
 
-	/* Clearing the last place of rg_systab. */
+	
 	if (i == Range_infor->rg_systab.tabnum)
 	{
 		MEMSET(Range_infor->rg_systab.rg_tabdir[i - 1],
@@ -5822,7 +5774,7 @@ rg_mapred_process(void *args)
 	READ(fd1, tablet_bp, SSTABLE_SIZE); 
 	CLOSE(fd1);
 
-	/* Create the socket fot the transferring of bigdata. */
+	
 	listenfd = conn_socket_open(data_port);
 	if (!listenfd)
 	{
@@ -5940,7 +5892,7 @@ rg_mapred_process(void *args)
 					char * resp = conn_build_resp_byte(RPC_SUCCESS, sizeof(MT_BLOCK_CACHE), 
 						(char *)block_cache);
 					int resp_size = conn_get_resp_size((RPCRESP *)resp);
-					/* Send the result to the client. */
+					
 					tcp_put_data(connfd, resp, resp_size);
 					conn_destroy_resp_byte(resp);	
 				}
@@ -5978,7 +5930,7 @@ rg_mapred_process(void *args)
 			
 			char * resp = conn_build_resp_byte(RPC_NO_VALUE, 0,	NULL);
 			int resp_size = conn_get_resp_size((RPCRESP *)resp);
-			/* Send the result to the client. */
+			
 			tcp_put_data(connfd, resp, resp_size);
 			conn_destroy_resp_byte(resp);	
 		}
@@ -5988,7 +5940,7 @@ rg_mapred_process(void *args)
 
 			char * resp = conn_build_resp_byte(RPC_SUCCESS, 0,	NULL);
 			int resp_size = conn_get_resp_size((RPCRESP *)resp);
-			/* Send the result to the client. */
+			
 			tcp_put_data(connfd, resp, resp_size);
 			conn_destroy_resp_byte(resp);
 			
