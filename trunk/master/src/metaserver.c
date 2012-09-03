@@ -184,19 +184,19 @@ meta_server_setup(char *conf_path)
 	Master_infor = MEMALLOCHEAP(sizeof(MASTER_INFOR));
 	MEMCPY(Master_infor->conf_path, conf_path, STRLEN(conf_path));
 
-	/* Meta data of the table. */
+	
 	Master_infor->meta_systab = malloc(sizeof(META_SYSTABLE));
 	memset(Master_infor->meta_systab, 0, sizeof(META_SYSTABLE));
 
-	/* Table header */
+	
 	Master_infor->meta_sysobj = malloc(sizeof(META_SYSOBJECT));
 	memset(Master_infor->meta_sysobj, 0, sizeof(META_SYSOBJECT));
 
-	/* column information. */
+	
 	Master_infor->meta_syscol = malloc(sizeof(META_SYSCOLUMN));
 	memset(Master_infor->meta_syscol, 0, sizeof(META_SYSCOLUMN));
 
-	/* sysindex information. */
+	
 	Master_infor->meta_sysindex = malloc(sizeof(META_SYSINDEX));
 	memset(Master_infor->meta_sysindex, 0, sizeof(META_SYSINDEX));
 
@@ -307,12 +307,12 @@ meta_server_setup(char *conf_path)
 		
 		CLOSE(fd);
 
-		/* Checking the region server. */
+		
 		RANGE_PROF *rg_addr = (RANGE_PROF *)(Master_infor->rg_list.data);
 
 		for(i = 0; i < Master_infor->rg_list.nextrno; i++)
 		{
-			/* Metaserver is crash, all the online ranger server will be recovery. */
+			
 			if (rg_addr[i].rg_stat & RANGER_IS_ONLINE)
 			{
 				rg_addr[i].rg_stat &= ~RANGER_IS_ONLINE;
@@ -323,7 +323,7 @@ meta_server_setup(char *conf_path)
 		
 	}
 
-	/* Make directory to backup for the splitted tablet. */
+	
 	if (STAT(MT_META_BACKUP, &st) != 0)
 	{
 		MKDIR(status, MT_META_BACKUP, 0755); 
@@ -445,16 +445,14 @@ meta_crtab(TREE *command)
 	char		*tab_name;
 	int		tab_name_len;
 	char		tab_dir[256];
-	char    	tab_dir1[256];	/* For sysobject and syscolumn files */
+	char    	tab_dir1[256];	
 	int		status;
 	int		fd;
 	TREE		*col_tree;
-	char		*col_buf;	/* The space for all the column rows in 
-					** one table and sysobjects.
-					*/
+	char		*col_buf;	
 	int		col_buf_idx;
 	int		minlen;
-	int		varcol;		/* # of var-column */
+	int		varcol;		
 	int		colcnt;
 	int		rtn_stat;
 	TABLEHDR	*tab_hdr;
@@ -478,13 +476,13 @@ meta_crtab(TREE *command)
 	tab_name = command->sym.command.tabname;
 	tab_name_len = command->sym.command.tabname_len;
 
-	/* Create the file named table name. */
+	
 	MEMSET(tab_dir, 256);
 	MEMSET(tab_dir1, 256);
 	MEMCPY(tab_dir, MT_META_TABLE, STRLEN(MT_META_TABLE));
 	str1_to_str2(tab_dir, '/', tab_name);
 
-	/* Make the meta information for the newly created table. */
+	
 	if (STAT(tab_dir, &st) != 0)
 	{
 		if (meta_table_is_exist(tab_dir) != -1)
@@ -512,7 +510,7 @@ meta_crtab(TREE *command)
 		goto exit;
 	}
 	
-	/* Open syscolumn file to save the new table's column infor. */
+	
 	MEMCPY(tab_dir1, tab_dir, STRLEN(tab_dir));
 
 	str1_to_str2(tab_dir1, '/', "syscolumns");
@@ -524,12 +522,7 @@ meta_crtab(TREE *command)
 		goto exit;
 	}
 
-	/* 
-	** Clo_id (int) | Col_name (char 64) | Col_length (int)| 
-	** Col_offset (int) |Col_type (int)
-	** Table id is not needed, because this file locate at the current 
-	** table dir. 
-	*/
+	
 	//row_buf = MEMALLOCHEAP(4 * sizeof(int) + 64);
 	col_buf_idx = 0;
 	minlen = sizeof(ROWFMT);
@@ -537,15 +530,13 @@ meta_crtab(TREE *command)
 	colcnt = 0;
 	col_tree = command->left;
 
-	/* One table can contain 16 columns. */
+	
 	col_buf = MEMALLOCHEAP(COL_MAX_NUM * sizeof(COLINFO));
 	while (col_tree)
 	{
 	        MEMSET(&col_info, sizeof(COLINFO));
 
-		/* 
-		** Building a row for one column and insert it to the syscolumn.
-		*/
+		
 		//row_buf_idx = 0;
 
 		col_info.col_id = col_tree->sym.resdom.colid;
@@ -553,15 +544,10 @@ meta_crtab(TREE *command)
 		MEMCPY(col_info.col_name, col_tree->sym.resdom.colname,
 		STRLEN(col_tree->sym.resdom.colname));          
 				
-		/*
-		** Column length < 0 means this column is var-column. 
-		** 
-		** Building column offset...
-		**
-		*/
+		
 		if (col_tree->sym.resdom.colen > 0)
 		{
-			/* Using 1st column as the key defaultly. */
+			
 			if (col_tree->sym.resdom.colid == 1)
 			{
 				tab_key_coloff = minlen;
@@ -569,14 +555,14 @@ meta_crtab(TREE *command)
 				tab_key_coltype = col_tree->sym.resdom.coltype;
 			}
 			
-			/* Offset for fixed column. */
+			
                         col_info.col_offset = minlen;
 			
 			minlen += col_tree->sym.resdom.colen;			
 		}
 		else
 		{
-			/* Using 1st column as the key defaultly. */
+			
 			if (col_tree->sym.resdom.colid == 1)
 			{
 				tab_key_coloff = -(varcol+1);
@@ -584,9 +570,7 @@ meta_crtab(TREE *command)
 				tab_key_coltype = col_tree->sym.resdom.coltype;
 			}
 			
-			/* 
-			** The offset of var-column is -varcol, like -1, -2, -3... 
-			*/
+			
 			col_info.col_offset = -(varcol+1);
 
 			varcol++;
@@ -602,25 +586,23 @@ meta_crtab(TREE *command)
 		
 		col_info.col_type = col_tree->sym.resdom.coltype;
 		
-		/* Put the Col_infor buffer for the writting. */
+		
 		PUT_TO_BUFFER(col_buf, col_buf_idx, &col_info, sizeof(COLINFO));
 		
 		col_tree = col_tree->left;
 	}
 	
         
-	/* No Need to append this file. */
 	
-        /* Scan the tree of command to get the column information. */       
+	
+               
 	WRITE(fd, col_buf, col_buf_idx);
 
 	CLOSE(fd);
-	/* Cleat this buffer. */
+	
 	MEMSET(tab_dir1, 256);
 
-	/* 
-	** Create the sysobject file for this table. It like the DES in the ASE. 
-	*/
+	
 	MEMCPY(tab_dir1, tab_dir, STRLEN(tab_dir));
 
 	str1_to_str2(tab_dir1, '/', "sysobjects");
@@ -634,7 +616,7 @@ meta_crtab(TREE *command)
 
 	tab_hdr = MEMALLOCHEAP(sizeof(TABLEHDR));
 
-	/* TODO: Aquire the ID of table*/
+	
 	tab_hdr->tab_id = ++Master_infor->last_tabid;
 	MEMCPY(tab_hdr->tab_name, tab_name, tab_name_len);
 	tab_hdr->tab_tablet = 0;
@@ -648,30 +630,20 @@ meta_crtab(TREE *command)
 	tab_hdr->offset_c1 = 0;
 	tab_hdr->offset_c2 = -1;
 	
-	/* Scan the tree of command to get the column information. */
+	
 	WRITE(fd, tab_hdr, sizeof(TABLEHDR));
 
 	CLOSE(fd);
 	
-	/* 
-	** Create a empty sstable map file for this table. 
-	** This map can contain 1M sstab file (1M * 1M = 1T) 
-	*/
+	
 	sstab_map_tmp = (SSTAB_INFOR *)malloc(SSTAB_MAP_SIZE);
 
-	/* This Map has following flag:
-	**
-	**	0:	free
-	**	1:	used
-	**	-1:	reserved
-	*/
+	
 	MEMSET(sstab_map_tmp, 1024 * 1024 * sizeof(int));
 	
 	MEMSET(tab_dir1, 256);
 
-	/* 
-	** Create the sysobject file for this table. It like the DES in the ASE. 
-	*/
+	
 	MEMCPY(tab_dir1, tab_dir, STRLEN(tab_dir));
 
 	str1_to_str2(tab_dir1, '/', "sstabmap");
@@ -683,7 +655,7 @@ meta_crtab(TREE *command)
 		goto exit;
 	}
 	
-	/* Scan the tree of command to get the column information. */
+	
 	WRITE(fd, sstab_map_tmp, SSTAB_MAP_SIZE);
 
 	CLOSE(fd);
@@ -691,15 +663,13 @@ meta_crtab(TREE *command)
 	
 	tablet_store = (SVR_IDX_FILE *)MEMALLOCHEAP(sizeof(SVR_IDX_FILE));
 
-	/* Cleat this buffer. */
+	
 	MEMSET(tab_dir1, TABLE_NAME_MAX_LEN);
 
-	/* 
-	** Create the sysobject file for this table. It like the DES in the ASE. 
-	*/
+	
 	MEMCPY(tab_dir1, tab_dir, STRLEN(tab_dir));
 
-	/* TODO: placehoder. */
+	
 	str1_to_str2(tab_dir1, '/', "tabletinranger");
 	
 	OPEN(fd, tab_dir1, (O_CREAT|O_WRONLY|O_TRUNC));
@@ -709,12 +679,12 @@ meta_crtab(TREE *command)
 		goto exit;
 	}
 
-	/* Scan the tree of command to get the column information. */
+	
 	WRITE(fd, tablet_store, sizeof(SVR_IDX_FILE));
 
 	CLOSE(fd);
 
-	/* Make backup dir for the tablet split. */
+	
 	MEMSET(tab_dir1, TABLE_NAME_MAX_LEN);
 
 	MEMCPY(tab_dir1, MT_META_BACKUP, STRLEN(MT_META_BACKUP));
@@ -734,7 +704,7 @@ meta_crtab(TREE *command)
 	OPEN(fd, tab_dir1, (O_RDWR));
 	
 
-	/* Saving the meta information to the in-memory structure. */
+	
 	Master_infor->meta_systab->last_tabid = Master_infor->last_tabid;
 
 	MEMCPY(Master_infor->meta_systab->meta_tabdir[Master_infor->meta_systab->tabnum], 
@@ -742,7 +712,7 @@ meta_crtab(TREE *command)
 	
 	(Master_infor->meta_systab)->tabnum++;
 
-	/* Flush this creating information into the disk. */
+	
 	WRITE(fd, Master_infor->meta_systab, sizeof(META_SYSTABLE));
 
 	CLOSE(fd);
@@ -813,7 +783,7 @@ meta_ins_systab(char *systab, char *row)
 
 	minrowlen = sizeof(ROWFMT) + 3 * sizeof(int);
 
-	/* TODO: coloffset should be the virtual value. */
+	
 	key = row_locate_col(row, (sizeof(ROWFMT) + sizeof(int)),
 					minrowlen, &ign);
 	
@@ -831,11 +801,7 @@ meta_ins_systab(char *systab, char *row)
 
 #endif
 
-/* 
-** SYSTABLE tablethdr formate as follows:
-**	| row header | tablet id | sstable # |
-**
-*/
+
 char *
 meta_instab(TREE *command, TABINFO *tabinfo)
 {
@@ -889,10 +855,10 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 	MEMSET(tab_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_dir, MT_META_TABLE, STRLEN(MT_META_TABLE));
 
-	/* Current table dir. */
+	
 	str1_to_str2(tab_dir, '/', tab_name);
 
-	/* Save the table dir for the creating of tablet file. */
+	
 	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
 
@@ -970,7 +936,7 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 
 	if (tab_hdr->tab_tablet > 0)
 	{
-		/* 1st step: search the table tabletscheme to get the right tablet. */
+		
 		MEMSET(tab_tabletschm_dir, TABLE_NAME_MAX_LEN);
 		MEMCPY(tab_tabletschm_dir, tab_dir, STRLEN(tab_dir));
 		str1_to_str2(tab_tabletschm_dir, '/', "tabletscheme");
@@ -984,7 +950,7 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 				      TABLETSCHM_TABLETNAME_COLOFF_INROW,
 				      ROW_MINLEN_IN_TABLETSCHM, &namelen);
 		
-		/* 2nd step: search the table tabletN to get the right sstable. */
+		
 		MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
 		MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
 		str1_to_str2(tab_meta_dir, '/', name);
@@ -999,7 +965,7 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 						ROW_MINLEN_IN_TABLETSCHM, 
 						&namelen);
 
-		/* Get the addess (IP) of ranger server. */
+		
 		int ign;
 		rg_addr = row_locate_col(tabletschm_rp, 
 					 TABLETSCHM_RGADDR_COLOFF_INROW,
@@ -1053,13 +1019,13 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 
 		//rg_port = tss->tcur_rgprof->rg_port;
 
-		/* This flag is just only for the tablet. */
+		
 		tabinfo->t_stat &= ~TAB_TABLET_KEYROW_CHG;
 		
 		rp = tablet_srch_row(tabinfo, tab_hdr->tab_id, tabletid, 
 				     tab_meta_dir, keycol, keycolen);
 
-		/* Get the file name for sstable. */
+		
 		name = row_locate_col(rp, TABLET_SSTABNAME_COLOFF_INROW, 
 					ROW_MINLEN_IN_TABLET, &sstab_namelen);
 
@@ -1067,7 +1033,7 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 
 		MEMSET(sstab_name, SSTABLE_NAME_MAX_LEN);
 		
-		/* 3rd step: copy the sstable name into the common buffer. */	
+			
 		MEMCPY(sstab_name, name, sstab_namelen);
 
 		sstab_id = *(int *)row_locate_col(rp, TABLET_SSTABID_COLOFF_INROW, 
@@ -1079,31 +1045,7 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 		
 		res_sstab_id = *(int *)pres_sstab_id;
 
-		/*
-		** Check if the reserved sstable id has been used by last 
-		** sstable split.
-		** The senario of this case as following:
-		**	1. While new sstable is born, it will be assigned a new 
-		** reserved  sstable id for the new ly created sstable raised by 
-		** the sstable split.
-		**	2. While the sstable hit the split, it will assign the reserved
-		** sstable id to the newly created sstable, and then execute the
-		** Add SStable that it will set the reserved sstable with USED.
-		**	3. So, it will hit this issue. We need to understand such
-		** case: if the Add SStable is running after the new insert(this case),
-		** does it hit a bug that this insert would get the FALSE reserved
-		** sstable id (in ranger server) ? The answer is NO, because if 
-		** the new insert hit the new (second) split, the server will block
-		** this insert and flag the client to retry it till the Add SStable 
-		** is executed. (Add SStable will increase the TS on the splitted 
-		** sstable, the server check the TS on sstable to know if this 
-		** sstable is the latest.)
-		**
-		** The senario of key row changing as follows:
-		**	If the inserted row will locate at the first row of first 
-		** sstable of first tablet, it can be see as the case of key 
-		** row changing.
-		*/
+		
 		if(   (!SSTAB_MAP_RESERV(res_sstab_id)) 
 		   || (tabinfo->t_stat & TAB_TABLET_KEYROW_CHG))
 		{
@@ -1131,12 +1073,12 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 
 			if (tabinfo->t_stat & TAB_TABLET_KEYROW_CHG)
 			{
-				/* This row has a varchar column. */
+				
 				rlen_c5 = ROW_MINLEN_IN_TABLET + sizeof(int) 
 						+ keycolen + sizeof(int);
 			}
 
-			/* Get the right length of the row to be inserted newly. */
+			
 			rlen = (tabinfo->t_stat & TAB_TABLET_KEYROW_CHG) ? 
 					rlen_c5 : ROW_GET_LENGTH(rp, 
 							ROW_MINLEN_IN_TABLET);
@@ -1162,16 +1104,11 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 					       keycol, keycolen);								
 			}
 
-			/* 
-			** Even if this update raise the tablet split, we just 
-			** remove the backup for the tablet, don't need to
-			** consider the ranger-state file because this update
-			** is only for the meta server behavior. 
-			*/
+			
 			if (tablet_upd_row(tab_hdr,tab_hdr->tab_id, tabletid,
 				tab_meta_dir, rp, newrp, ROW_MINLEN_IN_TABLET))
 			{
-				/* Remove the backup for the tablet split. */						
+										
 				int	status = FALSE;
 				char	cmd_str[TABLE_NAME_MAX_LEN];
 				
@@ -1212,23 +1149,12 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 
 				copy.tabletschm_newrp = tabletschm_newrp;
 
-				/*
-				** TODO: tabletschm_rp may be CHANGED before we 
-				** use it here, because we just use the buffer but we 
-				** don't reserve it or lock it. 
-				** RESOLVED: The meta server just has single 
-				** working thread, so we can make sure the
-				** buffer is valid here.
-				*/
+				
 				tablet_schm_upd_col(tabletschm_newrp, tabletschm_rp,
 							TABLETSCHM_KEY_COLID_INROW, 
 						    	keycol, keycolen);
 
-				/* 
-				** The key of tabletshema row to be deleted
-				** should be from the row in tabletschema file,
-				** but not the input row.
-				*/
+				
 				char	*key;
 				int	keylen;
 				
@@ -1272,19 +1198,16 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 		ex_raise(EX_ANY);
 	}
 	
-	/* This's the 1st insertion. */
+	
 	if (tab_hdr->tab_tablet == 0)
 	{
 		char	*sstab_rp;
 		int	sstab_rlen;
 
-		/* 
-		** Building a row that save the information of sstable,  this row
-		** is also the index, so we have to specify a  key for this row.
-		*/
+		
 		sstab_rlen = ROW_MINLEN_IN_TABLET + keycolen + 4 + COLOFFSETENTRYSIZE;
 
-		/* TODO: support "int" type of key column. */
+		
 #if 0
 		((!TYPE_IS_FIXED(tab_hdr->tab_key_coltype)) ? 
 		COLOFFSETENTRYSIZE : 0);
@@ -1301,7 +1224,7 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 
 		if(Master_infor->rg_list.nextrno > 0)
 		{
-			/* TODO: just return the first ranger server. */
+			
 			//rg_prof = (RANGE_PROF *)(Master_infor->rg_list.data);
 			rg_prof = meta_get_rg();
 
@@ -1321,7 +1244,7 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 			ex_raise(EX_ANY);
 		}
 		
-		/* 1st step: build a sstab row and check it into the file "tablet". */
+		
 		tablet_min_rlen = tablet_bld_row(sstab_rp, sstab_rlen, tab_name,
 						tab_name_len, sstab_id, 
 						res_sstab_id, sstab_name,
@@ -1339,7 +1262,7 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 			ex_raise(EX_ANY);
 		}
 
-		/* Set the tablet id for the 1st insert. */
+		
 		tabletid = 1; 
 		(tab_hdr->tab_tablet)++;
 		(tab_hdr->tab_sstab)++;
@@ -1363,62 +1286,56 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 		}
 	}	
 
-	/* Building the response information. */
+	
 
-	/* Get the meta data for the column. */
+	
 	col_buf_len = sizeof(INSMETA) + sizeof(TABLEHDR) 
 				+ tab_hdr->tab_col * (sizeof(COLINFO));
 	col_buf = MEMALLOCHEAP(col_buf_len);
 	MEMSET(col_buf, col_buf_len);
 
-	/* Fill the INSERT_META with the information. */
+	
 	col_buf_idx = 0;
 
-	/* ranger address. */
+	
 	MEMCPY((col_buf + col_buf_idx), rg_addr, STRLEN(rg_addr));
 	col_buf_idx += RANGE_ADDR_MAX_LEN;
 
-	/* ranger port. */
+	
 	*(int *)(col_buf + col_buf_idx) = rg_port;
 	col_buf_idx += sizeof(int);
 
-	/* ranger state. */
+	
 	*(int *)(col_buf + col_buf_idx) = RANGER_IS_ONLINE;
 	col_buf_idx += sizeof(int);
 
-	/* Ranger tablet number. */
+	
 	*(int *)(col_buf + col_buf_idx) = 0;
 	col_buf_idx += sizeof(int);
 
-	/* ranger index and ranger state file path and thread id. */
+	
 	col_buf_idx += sizeof(int) + TABLE_NAME_MAX_LEN + sizeof(pthread_t);
 
-	/* Put the sstab id for the buffersearch. */
+	
 	*(int *)(col_buf + col_buf_idx) = sstab_id;
 	col_buf_idx += sizeof(int);
 
-	/* Put the reserved sstab id for the buffersearch. */
+	
 	*(int *)(col_buf + col_buf_idx) = res_sstab_id;
 	col_buf_idx += sizeof(int);
 
-	/* Put the sstab's TS. */
+	
 	*(unsigned int *)(col_buf + col_buf_idx) = SSTAB_MAP_GET_SPLIT_TS(sstab_id);
 	col_buf_idx += sizeof(int);
 	
-	/* 
-	** Get the sstable file name. -- 
-	** This's the key point for the response information, other is the common info. 
-	*/
+	
 	MEMCPY((col_buf + col_buf_idx), sstab_name, STRLEN(sstab_name));
 	col_buf_idx += SSTABLE_NAME_MAX_LEN;
 
-	/* 
-	** Skip the fill for the status in the INSERT_META, because this field 
-	** is a running value. 
-	*/
+	
 	col_buf_idx += sizeof(int);
 
-	/* Get the # of column. */
+	
         *(int *)(col_buf + col_buf_idx) = tab_hdr->tab_col;
 	col_buf_idx += sizeof(int);
 
@@ -1428,11 +1345,11 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 	*(int *)(col_buf + col_buf_idx) = tab_hdr->tab_row_minlen;
 	col_buf_idx += sizeof(int);
 
-	/* Index root id. */
+	
 	*(int *)(col_buf + col_buf_idx) = tabletid;
 	col_buf_idx += sizeof(int);
 
-	/* Put the table header into this buffer. */
+	
 	MEMCPY((col_buf + col_buf_idx), tab_hdr, sizeof(TABLEHDR));
 	col_buf_idx += sizeof(TABLEHDR);
 	
@@ -1443,7 +1360,7 @@ meta_instab(TREE *command, TABINFO *tabinfo)
 
 	col_buf_idx += tab_hdr->tab_col * sizeof(COLINFO);
 
-	/* Flush the update of sstable map. */
+	
 	if (sstabmap_chg)
 	{
 		sstab_map_put(-1, tss->ttab_sstabmap);
@@ -1454,7 +1371,7 @@ exit:
 
 	if (rtn_stat)
 	{
-		/* Send to client. */
+		
 		rpc_status |= RPC_SUCCESS;		
 		resp = conn_build_resp_byte(rpc_status, col_buf_idx, col_buf);
 	}
@@ -1481,11 +1398,7 @@ exit:
 	return resp;
 }
 
-/*
-**	Control role:	               systable
-**			            /  	\
-**	meta role	:    sysobject(tab_hdr)	syscolumn(colinfo)
-*/
+
 static int
 meta__droptab_meta(int tabidx)
 {
@@ -1494,23 +1407,23 @@ meta__droptab_meta(int tabidx)
 	int	i;
 
 
-	/* Clearing the information of dropped table. */
+	
 	MEMSET(Master_infor->meta_systab->meta_tabdir[tabidx], TABLE_NAME_MAX_LEN);
 
-	/* Forward the information of its following table. */
+	
 	for (i = tabidx; i < ((Master_infor->meta_systab)->tabnum - 1); i++)
 	{
-		/* Systable ingformation. */
+		
 		MEMCPY(Master_infor->meta_systab->meta_tabdir[i], 
 				Master_infor->meta_systab->meta_tabdir[i + 1], 
 				TABLE_NAME_MAX_LEN);
 
-		/* Table header information. */
+		
 		MEMCPY(&(Master_infor->meta_sysobj->sysobject[i]), 
 				&(Master_infor->meta_sysobj->sysobject[i + 1]),
 				sizeof(TABLEHDR));
 
-		/* Column information. */
+		
 		Master_infor->meta_syscol->colnum[i] =
 				Master_infor->meta_syscol->colnum[i + 1];		
 		MEMCPY(&(Master_infor->meta_syscol->colinfor[i]),
@@ -1518,7 +1431,7 @@ meta__droptab_meta(int tabidx)
 				COL_MAX_NUM * sizeof(COLINFO));
 	}
 
-	/* Clearing the last place for the meta. */
+	
 	if (i == (Master_infor->meta_systab)->tabnum)
 	{
 		MEMSET(Master_infor->meta_systab->meta_tabdir[i - 1], TABLE_NAME_MAX_LEN);
@@ -1529,7 +1442,7 @@ meta__droptab_meta(int tabidx)
 	
 	(Master_infor->meta_systab)->tabnum--;
 	
-	/* Flush this updated information into the disk. */
+	
 	MEMSET(tab_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_dir, MT_META_TABLE, STRLEN(MT_META_TABLE));
 	str1_to_str2(tab_dir, '/', "systable");
@@ -1576,10 +1489,10 @@ meta_droptab(TREE *command)
 	MEMSET(tab_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_dir, MT_META_TABLE, STRLEN(MT_META_TABLE));
 
-	/* Current table dir. */
+	
 	str1_to_str2(tab_dir, '/', tab_name);
 
-	/* Save the table dir for the creating of tablet file. */
+	
 	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
 
@@ -1601,7 +1514,7 @@ meta_droptab(TREE *command)
 		goto exit;
 	}
 
-	/* Set the drop state on the sysobjects. */
+	
 	tab_hdr->tab_stat |= TAB_DROPPED;
 
 	if (!meta_save_sysobj(tab_dir,(char *)tab_hdr))
@@ -1612,10 +1525,7 @@ meta_droptab(TREE *command)
 
 	if(Master_infor->rg_list.nextrno > 0)
 	{
-		/* 
-		** TODO: just return the first ranger server. 
-		** We should return the address of all the ranger server.
-		*/
+		
 		rg_prof = meta_get_rg();
 
 		if (!rg_prof)
@@ -1643,7 +1553,7 @@ meta_droptab(TREE *command)
 	rg_addr = rg_prof->rg_addr;
 	rg_port = rg_prof->rg_port;
 
-	/* Send the ranger server address to the client. */
+	
 	col_buf_len = RANGE_ADDR_MAX_LEN + sizeof(int);
 	col_buf = MEMALLOCHEAP(col_buf_len);
 	MEMSET(col_buf, col_buf_len);
@@ -1664,7 +1574,7 @@ exit:
 	
 	if (rtn_stat)
 	{
-		/* Send to client. */
+		
 		rpc_status |= RPC_SUCCESS;
 		resp = conn_build_resp_byte(rpc_status, col_buf_idx, col_buf);
 	}
@@ -1707,7 +1617,7 @@ meta_removtab(TREE *command)
 	MEMSET(tab_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_dir, MT_META_TABLE, STRLEN(MT_META_TABLE));
 
-	/* Current table dir. */
+	
 	str1_to_str2(tab_dir, '/', tab_name);
 
 	if ((tabidx = meta_table_is_exist(tab_dir)) == -1)
@@ -1807,10 +1717,10 @@ meta_seldeltab(TREE *command, TABINFO *tabinfo)
 	MEMSET(tab_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_dir, MT_META_TABLE, STRLEN(MT_META_TABLE));
 
-	/* Current table dir. */
+	
 	str1_to_str2(tab_dir, '/', tab_name);
 
-	/* Save the table dir for the creating of tablet file. */
+	
 	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
 
@@ -1859,7 +1769,7 @@ meta_seldeltab(TREE *command, TABINFO *tabinfo)
 	keycol = par_get_colval_by_colid(command, tab_hdr->tab_key_colid, 
 						&keycolen);
 
-	/* 1st step: search the table tabletscheme to get the right tablet. */
+	
 	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
 	str1_to_str2(tab_meta_dir, '/', "tabletscheme");
@@ -1870,7 +1780,7 @@ meta_seldeltab(TREE *command, TABINFO *tabinfo)
 	name = row_locate_col(rp, TABLETSCHM_TABLETNAME_COLOFF_INROW, 
 				ROW_MINLEN_IN_TABLETSCHM, &namelen);
 
-	/* Get the addess (IP) of ranger server. */
+	
 	int ign;
 	rg_addr = row_locate_col(rp, TABLETSCHM_RGADDR_COLOFF_INROW,
 				ROW_MINLEN_IN_TABLETSCHM, &ign);
@@ -1919,7 +1829,7 @@ meta_seldeltab(TREE *command, TABINFO *tabinfo)
 
 	//rg_port = tss->tcur_rgprof->rg_port;	
 	
-	/* 2nd step: search the table tabletN to get the right sstable. */
+	
 	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
 	str1_to_str2(tab_meta_dir, '/', name);
@@ -1932,43 +1842,39 @@ meta_seldeltab(TREE *command, TABINFO *tabinfo)
 	rp = tablet_srch_row(tabinfo, tab_hdr->tab_id, tabletid, 
 				tab_meta_dir, keycol, keycolen);
 
-	/* Get the file name for sstable. */
+	
 	name = row_locate_col(rp, TABLET_SSTABNAME_COLOFF_INROW,
 				ROW_MINLEN_IN_TABLET, &namelen);
 
 	MEMSET(sstab_name, SSTABLE_NAME_MAX_LEN);
 	
-	/* 3rd step: copy the sstable name into the common buffer. */		
+			
 	MEMCPY(sstab_name, name, STRLEN(name));
 
-	/* Get the sstab id. */
+	
 	sstab_id = *(int *)row_locate_col(rp,TABLET_SSTABID_COLOFF_INROW, 
 					ROW_MINLEN_IN_TABLET, &namelen);
 
 	res_sstab_id = *(int *)row_locate_col(rp, TABLET_RESSSTABID_COLOFF_INROW, 
 					      ROW_MINLEN_IN_TABLET, &namelen);
 
-	/* 
-	** Read the file "tablet0", its row formate as follows:
-	**	| row header |sstab id| sstable name | Ranger server IP | key column value | Key column offset (optional) |
-	**
-	*/
+	
 
-	/* The selecting value is not exist. */	
+		
 	if (tabinfo->t_sinfo->sistate & SI_NODATA)
 	{
 		goto exit;
 	}
 	
-	/* Building the response information. */
+	
 
-	/* Get the meta data for the column. */
+	
 	col_buf_len = sizeof(INSMETA) + sizeof(TABLEHDR) 
 				+ tab_hdr->tab_col * (sizeof(COLINFO));
 	col_buf = MEMALLOCHEAP(col_buf_len);
 	MEMSET(col_buf, col_buf_len);
 
-	/* Fill the INSERT_META with the information. */
+	
 	col_buf_idx = 0;
 		
 	MEMCPY((col_buf + col_buf_idx), rg_addr, STRLEN(rg_addr));
@@ -1983,32 +1889,29 @@ meta_seldeltab(TREE *command, TABINFO *tabinfo)
 	*(int *)(col_buf + col_buf_idx) = 0;
 	col_buf_idx += sizeof(int);
 
-	/* ranger index and ranger state file path and thread id. */
+	
 	col_buf_idx += sizeof(int) + TABLE_NAME_MAX_LEN + sizeof(pthread_t);
 
-	/* put the sstab id for the bufsearch in the ranger server. */
+	
 	*(int *)(col_buf + col_buf_idx) = sstab_id;
 	col_buf_idx += sizeof(int);
 
-	/* Put the reserved sstab id for the buffersearch. */
+	
 	*(int *)(col_buf + col_buf_idx) = res_sstab_id;
 	col_buf_idx += sizeof(int);
 
-	/* Put the sstab's TS. */
+	
 	*(unsigned int *)(col_buf + col_buf_idx) = SSTAB_MAP_GET_SPLIT_TS(sstab_id);
 	col_buf_idx += sizeof(int);
 
-	/* Get the sstable file name. */
+	
 	MEMCPY((col_buf + col_buf_idx), sstab_name, SSTABLE_NAME_MAX_LEN);
 	col_buf_idx += SSTABLE_NAME_MAX_LEN;
 
-	/* 
-	** Skip the fill for the status in the INSERT_META, because this field
-	** is a running value. 
-	*/
+	
 	col_buf_idx += sizeof(int);
 
-	/* Get the # of column. */
+	
         *(int *)(col_buf + col_buf_idx) = tab_hdr->tab_col;
 	col_buf_idx += sizeof(int);
 
@@ -2018,11 +1921,11 @@ meta_seldeltab(TREE *command, TABINFO *tabinfo)
 	*(int *)(col_buf + col_buf_idx) = tab_hdr->tab_row_minlen;
 	col_buf_idx += sizeof(int);
 
-	/* Index root id. */
+	
 	*(int *)(col_buf + col_buf_idx) = tabletid;
 	col_buf_idx += sizeof(int);
 
-	/* Put the table header into this buffer. */
+	
 	MEMCPY((col_buf + col_buf_idx), tab_hdr, sizeof(TABLEHDR));
 	col_buf_idx += sizeof(TABLEHDR);
 	
@@ -2171,7 +2074,7 @@ meta_selrangetab(TREE *command, TABINFO *tabinfo)
 	col_buf_idx = 0;
 
 
-	/* Get the left and right boud. */
+	
 	for (k = 0; k < 2; k++)
 	{
 		key_is_expand = FALSE;
@@ -2181,7 +2084,7 @@ meta_selrangetab(TREE *command, TABINFO *tabinfo)
 
 		if ((keycolen == 1) && (!strncasecmp("*", keycol, keycolen)))
 		{
-			/* Case for the expand. */
+			
 			key_is_expand = TRUE;
 			
 			if (k == 0)
@@ -2199,7 +2102,7 @@ meta_selrangetab(TREE *command, TABINFO *tabinfo)
 		}
 		else
 		{
-			/* Case for the key user specified. */
+			
 			rp = tablet_schm_srch_row(tab_hdr->tab_id,
 						TABLETSCHM_ID, tab_meta_dir, 
 						keycol, keycolen);
@@ -2311,7 +2214,7 @@ meta_selrangetab(TREE *command, TABINFO *tabinfo)
 			goto exit;
 		}
 
-		/* Fill the structure of RANGE_PROF. */
+		
 		MEMCPY((col_buf + col_buf_idx), rg_addr, STRLEN(rg_addr));
 		col_buf_idx += RANGE_ADDR_MAX_LEN;
 
@@ -2324,7 +2227,7 @@ meta_selrangetab(TREE *command, TABINFO *tabinfo)
 		*(int *)(col_buf + col_buf_idx) = 0;
 		col_buf_idx += sizeof(int);
 
-		/* ranger index and ranger state file path and thread id. */
+		
 		col_buf_idx += sizeof(int) + TABLE_NAME_MAX_LEN + sizeof(pthread_t);
 		
 		*(int *)(col_buf + col_buf_idx) = sstab_id;
@@ -2401,7 +2304,7 @@ exit:
 	return resp;
 }
 
-/* selectwhere tab_name where c1(key) OR c2 (val1, val2) AND c3(val1, *) */
+
 char *
 meta_selwheretab(TREE *command, TABINFO *tabinfo)
 {
@@ -2497,14 +2400,14 @@ meta_selwheretab(TREE *command, TABINFO *tabinfo)
 	    || (querytype == SELECTSUM) || (querytype == DELETEWHERE)
 	    || (querytype == UPDATE))
 	{
-		/* TODO: checking for the parser tree. */
+		
 
-		/* Get the key colname. */
+		
 		int i;
 
 		for (i = 0; i < tab_hdr->tab_col; i++)
 		{
-			/* Default value of the column id of the key column is 1. */
+			
 			if (((COLINFO *)col_buf)[i].col_id == 1)
 			{
 				break;
@@ -2523,10 +2426,7 @@ meta_selwheretab(TREE *command, TABINFO *tabinfo)
 			leftkeylen = 1;
 			rightkeylen= 1;
 
-			/*
-			** Query optimizer and check if table has one index 
-			** against the column to be query. 
-			*/
+			
 			colmap = qryopt_get_colmap_by_cmd(command, 
 							(COLINFO *)col_buf,
 							tab_hdr->tab_col);
@@ -2576,14 +2476,14 @@ meta_selwheretab(TREE *command, TABINFO *tabinfo)
 			
 			if (k == 0)
 			{
-				/* Left range. */
+				
 				rp = tablet_schm_get_row(tab_hdr->tab_id,
 							TABLETSCHM_ID, 
 							tab_meta_dir, 0);
 			}
 			else
 			{
-				/* Right range. */
+				
 				rp = tablet_schm_get_row(tab_hdr->tab_id,
 							TABLETSCHM_ID, 
 							tab_meta_dir, -1);
@@ -2591,13 +2491,13 @@ meta_selwheretab(TREE *command, TABINFO *tabinfo)
 		}
 		else
 		{
-			/* Non-expand case. */
+			
 			rp = tablet_schm_srch_row(tab_hdr->tab_id, 
 						TABLETSCHM_ID, tab_meta_dir, 
 					  	keycol, keycolen);
 		}
 
-		/* Get the tablet name. */
+		
 		name = row_locate_col(rp, TABLETSCHM_TABLETNAME_COLOFF_INROW, 
 					ROW_MINLEN_IN_TABLETSCHM, &namelen);
 
@@ -2622,17 +2522,17 @@ meta_selwheretab(TREE *command, TABINFO *tabinfo)
 	
 	col_buf_idx = 0;		
 	
-	/* SELWHERE */
+	
 	MEMCPY((resp_buf + col_buf_idx), &selwhere, sizeof(SELWHERE));
 	col_buf_idx += sizeof(SELWHERE);
 
-	/* Range server list */
+	
 	MEMCPY((resp_buf + col_buf_idx), &(Master_infor->rg_list), 
 					sizeof(SVR_IDX_FILE));
 	col_buf_idx += sizeof(SVR_IDX_FILE);
 
 	
-	/* Save the meta (TABLEHDR) information into the SELWHERE structure. */
+	
 	MEMCPY((resp_buf + col_buf_idx), tab_hdr, sizeof(TABLEHDR));
 
 	col_buf_idx += sizeof(TABLEHDR);
@@ -2665,10 +2565,7 @@ exit:
 	return resp;
 }
 
-/* 
-** The command is as follows:
-**	addsstab into table_name (new_sstab_name, sstab_id, split_ts, split_sstabid, keycol)
-*/
+
 char *
 meta_addsstab(TREE *command, TABINFO *tabinfo)
 {
@@ -2780,7 +2677,7 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 
 	sstab_map = sstab_map_get(tab_hdr->tab_id, tab_dir, &tab_sstabmap);
 
-	/* The new sstable id and the reserved id of the splitted sstable. */
+	
 	int sstab_id;
 
 	sstab_id = m_atoi(colptr, colen);
@@ -2797,28 +2694,14 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 	
 	keycol = par_get_colval_by_colid(command, 5, &keycolen);
 
-	/*
-	** Stamp the split time on the sstab borning the new sstable.
-	**	Recovery case: It can also follow the normal logic, because the
-	** Add SStable against one same table just be only once at the same time,
-	** that's to say, the second Add SStable can be raised only the last 
-	** (first) Add SStable has registed itself into the meta server. (That 
-	** time the split time has been updated).
-	*/
+	
 	SSTAB_MAP_SET_SPLIT_TS(split_sstabid, split_ts);
 	
 
-	/* 
-	** Recovery case can also set it directly like the normal case,
-	** because the new sstab id and reserved id of Add SStable to be recovry
-	** is not used yet before the new sstable regist itself into meta server.
-	*/
+	
 	SSTAB_MAP_SET(sstab_id, SSTAB_USED);
 
-	/* 
-	** Building a row that save the information of sstable,  this row
-	** is also the index, so we have to specify a  key for this row.
-	*/
+	
 	sstab_rlen = ROW_MINLEN_IN_TABLET + keycolen + 4 + 4;
 
 	sstab_rp = MEMALLOCHEAP(sstab_rlen);
@@ -2829,23 +2712,23 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 	res_sstab_id = meta_get_free_sstab();
 	SSTAB_MAP_SET(res_sstab_id, SSTAB_RESERVED);		
 
-	/* 1st step: build a sstab row and check it into the file "tablet". */
+	
 	tablet_min_rlen = tablet_bld_row(sstab_rp, sstab_rlen, tab_name, 
 					 tab_name_len, sstab_id, res_sstab_id,
 					 sstab_name, sstab_name_len, keycol, 
 					 keycolen, tab_hdr->tab_key_coltype);
 
 
-	/* 1st step: search the table tabletscheme to get the right tablet. */
+	
 	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
 	str1_to_str2(tab_meta_dir, '/', "tabletscheme");
 
-	/* 0 is the reserved tabletscheme id. */
+	
 	rp = tablet_schm_srch_row(tab_hdr->tab_id, TABLETSCHM_ID, 
 				  tab_meta_dir, keycol, keycolen);
 
-	/* Tabletname is a fixed column, its length value is equal to TABLET_NAME_MAX_LEN. */
+	
 	name = row_locate_col(rp, TABLETSCHM_TABLETNAME_COLOFF_INROW, 
 			      ROW_MINLEN_IN_TABLETSCHM, &namelen);
 
@@ -2862,7 +2745,7 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 
 	tss->tcur_rgprof = rebalan_get_rg_prof_by_addr(rg_addr, rg_port);
 
-	/* 2nd step: search the table tabletN to get the right sstable. */
+	
 	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_meta_dir, tab_dir, STRLEN(tab_dir));
 	str1_to_str2(tab_meta_dir, '/', name);
@@ -2884,26 +2767,10 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 
 	str1_to_str2(ri_sstab, '/', tmp_ri_sstab);
 
-	/*
-	** Flush the update of sstable map before the new sstable inserting. 
-	** TODO: if the Add SStable is crash after this and before tabet_ins_row,
-	** it will lost the place of reserved sstable id, so we should fire the
-	** new feature for the sstable map checking consistency on time.
-	*/
+	
 	sstab_map_put(-1, tss->ttab_sstabmap);
 
-	/* 
-	** In recovery case, here are two senario as follows:
-	**	1. The tablet inserting is not happened in the Add SStable 
-	** raising.
-	**	2. Not 1. even if this, recovery will use the backup tablet to 
-	** replace the inserted tablet. ( if the Add SStable is flag with DELETE,
-	** the Add SStable will be removed (backup tablet will also be 
-	** removed )and don't take part in the recovery.)
-	**
-	** So even if recovery case, we can execute this command like the
-	** normal case.
-	*/
+	
 	if (tablet_ins_row(tab_hdr, tab_hdr->tab_id, tabletid, tab_meta_dir, 
 			   sstab_rp, ROW_MINLEN_IN_TABLET))
 	{
@@ -2915,7 +2782,7 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 			int	buf_idx;
 			IDX_ROOT_SPLIT	idx_root_split;
 			
-			/* Get the meta data for the column. */
+			
 			resp_buf_len = sizeof(INSMETA) + sizeof(IDX_ROOT_SPLIT);
 			
 			resp_buf = MEMALLOCHEAP(resp_buf_len);
@@ -2924,18 +2791,18 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 			
 			MEMSET(resp_buf, resp_buf_len);
 
-			/* Fill the INSERT_META with the information. */
+			
 			buf_idx = 0;
 
-			/* ranger address. */
+			
 			MEMCPY((resp_buf + buf_idx), rg_addr, STRLEN(rg_addr));
 			buf_idx += RANGE_ADDR_MAX_LEN;
 
-			/* ranger port. */
+			
 			*(int *)(resp_buf + buf_idx) = rg_port;
 			buf_idx += sizeof(int);
 
-			/* ranger state. */
+			
 			*(int *)(resp_buf + buf_idx) = RANGER_IS_ONLINE;
 			buf_idx += sizeof(int);
 
@@ -2994,7 +2861,7 @@ meta_addsstab(TREE *command, TABINFO *tabinfo)
 	
 	(tab_hdr->tab_sstab)++;
 
-	/* TODO: Same as the sstable map logic. */
+	
 	if (!meta_save_sysobj(tab_dir, (char *)tab_hdr))
 	{
 		goto exit;
@@ -3026,7 +2893,7 @@ exit:
 }
 
 
-/* return the index of sstab map. */
+
 static int
 meta_get_free_sstab()
 {
@@ -3080,7 +2947,7 @@ meta_crt_rg_logbackup_file(char *rgip, int rgport)
 	
 	str1_to_str2(rglogfile, '/', "log");
 
-	/* Create the ranger logging file. */
+	
 	OPEN(fd, rglogfile, (O_CREAT|O_WRONLY|O_TRUNC));
 
 	logfile = (LOGFILE *)MEMALLOCHEAP(sizeof(LOGFILE));
@@ -3108,7 +2975,7 @@ meta_crt_rg_logbackup_file(char *rgip, int rgport)
 
 	str1_to_str2(rglogfile, '/', rgname);
 
-	/* Make ranger backup file for the sstable split. . */
+	
 	if (STAT(rglogfile, &st) != 0)
 	{
 		MKDIR(status, rglogfile, 0755);
@@ -3117,7 +2984,7 @@ meta_crt_rg_logbackup_file(char *rgip, int rgport)
 	return status;
 }
 
-/* Clone from the routine of meta_crt_rg_logbackup_file(). */
+
 static int
 meta_crt_rgstate_file(RANGE_PROF *rg_prof, char *rgip, int rgport)
 {
@@ -3141,7 +3008,7 @@ meta_crt_rgstate_file(RANGE_PROF *rg_prof, char *rgip, int rgport)
 		return FALSE;
 	}
 	
-	/* Create the ranger state file. */
+	
 	OPEN(fd, rgstatefile, (O_CREAT|O_WRONLY|O_TRUNC));
 
 	statefile = (RG_STATE *)malloc(sizeof(RG_STATE));
@@ -3155,7 +3022,7 @@ meta_crt_rgstate_file(RANGE_PROF *rg_prof, char *rgip, int rgport)
 
 	free(statefile);
 
-	/* Save the rgstatefile to the profile of ranger.*/
+	
 	MEMCPY(rg_prof->rg_statefile, rgstatefile, STRLEN(rgstatefile));
 
 	return TRUE;
@@ -3216,15 +3083,7 @@ meta_collect_rg(char * req_buf)
 			{
 				if (HB_RANGER_IS_ON(&(Master_infor->heart_beat_data[i])))
 				{
-					/*
-					** If the ranger server restart while it 
-					** just crash in the interval of heartbeat,
-					** it will hit a false issue here that the
-					** ranger has not been create the 
-					** heartbeat with meta server. In this
-					** senario, user will have to restart the
-					** ranger server again.
-					*/
+					
 					traceprint("\n rg server with same ip and port is already on line \n");
 					start_heartbeat = FALSE;
 				}
@@ -3311,7 +3170,7 @@ meta_rebalan_svr_idx_file(char *tab_dir, REBALANCE_DATA *rbd)
 		goto exit;
 	}
 
-	/* Scan the tree of command to get the column information. */	
+		
 	status = READ(fd, tablet_store, sizeof(SVR_IDX_FILE));
 
 	Assert(status == sizeof(SVR_IDX_FILE));
@@ -3368,7 +3227,7 @@ meta_rebalan_svr_idx_file(char *tab_dir, REBALANCE_DATA *rbd)
 		rg_prof[max_rg].rg_tablet_num = max_tablet - transfer_tablet;
 		rg_prof[min_rg].rg_tablet_num = min_tablet + transfer_tablet;
 
-		/* TODO: we should set the bad bit for this. */
+		
 		//WRITE(fd, tablet_store, sizeof(SVR_IDX_FILE));
 
 		MEMCPY(rbd->rbd_max_tablet_rg, rg_prof[max_rg].rg_addr, 
@@ -3454,7 +3313,7 @@ meta_rebalancer(TREE *command)
 	tabinfo = NULL;
 	tablet_schm_bp = NULL;
 
-	/* Create the file named table name. */
+	
 	MEMSET(tab_dir, 256);
 	MEMSET(tab_dir1, 256);
 	MEMCPY(tab_dir, MT_META_TABLE, STRLEN(MT_META_TABLE));
@@ -3711,7 +3570,7 @@ meta_sharding(TREE *command, int sharding_table)
 		{
 			Assert((command->left) && (command->left->right));
 			
-			/* Check if it's the needed tablet to be sharding. */
+			
 			if (strncasecmp(tabletname, 
 					command->left->right->sym.constant.value,
 					command->left->right->sym.constant.len) != 0)
@@ -3746,25 +3605,25 @@ meta_sharding(TREE *command, int sharding_table)
 				int	buf_idx;
 				IDX_ROOT_SPLIT	idx_root_split;
 				
-				/* Get the meta data for the column. */
+				
 				resp_buf_len = sizeof(INSMETA) + sizeof(IDX_ROOT_SPLIT);
 				
 				resp_buf = MEMALLOCHEAP(resp_buf_len);
 
 				MEMSET(resp_buf, resp_buf_len);
 
-				/* Fill the INSERT_META with the information. */
+				
 				buf_idx = 0;
 
-				/* ranger address. */
+				
 				MEMCPY((resp_buf + buf_idx), rg_addr, STRLEN(rg_addr));
 				buf_idx += RANGE_ADDR_MAX_LEN;
 
-				/* ranger port. */
+				
 				*(int *)(resp_buf + buf_idx) = rg_port;
 				buf_idx += sizeof(int);
 
-				/* ranger state. */
+				
 				*(int *)(resp_buf + buf_idx) = RANGER_IS_ONLINE;
 				buf_idx += sizeof(int);
 
@@ -3887,14 +3746,14 @@ meta_rg_statistics(char *tab_dir, int tab_id, REBALANCE_STATISTICS *rbs)
 	rg_num = 0;
 	rebala_need = FALSE;
 	
-	/* Clear the memory information. */
+	
 	for(j = 0; j < temp_store->nextrno; j++)
 	{
 		rg_prof[j].rg_tablet_num = 0;
 		
 		if(rg_prof[j].rg_stat & RANGER_IS_ONLINE)
 		{
-			/* Count the online server. */
+			
 			rg_num++;
 		}
 	}
@@ -3924,10 +3783,7 @@ meta_rg_statistics(char *tab_dir, int tab_id, REBALANCE_STATISTICS *rbs)
 			
 			for(j = 0; j < temp_store->nextrno; j++)
 			{
-				/* 
-				** Collecting all the tablets locating all the ranger
-				** server including online and offline. 
-				*/
+				
 				if(   !strncasecmp(rg_prof[j].rg_addr, 
 					addr_in_blk, RANGE_ADDR_MAX_LEN) 
 		   		   && (rg_prof[j].rg_port == port_in_blk))
@@ -3960,7 +3816,7 @@ meta_rg_statistics(char *tab_dir, int tab_id, REBALANCE_STATISTICS *rbs)
 	rbs->rbs_tablet_tot_num = tablet_num;
 	rbs->rbs_rg_num = rg_num;
 
-	/* Clear the memory information. */
+	
 	for(j = 0; j < temp_store->nextrno; j++)
 	{
 		if(rg_prof[j].rg_stat & RANGER_IS_ONLINE)
@@ -4018,15 +3874,15 @@ meta_crtidx(TREE *command)
 	resp_buf_len = 0;
 	resp_buf_idx = 0;
 
-	/* Index name*/
+	
 	idx_name = command->sym.command.tabname;
 	idx_name_len = command->sym.command.tabname_len;
 
-	/* Table name locate at the sub-command ON. */
+	
 	tab_name = (command->right)->sym.command.tabname;
 	tab_name_len = (command->right)->sym.command.tabname_len;
 
-	/* Create the file named table name. */
+	
 	MEMSET(tab_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_dir, MT_META_TABLE, STRLEN(MT_META_TABLE));
 	str1_to_str2(tab_dir, '/', tab_name);
@@ -4051,7 +3907,7 @@ meta_crtidx(TREE *command)
 
 	char	rg_tab_dir[TABLE_NAME_MAX_LEN];
 	
-	/* The full path of ranger table. */
+	
 	MEMSET(rg_tab_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(rg_tab_dir, MT_RANGE_TABLE, STRLEN(MT_RANGE_TABLE));
 	str1_to_str2(rg_tab_dir, '/', tab_name);
@@ -4059,12 +3915,12 @@ meta_crtidx(TREE *command)
 	
 	int	status;
 
-	/* Build the full path for the tabletscheme file. */
+	
 	MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_meta_dir, rg_tab_dir, STRLEN(rg_tab_dir));
 	str1_to_str2(tab_meta_dir, '/', idx_name);
 	
-	/* Make the directory to save the state of ranger servers. */
+	
 	if (STAT(tab_meta_dir, &st) == 0)
 	{
 		traceprint("Index %s on table %s is exist.\n", idx_name, tab_name);
@@ -4087,7 +3943,7 @@ meta_crtidx(TREE *command)
 		goto exit;
 	}
 
-	/* The id of index and table id share the same count number. */
+	
 	++(Master_infor->last_tabid);
 	
 	IDXMETA	idxmeta;
@@ -4103,7 +3959,7 @@ meta_crtidx(TREE *command)
 
 	tab_hdr->has_index = TRUE;
 
-	/* Index time stamp on the table*/
+	
 	tab_hdr->index_ts = Master_infor->meta_sysindex->idx_ver;
 
 	meta_save_sysobj(tab_dir, (char *)tab_hdr);
@@ -4118,13 +3974,10 @@ meta_crtidx(TREE *command)
 
 	OPEN(fd, tab_meta_dir, (O_RDWR));
 	
-	/* 
-	** We only reserve the ID for this index, so that the index sstable 
-	** can be cached.
-	*/
+	
 	Master_infor->meta_systab->last_tabid = Master_infor->last_tabid;
 
-	/* Flush this creating information into the disk. */
+	
 	WRITE(fd, Master_infor->meta_systab, sizeof(META_SYSTABLE));
 
 	CLOSE(fd);
@@ -4137,21 +3990,21 @@ meta_crtidx(TREE *command)
 	
 	resp_buf_idx = 0;		
 	
-	/* Index meta */
+	
 	MEMCPY((resp_buf + resp_buf_idx), &idxmeta, sizeof(IDXMETA));
 	resp_buf_idx += sizeof(IDXMETA);
 
-	/* Range server list */
+	
 	MEMCPY((resp_buf + resp_buf_idx), &(Master_infor->rg_list), 
 					sizeof(SVR_IDX_FILE));
 	resp_buf_idx += sizeof(SVR_IDX_FILE);
 	
-	/* Table meta. */
+	
 	MEMCPY((resp_buf + resp_buf_idx), tab_hdr, sizeof(TABLEHDR));
 
 	resp_buf_idx += sizeof(TABLEHDR);
 
-	/* Column information. */
+	
 	MEMCPY((resp_buf + resp_buf_idx), colinfo, tab_hdr->tab_col * sizeof(COLINFO));
 	
 	resp_buf_idx += tab_hdr->tab_col * sizeof(COLINFO);
@@ -4207,15 +4060,15 @@ meta_dropidx(TREE *command)
 	resp_buf_len	= 0;
 	resp_buf_idx	= 0;
 
-	/* Index name*/
+	
 	idx_name = command->sym.command.tabname;
 	idx_name_len = command->sym.command.tabname_len;
 
-	/* Table name locate at the sub-command ON. */
+	
 	tab_name = (command->right)->sym.command.tabname;
 	tab_name_len = (command->right)->sym.command.tabname_len;
 
-	/* Create the file named table name. */
+	
 	MEMSET(tab_dir, 256);
 	MEMCPY(tab_dir, MT_META_TABLE, STRLEN(MT_META_TABLE));
 	str1_to_str2(tab_dir, '/', tab_name);
@@ -4259,10 +4112,7 @@ meta_dropidx(TREE *command)
 	
 	if(Master_infor->rg_list.nextrno > 0)
 	{
-		/* 
-		** TODO: just return the first ranger server. 
-		** We should return the address of all the ranger server.
-		*/
+		
 		rg_prof = meta_get_rg();
 
 		if (!rg_prof)
@@ -4287,7 +4137,7 @@ meta_dropidx(TREE *command)
 		ex_raise(EX_ANY);
 	}
 
-	/* Send the ranger server address to the client. */
+	
 	resp_buf_len = RANGE_ADDR_MAX_LEN + sizeof(int);
 	
 	resp_buf = MEMALLOCHEAP(resp_buf_len);
@@ -4351,15 +4201,15 @@ meta_removeidx(TREE *command)
 	resp_buf_len	= 0;
 	resp_buf_idx	= 0;
 
-	/* Index name*/
+	
 	idx_name = command->sym.command.tabname;
 	idx_name_len = command->sym.command.tabname_len;
 
-	/* Table name locate at the sub-command ON. */
+	
 	tab_name = (command->right)->sym.command.tabname;
 	tab_name_len = (command->right)->sym.command.tabname_len;
 
-	/* Create the file named table name. */
+	
 	MEMSET(tab_dir, 256);
 	MEMCPY(tab_dir, MT_META_TABLE, STRLEN(MT_META_TABLE));
 	str1_to_str2(tab_dir, '/', tab_name);
@@ -4384,7 +4234,7 @@ meta_removeidx(TREE *command)
 	if (!index_del_meta(tab_hdr->tab_id, idx_name, 
 					Master_infor->meta_sysindex))
 	{
-		/* Error information has been raised. */
+		
 		goto exit;
 	}
 
@@ -4395,7 +4245,7 @@ meta_removeidx(TREE *command)
 
 	meta_save_sysindex((char *)(Master_infor->meta_sysindex));
 
-	/* Index time stamp on the table*/
+	
 	tab_hdr->index_ts = Master_infor->meta_sysindex->idx_ver;
 
 	meta_save_sysobj(tab_dir, (char *)tab_hdr);
@@ -4616,6 +4466,7 @@ parse_again:
 	    	break;
 		
 	    case MCCTABLE:
+	    case MCCSSTAB:
 	    	resp = meta_checktable(command);
 		break;
 		
@@ -4795,12 +4646,12 @@ meta_heartbeat(void *args)
 	MSG_DATA	*new_msg;
 	int		sleeptime;
 
-	/* Wait 10s to make sure rg server's network service is ready. */
+	
 	sleep(10);
 
 	hb_recv_buf = Master_infor->heart_beat_data[rg_index].recv_data;
 
-	/* TODO: in this case(hb_conn<0), need to tell rg server register is failed. */
+	
 	if((hb_conn = conn_open(rg_addr->rg_addr, rg_addr->rg_port)) < 0)
 	{
 		perror("error in create connection to rg server when meta server start heart beat: ");
@@ -4811,7 +4662,7 @@ meta_heartbeat(void *args)
 
 	signal (SIGPIPE,SIG_IGN);
 
-	/* In memory information. */
+	
 	HB_SET_RANGER_ON(&(Master_infor->heart_beat_data[rg_index]));
 	
 	sleeptime = HEARTBEAT_INTERVAL;
@@ -4872,11 +4723,7 @@ meta_heartbeat(void *args)
 			sleeptime = HEARTBEAT_INTERVAL;
 		}
 
-		/*
-		** TODO: maybe more info will be added in hearbeat msg,  such as 
-		** overload monitor, so need to add some process routine on resp
-		** here in the future
-		*/
+		
 	}
 
 finish:
@@ -4999,7 +4846,7 @@ meta_transfer_target(char * src_ip, int src_port, char *target_ip, int * target_
 
 	for(i = 0; i < temp_store->nextrno; i++)
 	{
-		/* Find the online server nearby the crash server. */
+		
 		if(rg_prof[i].rg_stat & RANGER_IS_ONLINE)
 		{
 			j = i;
@@ -5018,7 +4865,7 @@ meta_transfer_target(char * src_ip, int src_port, char *target_ip, int * target_
 
 			if (j != -1)
 			{
-				/* Online server is found. */
+				
 				break;
 			}
 		}
@@ -5300,7 +5147,7 @@ meta_update(char * rg_addr, int rg_port)
 		
 		if (!meta_tablet_update(mt_entries.tabname[i], rg_addr, rg_port))
 		{
-			/* Error infor has been printed in the meta_tablet_updata. */
+			
 
 			rtn_stat = FALSE;
 			
@@ -5327,7 +5174,7 @@ meta_update(char * rg_addr, int rg_port)
 			sprintf(tab_name, "%s", ent->d_name);
 			if (!meta_tablet_update(tab_name, rg_addr, rg_port))
 			{
-				/* Error infor has been printed in the meta_tablet_updata. */
+				
 
 				rtn_stat = FALSE;
 				break;
@@ -5378,10 +5225,10 @@ meta_failover_rg(char * req_buf)
 			if(rg_addr[i].rg_stat & RANGER_IS_ONLINE)
 			{
 				
-				/* Before failover, ranger server must be the suspected. */
+				
 				Assert(rg_addr[i].rg_stat & RANGER_IS_SUSPECT);
 
-				/* Change the range state to the next state. */
+				
 				rg_addr[i].rg_stat &= ~(RANGER_IS_ONLINE | RANGER_IS_SUSPECT);
 				rg_addr[i].rg_stat = RANGER_IS_OFFLINE | RANGER_NEED_RECOVERY;
 		
@@ -5454,7 +5301,7 @@ meta_clean4crtidx(char * req_buf)
 							= IDX_IN_WORKING;
 	}
 	
-	/* Index time stamp on the table*/
+	
 	tab_hdr->index_ts = Master_infor->meta_sysindex->idx_ver;
 
 	MEMSET(tab_dir, TABLE_NAME_MAX_LEN);
@@ -5476,7 +5323,7 @@ meta_check_validation()
 	META_SYSINDEX	*meta_sysidx;
 
 
-	/* Index checking. */
+	
 	meta_sysidx = Master_infor->meta_sysindex;
 	
 	idx_meta = meta_sysidx->idx_meta;
@@ -5496,11 +5343,7 @@ meta_check_validation()
 }
 
 
-/*
-** Recovery is a deamon thread for the data recovery. it monitors the list of
-** rangers, check out the ranger to be recovery and recovery the range including
-** data recovery and meta recovery.
-*/
+
 void *
 meta_recovery()
 {
@@ -5592,7 +5435,7 @@ again:
                         goto again;
 		}		
 
-		/* Recover the Add SStable. */
+		
 		if (!meta__recovery_addsstab(rg_prof->rg_addr, rg_prof->rg_port))
 		{
 			traceprint("Recovery for the Add SStable is failed.\n");
@@ -5672,16 +5515,12 @@ static int
 meta__recovery_addsstab(char * rgip,int rgport)
 {
 	int			fd;
-	RG_STATE		*rgstate;	/* Ptr to the buffer for the
-						** rg_state file.
-						*/
+	RG_STATE		*rgstate;	
 	int			statelen;
 	int			rtn_state;
-	SSTAB_SPLIT_INFO	split_info;	/* Ptr to one slot in the
-						** rg_state.
-						*/
+	SSTAB_SPLIT_INFO	split_info;	
 	SSTAB_SPLIT_INFO	*prgstat;
-	char			*rgstat_off;	/* offset for the rgstate file. */
+	char			*rgstat_off;	
 	RPCRESP 		*resp;
 	char	statefile[TABLE_NAME_MAX_LEN];
 	char	add_sstab_cmd_buf[LINE_BUF_SIZE];
@@ -5711,7 +5550,7 @@ meta__recovery_addsstab(char * rgip,int rgport)
 	{	
 		prgstat = (SSTAB_SPLIT_INFO *)rgstat_off;
 
-		/* Must be less than the valid storage zone. */
+		
 		Assert(rgstat_off < ((char *)rgstate + 
 			rgstate->offset - SSTAB_SPLIT_INFO_HEADER));
 
@@ -5729,7 +5568,7 @@ meta__recovery_addsstab(char * rgip,int rgport)
 
 		if (meta__bld_addsstab_clause(&split_info, add_sstab_cmd_buf))
 		{
-			/* -1 is a fake id. */
+			
 			resp = (RPCRESP *)meta_handler(add_sstab_cmd_buf, -1);
 
 			if (!resp || !(resp->status_code & RPC_SUCCESS))
@@ -5742,10 +5581,7 @@ meta__recovery_addsstab(char * rgip,int rgport)
 		}
 		else
 		{
-			/* 
-			** Hit error and the error information is raised by the
-			** bld_addsstab. 
-			*/
+			
 			rtn_state = FALSE;
 			break;
 		}	
@@ -5755,10 +5591,7 @@ meta__recovery_addsstab(char * rgip,int rgport)
 
 	if (i == rgstate->sstab_split_num)
 	{
-		/* 
-		** Here it has finished the recovery successfully, clearing the 
-		** state file.
-		*/
+		
 		MEMSET(rgstate, sizeof(RG_STATE));
 		rgstate->offset = RG_STATE_HEADER;
 	}
@@ -5840,7 +5673,7 @@ meta__recovery_crtidx()
 			}
 		
 		
-			/* Index time stamp on the table*/
+			
 			tab_hdr->index_ts = Master_infor->meta_sysindex->idx_ver;
 
 			MEMSET(tab_meta_dir, TABLE_NAME_MAX_LEN);
@@ -6125,7 +5958,6 @@ meta_check_tabletschme(char *tabdir, int tabid)
 }
 
 
-
 static char *
 meta_checktable(TREE *command)
 {
@@ -6133,7 +5965,6 @@ meta_checktable(TREE *command)
 	int		tab_name_len;
 	char		tab_dir[TABLE_NAME_MAX_LEN];
 	char		tab_meta_dir[TABLE_NAME_MAX_LEN];
-	char   		*col_buf;
 	int		rtn_stat;
 	TABLEHDR	*tab_hdr;
 	int		sstab_rlen;
@@ -6141,17 +5972,22 @@ meta_checktable(TREE *command)
 	char		*resp;
 	int		tabidx;
 	int		rpc_status;
+	int		querytype;
+	char		*resp_buf;
+	int		resp_buflen;
 
 
 	Assert(command);
 
 	rtn_stat = FALSE;
-	col_buf= NULL;
 	sstab_rlen = 0;
 	sstab_idx = 0;
 	rpc_status = 0;
+	resp_buf = NULL;
+	resp_buflen = 0;
 	tab_name = command->sym.command.tabname;
 	tab_name_len = command->sym.command.tabname_len;
+	querytype = command->sym.command.querytype;
 
 	MEMSET(tab_dir, TABLE_NAME_MAX_LEN);
 	MEMCPY(tab_dir, MT_META_TABLE, STRLEN(MT_META_TABLE));
@@ -6185,9 +6021,33 @@ meta_checktable(TREE *command)
 		goto exit;
 	}
 
-	index_tab_check_index(Master_infor->meta_sysindex, tab_hdr->tab_id);
+	if (querytype == MCCTABLE)
+	{
+		index_tab_check_index(Master_infor->meta_sysindex, tab_hdr->tab_id);
 
-	meta_check_tabletschme(tab_dir, tab_hdr->tab_id);
+		meta_check_tabletschme(tab_dir, tab_hdr->tab_id);
+	}
+	else if (querytype == MCCSSTAB)
+	{
+		
+		
+		resp_buflen = sizeof(SELWHERE) + sizeof(SVR_IDX_FILE) + sizeof(TABLEHDR);
+	
+		resp_buf = MEMALLOCHEAP(resp_buflen);
+		MEMSET(resp_buf, resp_buflen);
+
+		int	bufidx = sizeof(SELWHERE);
+		
+		
+		MEMCPY((resp_buf + bufidx), &(Master_infor->rg_list), 
+						sizeof(SVR_IDX_FILE));
+		bufidx += sizeof(SVR_IDX_FILE);
+		
+		
+		MEMCPY((resp_buf + bufidx), tab_hdr, sizeof(TABLEHDR));
+
+		bufidx += sizeof(TABLEHDR);		
+	}
 	
 	rtn_stat = TRUE;
 
@@ -6195,12 +6055,18 @@ exit:
 	if (rtn_stat)
 	{
 		rpc_status |= RPC_SUCCESS;
-		resp = conn_build_resp_byte(rpc_status, 0, NULL);
+
+		resp = conn_build_resp_byte(rpc_status, resp_buflen, resp_buf);		
 	}
 	else
 	{
 		rpc_status |= RPC_FAIL;
 		resp = conn_build_resp_byte(rpc_status, 0, NULL);
+	}
+
+	if (resp_buf != NULL)
+	{
+		MEMFREEHEAP(resp_buf);
 	}
 
 	return resp;
@@ -6275,7 +6141,7 @@ meta_checkranger(TREE *command)
 		}
 	}
 
-	/* TODO: tablet location checking. */
+	
 	
 	if (rtn_stat)
 	{
@@ -6326,7 +6192,7 @@ meta_load_sysmeta()
 		MEMCPY(tab_meta_dir, Master_infor->meta_systab->meta_tabdir[i],
 			STRLEN(Master_infor->meta_systab->meta_tabdir[i]));
 
-		/* Load the table header information. */
+		
 		str1_to_str2(tab_meta_dir, '/', "sysobjects");
 
 
@@ -6355,7 +6221,7 @@ meta_load_sysmeta()
 		MEMCPY(tab_meta_dir, Master_infor->meta_systab->meta_tabdir[i],
 			STRLEN(Master_infor->meta_systab->meta_tabdir[i]));
 
-		/* Load the column information. */
+		
 		str1_to_str2(tab_meta_dir, '/', "syscolumns");
 
 		OPEN(fd, tab_meta_dir, (O_RDONLY));

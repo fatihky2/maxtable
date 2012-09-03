@@ -29,7 +29,7 @@ int main(int argc, char *argv[])
 	int	i;
 	
 
-	if (argc != 2)
+	if (argc < 2)
 	{
 		printf("Testing create table: ./sample create\n");
 		printf("Testing insert table: ./sample insert\n");
@@ -406,6 +406,41 @@ exitsellike:
 			printf(" The total row # is %d\n", total_rowcnt);
 
 exitselcnt:
+			if (exec_ctx)
+			{
+				mt_cli_close_execute(exec_ctx);
+
+				exec_ctx = NULL;
+			}
+		}
+
+		if (match(argv[1], "checksstab"))
+		{	
+			memset(resp, 0, 256);
+			memset(cmd, 0, 256);
+
+			sprintf(cmd, "mcc checksstab %s", argv[2]);
+			
+			rtn_stat = mt_cli_open_execute(connection, cmd, strlen(cmd), &exec_ctx);
+
+			if (rtn_stat != CLI_SUCCESS)
+			{
+				printf ("Error! \n");
+				goto exitchksstab;
+			}
+
+			printf("Client 1: %s\n", cmd);
+
+			MT_CLI_EXEC_CONTEX	*t_exec_ctx;
+
+			t_exec_ctx = exec_ctx;
+
+			for (i = 0; i < exec_ctx->rg_cnt; i++, t_exec_ctx++)
+			{
+				mt_cli_exec_builtin(t_exec_ctx);
+			}
+
+exitchksstab:
 			if (exec_ctx)
 			{
 				mt_cli_close_execute(exec_ctx);

@@ -487,6 +487,39 @@ conn_again:
 			meta_again = FALSE;
 			meta_only = TRUE;
 		    	break;
+
+		    case MCCSSTAB:
+		    	if (CLI_IS_CONN2MASTER(Cli_infor))
+			{
+				resp_ins = (INSMETA *)resp->result;
+
+				MEMCPY(Cli_infor->cli_ranger_ip, 
+				       resp_ins->i_hdr.rg_info.rg_addr, 
+				       RANGE_ADDR_MAX_LEN);
+
+				Cli_infor->cli_ranger_port = 
+					resp_ins->i_hdr.rg_info.rg_port;
+
+				/* Override the UNION part for this reques. */
+				MEMCPY(resp->result, RPC_IDXROOT_SPLIT_MAGIC, RPC_MAGIC_MAX_LEN);
+
+				send_buf_size = resp->result_length;
+				send_rg_bp = MEMALLOCHEAP(send_buf_size);
+				MEMSET(send_rg_bp, send_buf_size);
+
+				send_rg_bp_idx = 0;
+				PUT_TO_BUFFER(send_rg_bp, send_rg_bp_idx, 
+					      resp->result, resp->result_length);
+				
+				meta_again = FALSE;
+
+				meta_only = FALSE;
+			}
+			else if (!meta_again)
+			{
+				meta_only = TRUE;			
+			}
+		    	break;
 			
 		    case MCCRANGER:
 		    	meta_again = FALSE;

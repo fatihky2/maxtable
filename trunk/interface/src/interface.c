@@ -1201,6 +1201,11 @@ mt_cli_exec_selrang(CONN * connection, char * cmd, MT_CLI_EXEC_CONTEX **exec_ctx
 		rglist =  (SVR_IDX_FILE *)(((RPCRESP *)(meta_resp))->result + 
 				sizeof(IDXMETA));
 	}
+	else if (querytype == MCCSSTAB)
+	{
+		rglist =  (SVR_IDX_FILE *)(((RPCRESP *)(meta_resp))->result +
+				sizeof(SELWHERE));
+	}
 	else
 	{
 		rglist =  (SVR_IDX_FILE *)(((RPCRESP *)(meta_resp))->result + 
@@ -1286,6 +1291,7 @@ mt_cli_rgsel_ranger(CONN * connection, char * cmd, MT_CLI_EXEC_CONTEX *exec_ctx,
 	        && (exec_ctx->querytype != DELETEWHERE)
 	        && (exec_ctx->querytype != CRTINDEX)
 	        && (exec_ctx->querytype != UPDATE)
+	        && (exec_ctx->querytype != MCCSSTAB)
 		&& (!mt_cli_rgsel_is_bigdata(rg_connection, &bigdataport))))
 	{
 		rtn_state = FALSE;
@@ -1297,7 +1303,8 @@ mt_cli_rgsel_ranger(CONN * connection, char * cmd, MT_CLI_EXEC_CONTEX *exec_ctx,
 	    || (exec_ctx->querytype == SELECTSUM)
 	    || (exec_ctx->querytype == DELETEWHERE)
 	    || (exec_ctx->querytype == CRTINDEX)
-	    || (exec_ctx->querytype == UPDATE))
+	    || (exec_ctx->querytype == UPDATE)
+	    || (exec_ctx->querytype == MCCSSTAB))
 	{
 		rtn_state = TRUE;
 		exec_ctx->rg_conn = rg_connection;
@@ -1829,6 +1836,36 @@ mt_cli_rgsel__ranger(CONN * connection, char * cmd, MT_CLI_EXEC_CONTEX *exec_ctx
 //				sizeof(TABLEHDR) + (tab_hdr->tab_col) * sizeof(COLINFO), 
 //				cmd, cmd_size);
 	}
+	else if (exec_ctx->querytype == MCCSSTAB)
+	{
+		MEMCPY(((RPCRESP *)(exec_ctx->meta_resp))->result, 
+				RPC_MCCSSTAB_MAGIC, RPC_MAGIC_MAX_LEN);
+
+
+		tab_hdr = (TABLEHDR *)(((RPCRESP *)(exec_ctx->meta_resp))->result +
+					sizeof(SELWHERE) + sizeof(SVR_IDX_FILE));
+
+		
+		send_rg_buflen = RPC_MAGIC_MAX_LEN + sizeof(SELWHERE) + sizeof(TABLEHDR)
+					+ sizeof(int) + cmd_size;
+		
+		send_rg_buf = malloc(send_rg_buflen);
+		MEMSET(send_rg_buf, send_rg_buflen);
+
+		int	buf_idx = 0;
+
+		PUT_TO_BUFFER(send_rg_buf, buf_idx, RPC_REQUEST_MAGIC, RPC_MAGIC_MAX_LEN);
+
+		PUT_TO_BUFFER(send_rg_buf, buf_idx,  
+					((RPCRESP *)(exec_ctx->meta_resp))->result, 
+					sizeof(SELWHERE));
+
+		PUT_TO_BUFFER(send_rg_buf, buf_idx, (char *)tab_hdr, sizeof(TABLEHDR));
+
+		PUT_TO_BUFFER(send_rg_buf, buf_idx, &cmd_size, sizeof(int));
+		
+		PUT_TO_BUFFER(send_rg_buf, buf_idx, cmd, cmd_size);
+	}
 	else
 	{
 		/* SELECTWHERE/SELECTRANGE/COUNT/SUM. */
@@ -1984,7 +2021,8 @@ mt_cli_read_range(MT_CLI_EXEC_CONTEX *exec_ctx)
 	    || (exec_ctx->querytype == SELECTSUM)
 	    || (exec_ctx->querytype == CRTINDEX)
 	    || (exec_ctx->querytype == DELETEWHERE)
-	    || (exec_ctx->querytype == UPDATE))
+	    || (exec_ctx->querytype == UPDATE)
+	    || (exec_ctx->querytype == MCCSSTAB))
 	{
 		sockfd = exec_ctx->rg_conn->connection_fd;
 	}
@@ -2006,7 +2044,8 @@ retry:
 		    || (exec_ctx->querytype == SELECTSUM)
 		    || (exec_ctx->querytype == DELETEWHERE)
 		    || (exec_ctx->querytype == CRTINDEX)
-		    || (exec_ctx->querytype == UPDATE))
+		    || (exec_ctx->querytype == UPDATE)
+		    || (exec_ctx->querytype == MCCSSTAB))
 		{
 			exec_ctx->rg_conn->status = CLOSED;
 		}
@@ -2339,6 +2378,15 @@ mt_cli_exec_builtin(MT_CLI_EXEC_CONTEX *exec_ctx)
 		
 	    	break;
 
+	    case MCCSSTAB:
+	    	if (!mt_cli_read_range(exec_ctx))
+		{
+			exec_ctx->status |= CLICTX_RANGER_IS_UNCONNECT;
+			rtn_stat = FALSE;
+		}
+		
+	    	break;
+
 	    default:
 	    	break;
 
@@ -2569,6 +2617,10 @@ mt_cli_open_execute(CONN *connection, char *cmd, int cmd_len, MT_CLI_EXEC_CONTEX
 	    	rtn_stat = par_dropremov_idx_tab(cmd + s_idx, DROPINDEX);
 	    	break;
 
+	    case MCCSSTAB:
+	    	rtn_stat = par_dropremovrebalanmcc_tab(cmd + s_idx, MCCSSTAB);
+	    	break;
+		
 	    default:
 	    	rtn_stat = FALSE;
 	        break;
@@ -2604,6 +2656,7 @@ mt_cli_open_execute(CONN *connection, char *cmd, int cmd_len, MT_CLI_EXEC_CONTEX
 	    case CRTINDEX:
 	    case DELETEWHERE:
 	    case UPDATE:
+	    case MCCSSTAB:
 	    	rtn_stat = mt_cli_exec_selrang(connection, cmd, exec_ctx, querytype);
 	    	
 		break;

@@ -47,6 +47,7 @@
 #define	RPC_IDXROOT_SPLIT_MAGIC	"idxrspl"
 #define	RPC_CRTIDX_DONE_MAGIC	"idxcrtd"
 #define	RPC_DROPIDX_MAGIC	"dropidx"
+#define	RPC_MCCSSTAB_MAGIC	"mccssta"
 
 
 
@@ -120,7 +121,8 @@ typedef struct rpcresp
 #define RPC_REQ_MAPRED_GET_NEXT_VALUE_OP	0x0200
 #define	RPC_REQ_CRT_IDX_OP			0x0400
 #define	RPC_IDXROOT_SPLIT_OP			0x0800
-#define	RPC_REQ_DROPIDX_OP			0x1000			
+#define	RPC_REQ_DROPIDX_OP			0x1000
+#define	RPC_REQ_MCCSSTAB_OP			0x2000
 
 
 char *

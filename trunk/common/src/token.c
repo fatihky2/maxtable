@@ -44,7 +44,8 @@ TOKENS  MT_Tokens[] =
 	{REMOVEINDEX,	"remove index"},
 	{DELETEWHERE,	"deletewhere"},
 	{UPDATE,	"update set"},
-	{SHARDINGTABLET,"sharding tablet"}
+	{SHARDINGTABLET,"sharding tablet"},
+	{MCCSSTAB,	"mcc checksstab"}
 };
 
 int

@@ -554,6 +554,10 @@ conn_chk_reqmagic(char *str)
 	{
 		return RPC_IDXROOT_SPLIT_OP;
 	}
+	else if (!strncasecmp(RPC_MCCSSTAB_MAGIC, str, STRLEN(RPC_MCCSSTAB_MAGIC)))
+	{
+		return RPC_REQ_MCCSSTAB_OP;
+	}
 		
 
 	return 0;
