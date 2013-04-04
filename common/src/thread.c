@@ -77,12 +77,11 @@ void * msg_recv(void *args)
 	int listenfd, nfds, connfd, sockfd, totfds;
 	socklen_t clilen;
 	char cliip[24];
-	char buf[MSG_SIZE];
+//	char *buf;
 
 	struct sockaddr_in servaddr, cliaddr;
 
 	MSG_DATA *new_msg;
-	
 
 	//socket
 	listenfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -93,6 +92,8 @@ void * msg_recv(void *args)
 		perror("error in set_nonblock");
 		return NULL;
 	}
+
+	//buf = (char *)malloc(MSG_SIZE);
 
 	MEMSET(&servaddr, sizeof(servaddr));
 	servaddr.sin_family = AF_INET;
@@ -184,7 +185,9 @@ void * msg_recv(void *args)
 //				MEMSET(buf, MSG_SIZE);
 
 
-				n = tcp_get_data(sockfd, buf, MSG_SIZE);
+				new_msg = msg_mem_alloc();
+//				MEMCPY(new_msg->data, buf, n);
+				n = tcp_get_data(sockfd, new_msg->data, MSG_SIZE);
 
 				if (n < 0)
 				{	
@@ -280,8 +283,7 @@ void * msg_recv(void *args)
 				}
 				else						
 				{
-					new_msg = msg_mem_alloc();
-					MEMCPY(new_msg->data, buf, n);
+					Assert(new_msg);
 					new_msg->fd = sockfd;
 					new_msg->n_size = n;
 					new_msg->block_buffer = NULL;
@@ -340,6 +342,8 @@ finish:
 			}
 		}
 	}
+
+//	free(buf);
 
 }
 

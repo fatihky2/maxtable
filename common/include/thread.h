@@ -2,7 +2,7 @@
 #define __THREAD_H
 
 /* Must be greater than the block size. */
-#define MSG_SIZE (8 * 1024)
+#define MSG_SIZE ((1024 + 1) * 1024)
 
 #define EPOLL_SIZE 1024
 

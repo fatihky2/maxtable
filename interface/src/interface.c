@@ -238,12 +238,14 @@ int
 mt_cli_exec_crtseldel(CONN * connection, char * cmd, int cmd_len, MT_CLI_EXEC_CONTEX **exec_ctx)
 {
 	LOCALTSS(tss);
+#if 1
 	char		send_buf[LINE_BUF_SIZE];/* The RPC buffer for sending
 						** to meta server. 
 						*/
 	char		send_rg_buf[LINE_BUF_SIZE];/* The RPC buffer for sending
 						** to ranger server. 
 						*/
+#endif
 	char		tab_name[64];		/* Table name. */
 	int		send_buf_size;		/* Buffer size. */
 	RPCRESP		*resp;			/* Ptr to the response from the
