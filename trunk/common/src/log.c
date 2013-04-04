@@ -1248,11 +1248,17 @@ log_get_last_logoffset(LOGREC *logrec)
 {
 	int	rlen;
 	char	*rp;
-	int	logoffset;
+	int	logoffset;	
+	int	logoffset1;
 	char	*tmp;
+	int	i=0;
+	int	j=0;
+	int	k=0;
 
 
 	logoffset = 0;
+	logoffset1 = 0;
+	char *test = logrec;
 	tmp = (char *)logrec + LOG_FILE_SIZE;
 	
 	while (logoffset < LOG_FILE_SIZE)
@@ -1271,6 +1277,12 @@ log_get_last_logoffset(LOGREC *logrec)
 				
 				break;
 			}
+#if 0
+			Assert(   (((LOGHDR *)(test + logoffset))->opid != CHECKPOINT_BEGIN)
+                    		&& (((LOGHDR *)(test + logoffset))->opid != CHECKPOINT_COMMIT)
+                   		);
+#endif
+			
 		}
 		
 		if (   (((LOGHDR *)logrec)->opid == CHECKPOINT_BEGIN) 
@@ -1278,30 +1290,47 @@ log_get_last_logoffset(LOGREC *logrec)
 		   )
 		{
 			Assert(((LOGHDR *)logrec)->loglen == sizeof(LOGREC));
+#if 0
+			Assert(   (((LOGHDR *)(test + logoffset))->opid == CHECKPOINT_BEGIN)
+                    		|| (((LOGHDR *)(test + logoffset))->opid == CHECKPOINT_COMMIT)
+                   		);
+#endif
 
 			logoffset += ((LOGHDR *)logrec)->loglen;
+			logoffset1 = (char *)logrec - (char *)test + sizeof(LOGREC);
+			i++;
+			j++;
 
 			//traceprint("logoffset -- %d, logrec->opid  -- %d\n", logoffset, logrec->opid );
 			
 			logrec = (LOGREC *)((char *)logrec + sizeof(LOGREC));
+
+//			Assert(((char *)(test + logoffset)) == (char *)(logrec));
 			
 			continue;
 		}
 		else if(((LOGHDR *)logrec)->opid == LOG_SKIP)
 		{
 			logoffset += ((LOGHDR *)logrec)->loglen;
+			logoffset1 = (char *)logrec - (char *)test + sizeof(LOGREC);
+			i++;
+			k++;
 
 			//traceprint("logoffset -- %d, logrec->opid  -- %d\n", logoffset, logrec->opid );
 			
 			logrec = (LOGREC *)((char *)logrec + sizeof(LOGREC));
+//			Assert(((char *)(test + logoffset)) == (char *)(logrec));
 			continue;
 		}
 
-		
+	
+			
 		if(strncasecmp(((LOGHDR *)logrec)->logmagic, MT_LOG, 
 						STRLEN(MT_LOG)) == 0)
 		{
 			logoffset += ((LOGHDR *)logrec)->loglen;
+			logoffset1 = (char *)logrec - (char *)test + sizeof(LOGREC);
+			i++;
 			//traceprint("logoffset -- %d, logrec->opid  -- %d\n", logoffset, logrec->opid );
 		}
 		else
@@ -1311,9 +1340,12 @@ log_get_last_logoffset(LOGREC *logrec)
 		
 
 		logrec = (LOGREC *)((char *)logrec + sizeof(LOGREC));
+//		Assert(((char *)(test + logoffset)) == (char *)(logrec));
 	}
 
-	return logoffset;
+//	Assert(logoffset == logoffset1);
+
+	return logoffset1;
 }
 
 void

@@ -106,10 +106,10 @@ int main(int argc, char *argv[])
 			memset(resp, 0, 256);
 			memset(cmd , 0, 4096);
 
-			sprintf(cmd, "create table maxtab(id1 varchar, id2 varchar,id3 int, id4 varchar,id5 varchar,id6 varchar,id7 varchar,id8 varchar,id9 varchar)");
+//			sprintf(cmd, "create table maxtab(id1 varchar, id2 varchar,id3 int, id4 varchar,id5 varchar,id6 varchar,id7 varchar,id8 varchar,id9 varchar)");
 			
 //			sprintf(cmd, "create table maxtab(id1 varchar, id2 varchar, id3 varchar, id4 varchar, id5 varchar, id6 varchar)");
-//			sprintf(cmd, "create table maxtab(id1 varchar, id2 varchar,id3 text)");
+			sprintf(cmd, "create table maxtab(key varchar, shop_id varchar,shop_pic text)");
 			rtn_stat = mt_cli_open_execute(connection, cmd, strlen(cmd), &exec_ctx);
 
 			if (rtn_stat != CLI_SUCCESS)
@@ -131,7 +131,6 @@ exitcrt:
 
 		if (match(argv[1], "insert"))
 		{
-
 			memset(cmd , 0, 4096);
 
 			/* Insert 10000 data rows into table */
@@ -176,13 +175,32 @@ exitins:
 		if (match(argv[1], "inserttext"))
 		{
 			/* Insert 10000 data rows into table */
-			for(i = 0; i < 50; i++)
+			for(i = 1; i < 1000; i++)
 //			for(i = 1001; i < 1100; i++)
 //			for(i = 1101; i < 71100; i++)
 			{
-
+#if 0
 				char	*blob = "Edward P. Gibson, Esq., CISSP, FBCS, is a Director in PricewaterhouseCoopers' Forensic Services Group. He specializes in gathering intelligence to detect, mitigate, and prevent corporate IT and security risks such as economic espionage, IT / bank fraud, and cyber attacks.  Prior to PwC, 2005-2009, Gibson was the Chief cyber Security Advisor for Microsoft Ltd in the United Kingdom (UK) and praised for his  unique ability to make security issues relevant and personal. From 1985-2005 Gibson was a career FBI Special Agent.  He specialized in investigating complex international white-collar crimes, and was cited for his work in various espionage investigations involving FBI & CIA traitors.\0";	
 				int	blob_len = strlen(blob);
+#endif
+				char *blob = "http://i3.s1.dpfile.com/pc/281097f66763c0661f92df78eb78fa8b(240c180)/thumb.jpg";
+				int     blob_len = strlen(blob);
+
+#if 0
+				char filename[100];
+				memset(filename, 0, 100);
+				sprintf(filename, "./u1.gif");
+				FILE *fd = fopen(filename, "rb");             
+				fseek(fd, 0, SEEK_END);                            
+                                                   
+				int blob_len = ftell(fd);                          
+                                                   
+				rewind(fd);                                        
+                                                   
+				char *blob = (char *)malloc(blob_len * sizeof(char));
+                                                   
+				fread(blob, sizeof(char), blob_len, fd);            		
+#endif
 				int	blob_start = 0;
 				char	blob_id[8];
 
@@ -194,7 +212,7 @@ exitins:
 				memcpy(blob_id, &blob_start, 4);
 				memcpy(&(blob_id[4]), &blob_len, 4);
 
-				sprintf(cmd_header, "insert into maxtab(aaaa%d, bbbb%d, ", i,i);
+				sprintf(cmd_header, "insert into maxtab(0100_0_%d, 0000%d, ", i,i);
 			
 				cmd_hdlen = strlen(cmd_header);
 	
@@ -208,9 +226,9 @@ exitins:
 				memcpy(cmd + cmd_hdlen + 11, blob, blob_len);
 				
 
-				assert((cmd_hdlen + 9 + blob_len) < 1024);				
+				assert((cmd_hdlen + 11 + blob_len) < (20 *1024));				
 
-				rtn_stat = mt_cli_open_execute(connection, cmd, (cmd_hdlen + 9 + blob_len), &exec_ctx);
+				rtn_stat = mt_cli_open_execute(connection, cmd, (cmd_hdlen + 11 + blob_len), &exec_ctx);
 
 				if (rtn_stat != CLI_SUCCESS)
 				{
@@ -239,7 +257,7 @@ exitinstxt:
 			memset(cmd, 0, 256);
 			//sprintf(cmd, "selectwhere maxtab where id1(aaaa1, *) and id2(bbbb35, bbbb46)");
 			//sprintf(cmd, "selectwhere maxtab where id2(bbbb39, bbbb39) and id4(cccccc39, cccccc39)");
-			sprintf(cmd, "selectwhere maxtab where id2(bbbb1, bbbb9999)");
+			sprintf(cmd, "selectwhere maxtab where key(0, 9)");
 			//sprintf(cmd, "selectwhere maxtab where id1(aaaa1, aaaa999999)");
 //			sprintf(cmd, "selectwhere maxtab where id1(aaaa20, aaaa30)");
 //			sprintf(cmd, "selectwhere maxtab where id2(bbbb2000, bbbb2000)");
@@ -248,6 +266,7 @@ exitinstxt:
 
 			
 			rtn_stat = mt_cli_open_execute(connection, cmd, strlen(cmd), &exec_ctx);
+
 
 			if (rtn_stat != CLI_SUCCESS)
 			{
@@ -277,7 +296,7 @@ exitinstxt:
 						int	collen = 0;				
 						char	*col;
 						
-						col = mt_cli_get_colvalue(t_exec_ctx, rp, 6, &collen);
+						col = mt_cli_get_colvalue(t_exec_ctx, rp, 0, &collen);
 
 						printf ("col: %s\n", col);
 #endif
@@ -318,7 +337,7 @@ exitselwh:
 //			sprintf(cmd, "selectwhere maxtab where id2(bbbb3744, bbbb3750)");
 //			sprintf(cmd, "selectwhere maxtab where id3(cccccc20, cccccc20)");
 
-			
+
 			rtn_stat = mt_cli_open_execute(connection, cmd, strlen(cmd), &exec_ctx);
 
 			if (rtn_stat != CLI_SUCCESS)
@@ -638,11 +657,11 @@ exitdropindx:
 		if (match(argv[1], "select"))
 		{
 			/* Select datas from table */
-			for(i = 1; i < 10000; i++)
+			for(i = 1; i < 2; i++)
 			{
 				memset(resp, 0, 256);
 				memset(cmd, 0, 256);
-				sprintf(cmd, "select maxtab (%d)", i);
+				sprintf(cmd, "select maxtab (0000_01_r850g106_2060380_1)");
 
 				rtn_stat = mt_cli_open_execute(connection, cmd, strlen(cmd), &exec_ctx);
 
@@ -726,7 +745,7 @@ exitsel:
 					if (rp)
 					{
 						tot_row++;
-#if 0
+#if 1
 						int	collen = 0;				
 						char	*col;
 						

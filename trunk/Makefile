@@ -1,9 +1,9 @@
-CC		= gcc -g -Wall
-CPP		= g++ -g -Wall
-#CC		= gcc -Wall
-#CPP		= g++ -Wall
+#CC		= gcc -g -Wall
+#CPP		= g++ -g -Wall
+CC		= gcc -Wall
+CPP		= g++ -Wall
 AR		= ar cr
-CFLAGS		= -I./common/include/ -I./client/include -I./master/include -I./ranger/include -I./interface/include -I./service/include -lpthread -I/usr/lib/jvm/java-6-openjdk/include/ -D_GNU_SOURCE -D_XOPEN_SOURCE=500
+CFLAGS		= -I./common/include/ -I./client/include -I./master/include -I./ranger/include -I./interface/include -I./service/include -I/usr/lib/jvm/java-6-openjdk/include/ -D_GNU_SOURCE -D_XOPEN_SOURCE=500
 KFSFLAG		= -I${MT_DFS_INCLUDE_PATH} -L${MT_DFS_CLI_LIB_PATH} -lkfsClient -lboost_regex
 COMMON_SRC	= common/src/*.c
 REGION_SRC	= ranger/src/*.c
@@ -72,17 +72,17 @@ kfsmain:
 else ifeq (${MT_BACKEND}, LOCAL)
 
 master: ${COMMON_SRC} ${MASTER_SRC}
-	$(CC) $(CFLAGS) ${COMMON_SRC} ${MASTER_SRC} -D MEMMGR_TEST -D MAXTABLE_BENCH_TEST ${MT_KEY_VALUE} -o startMaster
+	$(CC) $(CFLAGS) ${COMMON_SRC} ${MASTER_SRC} -D MEMMGR_TEST -D MAXTABLE_BENCH_TEST ${MT_KEY_VALUE} -o startMaster -lpthread
 
 ranger: ${COMMON_SRC} ${REGION_SRC}
-	$(CC) $(CFLAGS) ${COMMON_SRC} ${REGION_SRC} -D MEMMGR_TEST -D MAXTABLE_BENCH_TEST -D RANGER -D MT_ASYNC_IO ${MT_KEY_VALUE} -o startRanger
+	$(CC) $(CFLAGS) ${COMMON_SRC} ${REGION_SRC} -D MEMMGR_TEST -D MAXTABLE_BENCH_TEST -D RANGER -D MT_ASYNC_IO ${MT_KEY_VALUE} -o startRanger -lpthread
 	
 client: ${COMMON_SRC} ${CLI_SRC}
-	$(CC) $(CFLAGS) ${COMMON_SRC} ${CLI_SRC} -D MEMMGR_TEST -D MAXTABLE_UNIT_TEST -o startClient
-	$(CC) $(CFLAGS) ${COMMON_SRC} ${CLI_SRC} -D MEMMGR_TEST -o imql
+	$(CC) $(CFLAGS) ${COMMON_SRC} ${CLI_SRC} -D MEMMGR_TEST -D MAXTABLE_UNIT_TEST -o startClient -lpthread
+	$(CC) $(CFLAGS) ${COMMON_SRC} ${CLI_SRC} -D MEMMGR_TEST -o imql -lpthread
 	
 sample: ${COMMON_SRC} ${INTERFACE_SRC}
-	$(CC) $(CFLAGS) ${COMMON_SRC} ${INTERFACE_SRC} -D MAXTABLE_SAMPLE_TEST ${MT_KEY_VALUE} -o sample
+	$(CC) $(CFLAGS) ${COMMON_SRC} ${INTERFACE_SRC} -D MAXTABLE_SAMPLE_TEST ${MT_KEY_VALUE} -o sample -lpthread
 	
 endif
 	

@@ -2798,8 +2798,9 @@ scan_cont:
 				break;
 			}
 
+			
 			if (   (querytype != MCCSSTAB)
-			    || !(sstab_scanctx.stat & SSTABSCAN_BLK_IS_FULL))
+			    && !(sstab_scanctx.stat & SSTABSCAN_BLK_IS_FULL))
 			{
 				
 				bufunkeep(bp->bsstab);

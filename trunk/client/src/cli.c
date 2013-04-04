@@ -541,6 +541,13 @@ conn_again:
 			{
 				resp_ins = (INSMETA *)resp->result;
 
+				/* 
+				** TODO:
+				** Bug fot the table without index. We should 
+				** skip the ranger operation if the tablet has
+				** not any index. 
+				*/
+
 				MEMCPY(Cli_infor->cli_ranger_ip, 
 				       resp_ins->i_hdr.rg_info.rg_addr, 
 				       RANGE_ADDR_MAX_LEN);

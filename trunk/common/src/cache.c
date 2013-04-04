@@ -160,6 +160,8 @@ ca_setup_pool()
 
 	traceprint("BLOCK_MAX_COUNT : %d  --  Block # : %d  -- temp # : %ld\n", BLOCK_MAX_COUNT, count, temp);
 
+#if 1 
+
 	if (count > (BLK_CNT_IN_SSTABLE * SSTABLE_MAX_COUNT))
 	{
 		
@@ -169,6 +171,7 @@ ca_setup_pool()
 	{
 		assert(0);
 	}
+#endif
 
 	i = 0;
 	j = 0;
