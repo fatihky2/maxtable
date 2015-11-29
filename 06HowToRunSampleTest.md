@@ -1,0 +1,1 @@
+The sample tests locate at the ./interface/src/sample.c, there are some test cases, like Create table, Insert table, Select table and Delete table. You will have the visual feeling by modifying and running the sample.

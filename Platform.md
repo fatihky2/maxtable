@@ -1,0 +1,1 @@
+  * Linux 2.6.38-8-generic x86\_64 （Ubuntu 11.04）
